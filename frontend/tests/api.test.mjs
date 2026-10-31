@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createClient,selectPreview,commandTarget,commandFinished,readEvents} from '../src/api.js';
 import {SIMULATION_DAYS} from '../src/config.js';
 import {dec,vnd,mediaURL} from '../src/format.js';
+import {resolveApiPath} from '../src/runtime.js';
 const storage=()=>{const map=new Map();return {getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,String(value))};};
 const response=(body,status=200)=>({ok:status>=200 && status<300,status,json:async()=>body});
 
@@ -59,6 +60,15 @@ test('command targets bind the current card, content attempt and final-day state
   assert.notEqual(commandTarget(state,'/api/decision'),commandTarget({...state,pending_card:{card_id:'D-2'}},'/api/decision'));
   assert.notEqual(commandTarget(state,'/api/content/retry'),commandTarget({...state,content_draft:{version:2}},'/api/content/retry'));
   assert.notEqual(commandTarget({...state,day:7,step:'day_done'},'/api/night'),commandTarget({...state,day:7,step:'complete'},'/api/night'));
+});
+test('media commands advance with the server wizard stage and the optional API base is public configuration',async()=>{
+  const state={run_id:'run',day:1,step:'content_review',content_draft:{version:1,job_id:'job',wizard:{stage:'choose_image'}}};
+  const next={...state,content_draft:{...state.content_draft,wizard:{stage:'image_queued'}}};
+  assert.equal(commandFinished(state,next,'/api/content/image'),true);
+  assert.equal(resolveApiPath('/api/state','https://backend.example/proxy/'),'https://backend.example/proxy/api/state');
+  assert.equal(resolveApiPath('/media/file.mp4','javascript:alert(1)'),'/media/file.mp4');
+  let called;const client=createClient({apiBase:'https://backend.example/proxy',fetchImpl:async(path,options)=>{called={path,options};return response({run_id:'run'});}});
+  await client.request('/api/state');assert.equal(called.path,'https://backend.example/proxy/api/state');assert.equal(called.options.credentials,'include');
 });
 test('preview covers negotiation, approval, retries, feedback confirmation and seven-day completion',async()=>{
   let clock=1000000;const client=createClient({preview:true,storage:storage(),now:()=>clock,assetRoot:new URL('https://demo.test/img/'),fetchImpl:async()=>{throw new Error('Preview must not call a network API');}});

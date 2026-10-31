@@ -25,6 +25,9 @@ def test_muse_defaults_and_one_product_prompt():
     prompt = build_muse_prompt(request, plan)
     assert 'EXACTLY ONE PRODUCT / ONE SKU' in prompt
     assert 'SAME fan model' in prompt and 'Vietnamese line' in prompt
+    assert 'may naturally hold or support' in prompt and 'otherwise use another natural gesture' in prompt
+    assert 'Preserve the desktop fan base' in prompt and 'do not turn it into a handheld fan' in prompt
+    assert 'do not invent dimensions or measurements' in prompt
     assert plan.narration in prompt
     with pytest.raises(ValidationError):
         VideoRequest(product_name='Quạt', generate_script=False)
@@ -71,7 +74,8 @@ def test_muse_missing_key_fails_before_submit(tmp_path):
         assert 'MUSE_API_KEY' in response.text
 
 
-def test_muse_pipeline_uses_generated_frames_not_still_compositor(tmp_path,monkeypatch):
+@pytest.mark.parametrize(('produced_seconds', 'duration_matches'), [(5, True), (2, False)])
+def test_muse_pipeline_checks_the_delivered_duration(tmp_path, produced_seconds, duration_matches):
     import PIL.Image
     from video_api.storage import LocalStorage
     from video_api.store import Store
@@ -93,9 +97,9 @@ def test_muse_pipeline_uses_generated_frames_not_still_compositor(tmp_path,monke
         def __init__(self,settings): pass
         def generate(self,prompt,**kw):
             kw['on_task']('remote-id');kw['on_update']('muse_generating')
-            legacy=VideoRequest(input_asset_id='a'*32,product_name='fixture',mode='motion_graphics',voice='none',generate_script=False,duration=2,fps=12)
+            legacy=VideoRequest(input_asset_id='a'*32,product_name='fixture',mode='motion_graphics',voice='none',generate_script=False,duration=produced_seconds,fps=12)
             video=render_video(settings,legacy,CreativePlan(title='fixture',tagline='',narration='',visual_prompt=''),
-                               image,None,None,None,2,kw['work'])
+                               image,None,None,None,produced_seconds,kw['work'])
             source=kw['work']/'muse-source.mp4'
             video.rename(source)
             return source,{'task_id':'remote-id'}
@@ -103,6 +107,9 @@ def test_muse_pipeline_uses_generated_frames_not_still_compositor(tmp_path,monke
     process_muse_job(settings,store,storage,row,provider_factory=Provider,muse_factory=Generator)
     done=store.job(row['id']);result=json.loads(done['result'])
     assert done['status']=='done' and result['provider']=='muse'
-    assert result['muse_task_id']=='remote-id' and result['visual_review_passed'] is True
+    assert result['muse_task_id']=='remote-id' and result['visual_review_passed'] is duration_matches
+    assert result['requested_duration_seconds']==5 and result['duration_seconds']==pytest.approx(produced_seconds, abs=0.5)
+    assert result['duration_matches_requested'] is duration_matches
+    assert done['stage']==('done' if duration_matches else 'needs_visual_review')
     assert result['media_text_vision_calls_reserved']==result['media_text_vision_calls_completed']==2
     assert result['motion_source']=='muse_generated_live_action'

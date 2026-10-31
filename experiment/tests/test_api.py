@@ -256,9 +256,34 @@ def test_minio_not_ready_rejected_before_job(tmp_path):
                         minio_access_key='', minio_secret_key='')
     app = create_app(settings, worker_enabled=False)
     with TestClient(app) as client:
-        asset = upload(client)
-        response = client.post('/v1/jobs', headers=headers() | {'Idempotency-Key':'missing-minio'}, json=payload(asset))
+        picture = io.BytesIO()
+        Image.new('RGB', (20, 20), 'white').save(picture, 'PNG')
+        response = client.post('/v1/assets', headers=headers(), files={'file':('product.png',picture.getvalue(),'image/png')})
         assert response.status_code == 503
+        assert not list((tmp_path/'assets').iterdir())
+
+
+def test_input_asset_is_storage_backed_and_has_scoped_refreshable_signed_url(api):
+    client, app = api
+    asset_id = upload(client)
+    row = app.state.store.asset(asset_id, 'alice')
+    assert row['object_key'] and row['sha256'] and row['size_bytes']
+    assert app.state.storage.stat(row['object_key']) == row['size_bytes']
+    assert client.get('/v1/assets/' + asset_id, headers=headers('bob')).status_code == 404
+    view = client.get('/v1/assets/' + asset_id, headers=headers()).json()
+    assert view['asset_url'].startswith('https://video.example.com/v1/assets/')
+    response = client.get(view['asset_url'])
+    assert response.status_code == 200 and response.headers['content-type'] == 'image/png'
+    assert response.content.startswith(b'\x89PNG\r\n\x1a\n')
+    assert client.head(view['asset_url']).status_code == 200
+    assert client.get(view['asset_url'], headers={'Range':'bytes=0-3'}).content == b'\x89PNG'
+    assert client.get(view['asset_url'].replace('signature=', 'signature=x')).status_code == 403
+    Path(row['path']).unlink()
+    # Public delivery reads object storage, not the deleted cache.
+    assert client.get(view['asset_url']).content == response.content
+    from video_api.storage import materialize_asset
+    restored = materialize_asset(app.state.storage, row, tmp_path := app.state.settings.data_dir / 'jobs')
+    assert restored.read_bytes() == response.content
 
 
 def test_cross_origin_preflight_and_error_responses(api):

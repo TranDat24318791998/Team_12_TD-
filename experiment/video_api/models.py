@@ -24,7 +24,7 @@ class VideoRequest(BaseModel):
     voice_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     music_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     music: Literal['synth', 'upload', 'none'] = 'none'
-    duration: float = Field(default=5, ge=2, le=30)
+    duration: float = Field(default=20, ge=2, le=30)
     fps: int = Field(default=24, ge=12, le=30)
     aspect: Literal['9:16', '16:9', '1:1'] = '9:16'
     resolution: Literal['preview', 'hd'] = 'preview'
@@ -39,8 +39,8 @@ class VideoRequest(BaseModel):
         if self.mode == 'muse':
             if not self.generate_script:
                 raise ValueError('mode=muse yêu cầu GPT viết prompt/script: generate_script=true')
-            if self.duration not in (5, 10, 15):
-                raise ValueError('Thời lượng Muse chỉ nhận 5, 10 hoặc 15 giây')
+            if self.duration not in (5, 10, 15, 20):
+                raise ValueError('Thời lượng Muse chỉ nhận 5, 10, 15 hoặc 20 giây')
             if self.script and len(self.script.split()) > int(self.duration * 4):
                 raise ValueError('Script quá dài cho video Muse; rút gọn hoặc tăng thời lượng')
             if self.generate_image:
@@ -80,6 +80,7 @@ class MuseVisualReview(BaseModel):
     single_fan_product: bool
     consistent_product: bool
     notes_vi: str
+    short_description: str = Field(default="", max_length=500)
     requested_style_matches: bool = True
 
 
@@ -108,3 +109,4 @@ class ImageRequest(BaseModel):
     product_kind: Literal['handheld_fan', 'desktop_fan'] = 'desktop_fan'
     product_name: str = Field(default='Quạt để bàn', min_length=1, max_length=90)
     background_preference: Literal['default', 'bright'] = 'default'
+    seller_wishes: str = Field(default='', max_length=1000)

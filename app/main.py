@@ -10,8 +10,10 @@ def create_app(*, home=None, worker_factory=None, bootstrap_defaults=None):
     from app.core.settings import Settings
     from app.runtime.data_worker import DataWorker
     settings = Settings()
+    driver = {'agent_version': 'native'}
+    if settings.media_mode == 'live': driver['media_wizard'] = 'staged'
     defaults = {'execution_profile': 'external', 'content_mode': 'worker', 'learning_mode': 'external',
-                'mode': settings.resolved_mode(), 'driver_config': {'agent_version': 'native'}}
+                'mode': settings.resolved_mode(), 'driver_config': driver}
     if bootstrap_defaults: defaults.update(bootstrap_defaults)
     application = create_data_app(home, bootstrap_defaults=defaults,product_image_path=settings.demo_product_image_path,
                                   worker_factory=worker_factory or (lambda service: DataWorker(service, settings)))

@@ -188,12 +188,17 @@ Tài liệu: [OpenAI images](https://developers.openai.com/api/docs/guides/image
 
 ### API ảnh và video từ ảnh quảng cáo
 
-- `POST /v1/images`: multipart `logo`, `product`, `style`, tùy chọn `style_reference`. Header Bearer `VIDEO_API_TOKEN`, `Idempotency-Key`. `wait=true` chờ tối đa 80 giây; nếu chưa xong trả 202, poll `GET /v1/jobs/{job_id}`. Khi hoàn tất có `image_url`, `asset_id`, `result.minio_uri`.
+- `POST /v1/images`: multipart `product`, `style`, tùy chọn `logo`, `style_reference`, `product_kind`, `product_name`, `seller_wishes` (tối đa 1.000 ký tự). Header Bearer `VIDEO_API_TOKEN`, `Idempotency-Key`. `wait=true` chờ tối đa 80 giây; nếu chưa xong trả 202, poll `GET /v1/jobs/{job_id}`. Khi hoàn tất có `image_url`, `asset_id`, `result.minio_uri`. `POST /v1/image-jobs` nhận các asset ID và cùng trường `seller_wishes`; thay nội dung hoặc lời dặn cần key mới.
 - Style: `clean_white`, `pastel_lifestyle`, `premium_studio`, `summer_fresh`; danh mục `GET /v1/image-styles`.
-- `POST /v1/videos`: multipart `image`, `output_type` (`chibi_3d` hoặc `realistic_human`), `duration` (5/10/15), tùy chọn `product_name`. Trả 202; poll job để nhận `video_url`, `watch_url` và `result.minio_uri`.
+- `POST /v1/videos`: multipart `image`, `output_type` (`chibi_3d` hoặc `realistic_human`), `duration` (5/10/15/20), tùy chọn `product_name`. Trả 202; poll job để nhận `video_url`, `watch_url` và `result.minio_uri`. `POST /v1/jobs` có thể dùng `input_asset_id` của ảnh đã tạo, tránh upload lại.
 - Agent có asset ID dùng `POST /v1/image-jobs` hoặc `POST /v1/jobs` với `input_asset_id`, `output_type`, `duration`.
 - GPT phân tích sản phẩm/logo/màu/style trước khi viết script và prompt Muse. Video cần người bán duyệt độ chính xác logo/sản phẩm.
 - Link public có chữ ký hết hạn; gọi lại GET job có xác thực để lấy link mới. `minio_uri` là đường dẫn object; `minio_url` là endpoint nội bộ, bucket riêng tư không cho GET ẩn danh. UI dùng `image_url`/`video_url` qua tunnel.
+- `POST /v1/assets` lưu cả ảnh/logo đầu vào vào storage và trả `asset_url` có chữ ký; `GET /v1/assets/{asset_id}` có xác thực cấp link mới. Link xem qua FastAPI hỗ trợ GET/HEAD/Range, không phơi key MinIO. Bản `local` chỉ dành cho chế độ đã cấu hình local/test; chọn `STORAGE_BACKEND=minio` để persist vào MinIO.
 - Bộ ảnh mẫu: `data/test-assets/`; prompt gốc `prompts.jsonl`, báo cáo live `data/image_test_report.json`, `data/video_test_*.json`. Test tự động không gọi API trả phí.
 
 CORS: mặc định `CORS_ORIGINS=*`, mọi domain được gọi API/đọc media qua tunnel. Cho phép mọi request header và method trong preflight; endpoint thực tế vẫn theo routes đã định nghĩa. Không dùng cookie credentials; API riêng vẫn yêu cầu Bearer token. Link ảnh/video signed URL không cần Bearer. CORS áp dụng cả response 401/403 và hỗ trợ đọc Range/Content-Length từ JavaScript.
+
+### Mặc định video và nhận xét OpenAI
+
+`POST /v1/videos` và `POST /v1/jobs`: bỏ `duration` → 20 giây; bỏ `output_type` → `realistic_human`. Nhận 5/10/15/20 giây. Khi job hoàn tất, GET job trả `video_url` và `short_description` (cũng lưu trong `result.short_description`): 1–2 câu tiếng Việt do OpenAI nhận xét các khung hình video thực tế. Không phải đánh giá âm thanh; job cũ chưa có mô tả trả chuỗi rỗng. POST video vẫn trả 202 để poll, không có link khi render chưa hoàn tất.

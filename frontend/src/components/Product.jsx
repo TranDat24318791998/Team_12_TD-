@@ -3,13 +3,14 @@ import {Icon} from './Icon.jsx';
 import {asset,categoryLabel,changedFields,colorsFor,dec,mediaURL,vnd} from '../format.js';
 
 export function Product({shop,original,onAddCart,onNotice}){
-  const images=(shop.images?.length?shop.images:[asset('product-placeholder.svg')]).slice(0,4);
-  const displayURL=value=>mediaURL(value) || asset('product-placeholder.svg');
+  const fallbackImage=shop.shop_id==='D'?'demo-d-desktop.jpg':'product-placeholder.svg';
+  const images=(shop.images?.length?shop.images:[asset(fallbackImage)]).slice(0,4);
+  const displayURL=value=>mediaURL(value) || asset(fallbackImage);
   const [imageIndex,setImageIndex]=useState(0),[color,setColor]=useState(null),[quantity,setQuantity]=useState(1),[showVideo,setShowVideo]=useState(false);
   const changes=original?changedFields(shop,original).map(change=>change.key):[];
   const mark=key=>changes.includes(key)?<span className="badge-new">Mới</span>:null;
   const colors=colorsFor(shop);const swatches={'trắng':'#e6e9df','hồng':'#e7bdbd','xanh mint':'#b8d5c2'};
-  const fallback=event=>{if(!event.currentTarget.dataset.fallback){event.currentTarget.dataset.fallback='1';event.currentTarget.src=asset('product-placeholder.svg');event.currentTarget.alt+=' (ảnh thay thế)';}};
+  const fallback=event=>{if(!event.currentTarget.dataset.fallback){event.currentTarget.dataset.fallback='1';event.currentTarget.src=asset(fallbackImage);event.currentTarget.alt+=' (ảnh thay thế)';}};
   return <>
     <div className="card"><div className="product-top">
       <div className="gallery"><div className="hero-image">{mark('images')}<span className="image-caption">{shop.name}</span><img id="product-hero" key={displayURL(images[imageIndex] || images[0])} src={displayURL(images[imageIndex] || images[0])} alt={`${shop.title} · ${shop.name}`} fetchPriority="high" onError={fallback}/></div>

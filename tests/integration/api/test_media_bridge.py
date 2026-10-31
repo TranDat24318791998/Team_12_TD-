@@ -120,6 +120,10 @@ def test_real_http_bridge_runs_native_content_and_imports_same_attempt_media(tmp
             assert all(request['logo_asset_id']==logo_id for request in requests if request.get('job_type')=='image')
             reference = next(result['asset_id'] for request, result in jobs if request.get('style') == 'clean_white')
             assert next(request['input_asset_id'] for request in requests if request.get('job_type') != 'image') == reference
+            video_request, video_result = next((request, result) for request, result in jobs if request.get('job_type') != 'image')
+            assert video_result['requested_duration_seconds'] == video_request['duration']
+            assert video_result['duration_seconds'] == pytest.approx(video_request['duration'], abs=0.5)
+            assert video_result['duration_matches_requested'] is True
     finally:
         process.terminate()
         process.wait(timeout=10)

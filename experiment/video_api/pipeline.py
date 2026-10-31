@@ -5,6 +5,7 @@ import sys
 from .models import CreativePlan, VideoRequest
 from .openai_media import OpenAIMedia
 from .render import extract_frame, normalize_audio, render_video, synth_music
+from .storage import materialize_asset
 
 
 def process_job(settings, store, storage, row, provider_factory=OpenAIMedia):
@@ -29,8 +30,7 @@ def process_job(settings, store, storage, row, provider_factory=OpenAIMedia):
     original = store.asset(request.input_asset_id, owner)
     if not original:
         raise RuntimeError('Không còn asset đầu vào')
-    from pathlib import Path
-    image = Path(original['path'])
+    image = materialize_asset(storage, original, work)
     source_video = None
     if original['kind'] == 'video':
         source_video = image
@@ -69,7 +69,7 @@ def process_job(settings, store, storage, row, provider_factory=OpenAIMedia):
         voice_path, voice_duration = normalize_audio(settings, raw, work / 'voice.wav')
     elif request.voice == 'upload':
         asset = store.asset(request.voice_asset_id, owner)
-        voice_path, voice_duration = normalize_audio(settings, asset['path'], work / 'voice.wav')
+        voice_path, voice_duration = normalize_audio(settings, materialize_asset(storage, asset, work), work / 'voice.wav')
     duration = max(request.duration, voice_duration + 0.5 if voice_path else 0)
     if duration > 30:
         raise RuntimeError('Lời đọc dài quá 30 giây; rút gọn script và tạo job mới')
@@ -78,7 +78,7 @@ def process_job(settings, store, storage, row, provider_factory=OpenAIMedia):
         music = synth_music(work / 'music.wav', duration)
     elif request.music == 'upload':
         asset = store.asset(request.music_asset_id, owner)
-        music, _ = normalize_audio(settings, asset['path'], work / 'music.wav')
+        music, _ = normalize_audio(settings, materialize_asset(storage, asset, work), work / 'music.wav')
     stage('rendering')
     video = render_video(settings, request, plan, image, source_video, voice_path, music, duration, work)
     stage('uploading_minio' if settings.storage_backend == 'minio' else 'saving_local')

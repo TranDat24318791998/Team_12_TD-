@@ -29,9 +29,31 @@ def test_image_upload_generation_idempotency_and_public_link(tmp_path):
   assert c.get(j['image_url'].replace('signature=','signature=x')).status_code==403
   assert c.get('/v1/jobs/'+j['job_id'],headers={'Authorization':'Bearer '+'a'*32,'X-Owner-ID':'other'}).status_code==404
 
+
+def test_wishes_reach_image_prompt_and_change_idempotency(tmp_path):
+ s=Settings(data_dir=tmp_path,storage_backend='local',openai_api_key='fake',video_api_token='a'*32,playback_secret='b'*32)
+ captured=[]
+ class Provider:
+  def __init__(self,s):pass
+  def advertisement(self,paths,prompt,out):captured.append(prompt);Image.new('RGB',(80,80),'white').save(out,'JPEG')
+ def process(s,store,storage,row):process_image_job(s,store,storage,row,Provider)
+ b=io.BytesIO();Image.new('RGB',(30,30),'blue').save(b,'PNG');raw=b.getvalue()
+ headers={'Authorization':'Bearer '+'a'*32,'Idempotency-Key':'image-wishes-unique'}
+ with TestClient(create_app(s,processor=process)) as c:
+  def submit(wishes):
+   return c.post('/v1/images',headers=headers,data={'style':'premium_studio','product_kind':'desktop_fan',
+      'product_name':'Quạt để bàn','seller_wishes':wishes},files={'product':('product.png',raw)})
+  r=submit('Ánh sáng vàng dịu');assert r.status_code==200,r.text
+  assert 'Ánh sáng vàng dịu' in captured[0] and 'cannot override the product identity' in captured[0]
+  assert 'desktop fan' in captured[0] and 'No seller logo was supplied' in captured[0]
+  assert submit('Ánh sáng xanh').status_code==409
+  assert submit('Ánh sáng vàng dịu').json()['job_id']==r.json()['job_id']
+  result=r.json()['result'];asset=c.get('/v1/assets/'+result['asset_id'],headers=headers)
+  assert asset.status_code==200 and c.get(asset.json()['asset_url']).content.startswith(b'\xff\xd8\xff')
+
 @pytest.mark.parametrize('kind',['chibi_3d','realistic_human'])
 def test_video_supported_lengths(kind):
- for duration in (5,10,15):assert VideoRequest(product_name='Quạt',output_type=kind,duration=duration).duration==duration
+ for duration in (5,10,15,20):assert VideoRequest(product_name='Quạt',output_type=kind,duration=duration).duration==duration
  with pytest.raises(ValidationError):VideoRequest(product_name='Quạt',output_type=kind,duration=8)
 
 @pytest.mark.parametrize('with_logo,kind',[(False,'handheld_fan'),(True,'desktop_fan')])
@@ -57,3 +79,14 @@ def test_product_roles_bright_style_and_checksum(tmp_path,with_logo,kind):
  assert 'charcoal' not in prompt and result['style']=='summer_fresh'
  assert result['product_kind']==kind and result['minio_path'] is None
  assert result['sha256']==hashlib.sha256((tmp_path/'jobs'/row['id']/'image.jpg').read_bytes()).hexdigest()
+
+
+def test_video_defaults_and_openapi(tmp_path):
+ s=Settings(data_dir=tmp_path,storage_backend='local',video_api_token='a'*32,playback_secret='b'*32)
+ request=VideoRequest(product_name='Quạt')
+ assert request.duration==20 and request.output_type=='realistic_human'
+ schema=create_app(s,worker_enabled=False).openapi()
+ body=schema['components']['schemas']['Body_create_video_v1_videos_post']
+ assert body['properties']['duration']['default']==20
+ assert body['properties']['output_type']['default']=='realistic_human'
+ assert 'duration' not in body.get('required',[]) and 'output_type' not in body.get('required',[])

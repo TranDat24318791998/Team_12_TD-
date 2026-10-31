@@ -438,6 +438,8 @@ def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_
                 return {'brief':brief,'step':'idle'}
             if tag=="decision":return facade.decide(c,p,r,body)
             if tag=="retry":return facade.retry(c,p,r,body)
+            if tag=="image":return facade.start_media(c,p,r,body,'image')
+            if tag=="video":return facade.start_media(c,p,r,body,'video')
             if tag=="apply":return facade.use_content(c,p,r,body)
             if tag=="night":return facade.night(c,p,r)
             raise Fault("NOT_FOUND","Không tìm thấy route",404)
@@ -450,7 +452,7 @@ def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_
         async def endpoint(request:Request):return await legacy(request,tag)
         endpoint.__name__="demo_"+tag
         return endpoint
-    for path,tag,method in (("/state","state","GET"),("/reset","reset","POST"),("/brief/confirm","brief","POST"),("/day/start","start","POST"),("/events","events","GET"),("/decision","decision","POST"),("/content/retry","retry","POST"),("/content/apply","apply","POST"),("/night","night","POST"),("/proof","proof","GET")):
+    for path,tag,method in (("/state","state","GET"),("/reset","reset","POST"),("/brief/confirm","brief","POST"),("/day/start","start","POST"),("/events","events","GET"),("/decision","decision","POST"),("/content/retry","retry","POST"),("/content/image","image","POST"),("/content/video","video","POST"),("/content/apply","apply","POST"),("/night","night","POST"),("/proof","proof","GET")):
         application.add_api_route("/api"+path,legacy_endpoint(tag),methods=[method])
 
     @application.get('/api/proof/demo')

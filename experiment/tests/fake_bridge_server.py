@@ -43,7 +43,7 @@ class FakeMuse:
         on_update('muse_generating')
         path = work / 'source.mp4'
         subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
-                        '-i', 'color=c=white:s=80x80:r=12', '-t', '2', '-c:v', 'libx264',
+                        '-i', 'color=c=white:s=80x80:r=12', '-t', str(kwargs['duration']), '-c:v', 'libx264',
                         '-pix_fmt', 'yuv420p', str(path)], check=True)
         return path, {'task_id':'fake-task'}
 

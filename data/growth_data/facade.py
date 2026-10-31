@@ -1,7 +1,7 @@
 """Nine legacy demo endpoints share the same commands as the versioned API."""
 
 from .service import Principal
-from .storage import many, one
+from .storage import dumps, many, now, one
 from .simulation import aggregate
 from .errors import Fault, require
 
@@ -46,7 +46,8 @@ class Facade:
         run=self.s.entity(c,'runs',r,'run_id',r)
         images=[{k:v for k,v in x.items() if k!='asset_id'} for x in content['cover_options']]
         video={k:v for k,v in content['video_job'].items() if k!='asset_id'}
-        if run['config'].get('driver',{}).get('agent_version')=='native' and job['provider']=='assigned_worker' and job['status'] in {'queued','running'}:
+        wizard=job['brief'].get('wizard')
+        if run['config'].get('driver',{}).get('agent_version')=='native' and job['provider']=='assigned_worker' and job['status'] in {'awaiting_image','queued','running'}:
             def slot_view(slot,kind):
                 entry=job['provider_state'].get(slot,{})
                 view={'status':entry.get('status','pending'),'path':None,'source':entry.get('source')}
@@ -58,12 +59,28 @@ class Facade:
                         view['path']=f"/api/v1/runs/{r}/assets/{asset['asset_id']}/download"
                     except (Fault,OSError):view['status']='failed'
                 if kind=='video':
-                    view.update({key:entry[key] for key in ('review_passed','review_notes','duration_seconds') if key in entry})
+                    view.update({key:entry[key] for key in ('review_passed','review_notes','duration_seconds','short_description') if key in entry})
+                    if wizard and wizard.get('stage')=='video':
+                        view['requested_duration_seconds']=wizard['duration']
+                        view['duration_matches_requested']=self.s.duration_matches(wizard['duration'],entry.get('duration_seconds'))
                 return view
             images=[{'option':slot,**slot_view(slot,'image')} for slot in 'ABC']
             video=slot_view('video','video')
-        return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":content["title"],"description":content["description"],
-                "images":images,"video":video,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
+        wizard_view=None
+        if wizard:
+            stage=wizard.get('stage')
+            if job['status']=='awaiting_image':stage='choose_image'
+            elif job['status'] in {'queued','running'}:stage=f'{stage}_queued'
+            elif job['status']=='succeeded':stage=f'{stage}_ready'
+            else:stage='failed'
+            wizard_view={**wizard,'stage':stage}
+        input_image=None
+        if wizard:
+            aid=job['brief'].get('wizard_input_asset_id')
+            selected=one(c,"SELECT * FROM assets WHERE run_id=? AND asset_id=? AND product_id=? AND kind='image'",(r,aid,job['product_id'])) if aid else self.s.wizard_input_asset(c,r,job)
+            if selected:input_image=f"/api/v1/runs/{r}/assets/{selected['asset_id']}/download"
+        return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":content["title"],"description":content["description"],"input_image":input_image,
+                "images":images,"video":video,"wizard":wizard_view,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
 
     def night_summary(self,c,r,run,handoff):
         if not handoff or not handoff['night_summary']:return None
@@ -253,6 +270,42 @@ class Facade:
         if run['config'].get('driver',{}).get('agent_version')=='native': self._check_binding(c,r,job,body)
         self.s.content_create(c,p,r,"D",dict(proposal_id=job["proposal_id"],product_id=job["product_id"],feedback_vi=body["feedback_vi"],expected_current_attempt=job["attempt"],retry_scope=body.get("retry_scope","images")))
         return {"draft":self.draft(c,r)}
+
+    def start_media(self,c,p,r,body,stage):
+        from .models import LegacyContentImage, LegacyContentVideo
+        model=LegacyContentImage if stage=='image' else LegacyContentVideo
+        body=model.model_validate(body).model_dump()
+        run=self.s.scope(c,p,r,'D',{'seller'})
+        job=one(c,"SELECT * FROM content_jobs WHERE run_id=? AND shop_id='D' ORDER BY rowid DESC LIMIT 1",(r,))
+        require(job,'CONTENT_REQUIRED','Chưa có nội dung')
+        self._check_binding(c,r,job,body)
+        wizard=job['brief'].get('wizard')
+        require(wizard and run['phase']=='content_review','STAGED_MEDIA_REQUIRED','Bản nội dung không hỗ trợ luồng này')
+        content=self.s.entity(c,'content_versions',r,'content_id',job['output_content_ids'][0])
+        if stage=='image':
+            require(job['status']=='awaiting_image' and wizard.get('stage')=='choose_image' and content['status']=='draft',
+                    'STALE_DRAFT','Ảnh đã được yêu cầu hoặc bản nội dung đã thay đổi')
+            source=self.s.wizard_input_asset(c,r,job)
+            require(source,'MEDIA_INPUT_MISSING','Không tìm thấy ảnh sản phẩm hợp lệ')
+            c.execute('INSERT OR IGNORE INTO asset_jobs(run_id,asset_id,job_id) VALUES(?,?,?)',(r,source['asset_id'],job['job_id']))
+            self.s.checked_job_asset(c,r,job,source['asset_id'],'image')
+            wizard={**wizard,'stage':'image','background':body['background'],'wishes':body['wishes'].strip()}
+        else:
+            require(job['status']=='succeeded' and wizard.get('stage')=='image' and content['status']=='validated',
+                    'IMAGE_REQUIRED','Cần tạo ảnh trước khi chọn video')
+            image=next((item for item in content['cover_options'] if item['option']=='A'),None)
+            slot=job['provider_state'].get('A',{})
+            require(image and image.get('status')=='done' and image.get('asset_id')==slot.get('asset_id')
+                    and slot.get('status')=='done' and slot.get('source_asset_id') and 'video' not in job['provider_state'],
+                    'IMAGE_REQUIRED','Ảnh tạo chưa sẵn sàng')
+            self.s.checked_job_asset(c,r,job,image['asset_id'],'image')
+            wizard={**wizard,'stage':'video','output_type':body['output_type'],'duration':body['duration']}
+            c.execute("UPDATE content_versions SET status='draft',version=version+1,updated_at=? WHERE run_id=? AND content_id=?",(now(),r,content['content_id']))
+        brief={**job['brief'],'wizard':wizard}
+        if stage=='image':brief['wizard_input_asset_id']=source['asset_id']
+        c.execute("UPDATE content_jobs SET brief_json=?,status='queued',error_code=NULL,lease_until=?,version=version+1,updated_at=? WHERE run_id=? AND job_id=?",(dumps(brief),self.s.expires(120),now(),r,job['job_id']))
+        self.s.event(c,r,run['current_day'],'content_job','seller','D',{'job_id':job['job_id'],'attempt':job['attempt'],'kind':stage,'status':'queued'},visibility='shop_private',text='Người bán đã yêu cầu tạo ảnh' if stage=='image' else 'Người bán đã yêu cầu tạo video')
+        return {'draft':self.draft(c,r)}
 
     def use_content(self,c,p,r,body):
         run=self.s.run(c,p,r)

@@ -10,10 +10,10 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
   const original = {
     shop_id:'D', name:'Nhà Bé Lan', category:'quat_mini', price:175000, stock:300,
     listing_quality:0.55, search_rank_page:3, rating:4.6, base_impressions:2500,
-    title:'Quạt mini cầm tay sạc usb loại tốt giá rẻ',
-    description:'Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.',
-    attributes:['3 tốc độ gió','sạc USB','pin 2000mAh','3 màu: Trắng, Hồng, Xanh mint'],
-    images:['fan-original','fan-white','fan-pink','fan-mint'].map(image), video:null, active_voucher_pct:0
+    title:'Quạt để bàn màu trắng',
+    description:'Quạt để bàn màu trắng, cánh màu xanh nhạt, có đế và núm điều chỉnh.',
+    attributes:['quạt để bàn','thân màu trắng','cánh màu xanh nhạt','có đế','có núm điều chỉnh'],
+    images:[new URL('demo-d-desktop.jpg',root).href], video:null, active_voucher_pct:0
   };
   const packageFor = (voucher=3) => ({content_refresh:true,ads_daily_budget:45000,voucher_pct:voucher,stop_roas_below:6.5,stop_after_days:2,duration_days:3});
   const previewCheck=(ok,message_vi)=>({ok,message_vi,sources:[{kind:'preview',title_vi:'Dữ liệu kiểm tra minh họa',version:'preview-1',excerpt_vi:message_vi}]});
