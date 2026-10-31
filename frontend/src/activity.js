@@ -7,6 +7,27 @@ export function scopedEvents(state,events=[]){
   return events.filter(event=>event.run_id===state.run_id && event.day===state.day && (!event.shop_id || event.shop_id===state.demo_shop.shop_id)).sort((a,b)=>a.seq-b.seq);
 }
 
+export function sellerFeedback(state,events=[]){
+  const own=scopedEvents(state,events).filter(event=>event.shop_id===state.demo_shop.shop_id);
+  const latest=own.findLast(event=>event.type==='seller_decision');
+  const feedback=latest?.data?.action==='negotiate'?latest:null;
+  let result=state.renegotiation;
+  if(feedback && result?.source_card_id!==feedback.data.card_id)result=null;
+  if(!feedback && latest){
+    const decidedCard=own.findLast(event=>event.type==='card_sent' && (event.data?.card_id || event.data?.card?.card_id)===latest.data?.card_id);
+    if(decidedCard?.data?.negotiation_id && decidedCard.data.negotiation_id===result?.negotiation_id)result=null;
+  }
+  const source=feedback?.data?.card_id || result?.source_card_id;
+  if(!source || ['idle','night_done','complete','content_review'].includes(state.step))return {waiting:false};
+  const card=state.pending_card;
+  const cardEvent=own.findLast(event=>event.type==='card_sent' && (event.data?.card_id || event.data?.card?.card_id)===card?.card_id);
+  const newCard=state.step==='awaiting_decision' && card && card.card_id!==source &&
+    ((feedback && cardEvent?.seq>feedback.seq) || (result?.status==='agreed' && result.negotiation_id && card.negotiation_id===result.negotiation_id));
+  if(newCard)return {waiting:false,result,card:true};
+  if(state.step==='day_done' && ['failed','unknown'].includes(result?.status))return {waiting:false,result};
+  return {waiting:true,result};
+}
+
 export function deriveActivity(state,events=[]){
   const dayEvents=scopedEvents(state,events);
   const own=dayEvents.filter(event=>event.shop_id===state.demo_shop.shop_id);
@@ -43,9 +64,9 @@ export function deriveActivity(state,events=[]){
   const currentTask=task && task.updated_seq>=(semantic?.seq ?? 0)?task:null;
   const cardEvent=own.findLast(event=>event.type==='card_sent');
   // A decision event may arrive one poll before its StateView. Do not revive the old card.
-  const restarting=!!restart && (!cardEvent || cardEvent.seq<boundary) && state.pending_card?.card_id===restart.data.card_id;
-  const awaiting=state.step==='awaiting_decision' && !restarting;
-  const negotiating=state.step==='negotiating' || restarting;
+  const feedback=sellerFeedback(state,events);
+  const awaiting=state.step==='awaiting_decision' && !feedback.waiting;
+  const negotiating=state.step==='negotiating' || feedback.waiting;
   const question=!negotiating && (state.pending_card || cardEvent?.data?.card)?.kind==='question';
   const decision=own.findLast(event=>event.type==='seller_decision' && event.seq>(lastTurn?.seq ?? boundary));
   const outcome=awaiting?'waiting_seller':decision?.data.action==='reject'?'rejected':decision && ['accept','edit'].includes(decision.data.action)?'approved':lastTurn?.data.action==='withdraw' || lastTurn?.data.action==='reject'?'no_fit':currentTask?.status==='failed'?'failed':currentTask?.status==='stopped'?'stopped':lastTurn?.data.action==='accept'?'agreed':negotiating?'negotiating':'idle';
@@ -77,7 +98,7 @@ export function deriveActivity(state,events=[]){
 
 export function journeyProgress(state,events=[],pending){
   const dayEvents=scopedEvents(state,events);
-  const current=pending==='/api/night'?5:({idle:0,negotiating:1,awaiting_decision:2,content_review:3,day_done:4,night_done:6,complete:6}[state.step] ?? 0);
+  const current=pending==='/api/night'?5:sellerFeedback(state,events).waiting?1:({idle:0,negotiating:1,awaiting_decision:2,content_review:3,day_done:4,night_done:6,complete:6}[state.step] ?? 0);
   const lastCard=state.pending_card || dayEvents.findLast(event=>event.type==='card_sent')?.data?.card;
   const decision=dayEvents.findLast(event=>event.type==='seller_decision');
   const noFit=deriveActivity(state,events).outcome==='no_fit';

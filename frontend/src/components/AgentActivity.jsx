@@ -4,6 +4,22 @@ import {Icon} from './Icon.jsx';
 
 const actionLabels={propose:'Đã gửi đề xuất',counter:'Đã phản đề xuất',accept:'Đã đồng ý',reject:'Đã từ chối',withdraw:'Đã rút đề xuất'};
 const refereeLabels={continue:'Tiếp tục trao đổi',refocus:'Cần tập trung lại',ask_human:'Cần hỏi người bán',stop:'Dừng thương lượng'};
+function sourceURL(value){
+  if(typeof value!=='string' || !value.trim())return null;
+  try{
+    const base=globalThis.location?.origin && globalThis.location.origin!=='null'?globalThis.location.origin:'http://localhost';
+    const url=new URL(value,base);
+    return url.origin===base && ['http:','https:'].includes(url.protocol) && url.pathname.startsWith('/api/')?url.pathname+url.search+url.hash:null;
+  }catch{return null;}
+}
+function CheckSources({sources}){
+  const items=Array.isArray(sources)?sources.filter(source=>typeof source?.title_vi==='string' && source.title_vi.trim()):[];
+  if(!items.length)return null;
+  return <details className="check-sources"><summary>Nguồn kiểm tra ({items.length})</summary><ul>{items.map((source,index)=>{
+    const url=sourceURL(source.download_url);
+    return <li key={index}><div>{url?<a href={url} target="_blank" rel="noopener noreferrer">{source.title_vi}</a>:<span>{source.title_vi}</span>}{source.version!=null && <> · Phiên bản {String(source.version)}</>}{source.excerpt_vi && <p>{source.excerpt_vi}</p>}</div></li>;
+  })}</ul></details>;
+}
 const packageFields=[
   ['ads_daily_budget','Quảng cáo / ngày',value=>value===0?'Không chạy':vnd(value)],
   ['voucher_pct','Voucher',value=>value==null?'—':dec(value,0)+'%'],
@@ -47,7 +63,7 @@ export function AgentActivity({state,events,preview,error,pending}){
         <span className="process-agent"><Icon name="user"/>{activity.outcome==='rejected'?'Đã từ chối':activity.outcome==='approved'?'Đã duyệt':'Chủ shop duyệt'}</span>
       ].map((node,index)=><li key={index} className={(done[index]?'is-done ':'')+(!error && !resolved && !stopped && (activity.negotiating || activity.awaiting) && current===index?'is-current':'')} aria-current={!error && !resolved && !stopped && (activity.negotiating || activity.awaiting) && current===index?'step':undefined}>{node}</li>)}</ol>
       <div className="activity-badges">{activity.attempt && <span className="activity-attempt">Phiên {activity.attempt}</span>}<span className="activity-round">{activity.round?'Vòng '+activity.round+' / tối đa '+activity.maxRounds:'Chưa bắt đầu vòng'}</span></div>
-      <details className="activity-details"><summary title="Điều khoản và kiểm tra chi tiết">Chi tiết <Icon name="chevron"/></summary><div className="activity-detail-body"><p className="process-detail-status">{status} · Trọng tài: {refereeLabel}</p><PackageComparison baseline={activity.baseline} latest={activity.latest} label={activity.baselineLabel}/><div className="agent-guardians"><div className="guardian code-guardian"><h3>Code kiểm tra</h3><p>{checkLabel}</p><ul>{(Array.isArray(check?.data.checks)?check.data.checks:[]).filter(item=>typeof item?.ok==='boolean').map((item,index)=><li key={index}><Icon name={item.ok?'check':'close'}/>{item.message_vi}</li>)}</ul></div><div className="guardian referee-guardian"><h3>Trọng tài</h3><p>{refereeLabel}</p>{reference && <div className="referee-reason">{referee.text_vi}{reference.focused_question && <p>{reference.focused_question}</p>}</div>}</div></div></div></details>
+      <details className="activity-details"><summary title="Điều khoản và kiểm tra chi tiết">Chi tiết <Icon name="chevron"/></summary><div className="activity-detail-body"><p className="process-detail-status">{status} · Trọng tài: {refereeLabel}</p><PackageComparison baseline={activity.baseline} latest={activity.latest} label={activity.baselineLabel}/><div className="agent-guardians"><div className="guardian code-guardian"><h3>Code kiểm tra</h3><p>{checkLabel}</p><ul>{(Array.isArray(check?.data.checks)?check.data.checks:[]).filter(item=>typeof item?.ok==='boolean').map((item,index)=><li key={index}><Icon name={item.ok?'check':'close'}/><div>{item.message_vi}<CheckSources sources={item.sources}/></div></li>)}</ul></div><div className="guardian referee-guardian"><h3>Trọng tài</h3><p>{refereeLabel}</p>{reference && <div className="referee-reason">{referee.text_vi}{reference.focused_question && <p>{reference.focused_question}</p>}</div>}</div></div></div></details>
     </div>
     <p className={error || stopped || activity.outcome==='rejected'?'process-notice':'sr-only'} role="status">{status}</p>
   </section>;

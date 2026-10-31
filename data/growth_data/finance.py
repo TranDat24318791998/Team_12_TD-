@@ -52,7 +52,9 @@ def check(package, price, cost, rules, stock, fees=None):
     p = package.model_dump() if hasattr(package, "model_dump") else package
     f = financials(price, cost, p["voucher_pct"], fees)
     violations = []
+    checks = []
     def require(ok, code):
+        checks.append({'code':code,'ok':bool(ok)})
         if not ok:
             violations.append(code)
     ads = p["ads_daily_budget"]
@@ -66,7 +68,7 @@ def check(package, price, cost, rules, stock, fees=None):
     if ads:
         require(f["break_even_roas"] is not None and f["break_even_roas"] <= rules["max_breakeven_roas"], "BREAKEVEN_TOO_HIGH")
         require(p["stop_roas_below"] is not None and f["stop_threshold"] is not None and p["stop_roas_below"] >= f["stop_threshold"], "STOP_BELOW_BREAKEVEN")
-    return {"passed": not violations, "violations": violations, **f}
+    return {"passed": not violations, "violations": violations, "checks":checks, **f}
 
 
 def safe_package(price, cost, rules, stock, requested=None, fees=None):

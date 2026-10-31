@@ -99,3 +99,13 @@ test('question-only cards skip negotiation; rejection skips content/apply; final
   assert.equal(journeyProgress({...state,step:'complete'},[]).current,6);
   assert.equal(journeyProgress({...state,step:'day_done'},[],'/api/night').current,5);
 });
+
+test('renegotiation stays waiting across stale state/event ordering and never uses another attempt',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',action:'negotiate'});
+  const staleTerminal=event(5,'shop_turn',{negotiation_id:'n-old',action:'reject',package:null});
+  const staleState={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'other',negotiation_id:'n-old',status:'failed',reason_vi:'cũ'}};
+  const activity=deriveActivity(staleState,[proposal,staleTerminal,feedback]);
+  assert.equal(activity.negotiating,true);assert.equal(activity.outcome,'negotiating');assert.equal(journeyProgress(staleState,[proposal,staleTerminal,feedback]).current,1);
+  const running={...staleState,renegotiation:{source_card_id:'c-1',negotiation_id:'n-new',status:'running'}};
+  assert.equal(deriveActivity(running,[feedback]).negotiating,true);
+});

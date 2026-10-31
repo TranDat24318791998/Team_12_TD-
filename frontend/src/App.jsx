@@ -6,6 +6,7 @@ import {NightPage} from './pages/Night.jsx';
 import {ProofPage} from './pages/Proof.jsx';
 import {pageURL} from './format.js';
 import {useRun} from './useRun.js';
+import {sellerFeedback} from './activity.js';
 
 export function App({client,page=globalThis.location?.pathname.split('/').pop() || 'index.html'}){
   const demo=page==='demo.html',proof=page==='proof.html';
@@ -17,7 +18,7 @@ export function App({client,page=globalThis.location?.pathname.split('/').pop() 
   useEffect(()=>{if(proof)document.title='Học qua bộ nhớ · Growth Agents';},[proof]);
   useEffect(()=>{if(run.state?.demo_shop)document.title=run.state.demo_shop.name+' · ShopPilot AI';},[run.state?.demo_shop?.name]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),5500);return()=>clearTimeout(timer);},[notice]);
-  async function endDay(){if(run.state?.step==='day_done' && await run.act('/api/night',{expected_day:run.state.day}))navigate('night.html');}
+  async function endDay(){if(run.state?.step==='day_done' && !sellerFeedback(run.state,run.events).waiting && await run.act('/api/night',{expected_day:run.state.day}))navigate('night.html');}
   async function jumpToDay7(){
     if(await run.act('/api/demo/jump-day7'))navigate('proof.html?day=7');
   }
@@ -27,5 +28,5 @@ export function App({client,page=globalThis.location?.pathname.split('/').pop() 
   else if(demo)view=<DemoPage run={run} preview={client.preview} navigate={navigate} onEndDay={endDay} onNotice={setNotice}/>;
   else if(page==='night.html')view=<NightPage run={run} preview={client.preview}/>;
   else view=<ShopPage run={run} preview={client.preview} updated={page==='updated.html'} onReset={()=>setReset(true)} onEndDay={endDay} onNotice={setNotice} onAddCart={count=>{setCart(value=>value+count);setNotice('Đã thêm vào giỏ hàng mô phỏng.');}} navigate={navigate}/>;
-  return <><Shell preview={client.preview} state={run.state} compact={demo || proof} comparison={proof} pending={busy} onEndDay={endDay} onJumpToDay7={jumpToDay7} onNotice={setNotice} cart={cart}>{view}</Shell><ResetDialog open={reset} onClose={()=>setReset(false)} onReset={async memory=>{if(await run.act('/api/reset',{memory,seed:42}))navigate('index.html');}} pending={!!busy} error={run.actionError}/>{(notice || run.actionError) && <div className={'toast '+(run.actionError?'error':'')} role={run.actionError?'alert':'status'}>{run.actionError || notice}{run.actionError && <button className="icon-button" aria-label="Đóng thông báo" onClick={run.clearActionError}>×</button>}</div>}</>;
+  return <><Shell preview={client.preview} state={run.state} events={run.events} compact={demo || proof} comparison={proof} pending={busy} onEndDay={endDay} onJumpToDay7={jumpToDay7} onNotice={setNotice} cart={cart}>{view}</Shell><ResetDialog open={reset} onClose={()=>setReset(false)} onReset={async memory=>{if(await run.act('/api/reset',{memory,seed:42}))navigate('index.html');}} pending={!!busy} error={run.actionError}/>{(notice || run.actionError) && <div className={'toast '+(run.actionError?'error':'')} role={run.actionError?'alert':'status'}>{run.actionError || notice}{run.actionError && <button className="icon-button" aria-label="Đóng thông báo" onClick={run.clearActionError}>×</button>}</div>}</>;
 }

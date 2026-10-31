@@ -110,6 +110,28 @@ class Facade:
         if run['config'].get('driver',{}).get('agent_version')=='native':
             busy=busy or bool(one(c,"SELECT job_id FROM content_jobs WHERE run_id=? AND status IN ('queued','running') LIMIT 1",(r,)))
         if operation and operation['status'] in {'queued','running'} and (operation['kind']=='start_day' or operation['kind'].startswith('renegotiate:')):step="negotiating"
+        retry=one(c,"SELECT * FROM operations WHERE run_id=? AND day=? AND kind LIKE 'renegotiate:%' ORDER BY rowid DESC LIMIT 1",(r,run['current_day']))
+        renegotiation=None
+        if retry and retry['result']:
+            source_id=retry['result'].get('source_card_id')
+            source=one(c,"SELECT * FROM cards WHERE run_id=? AND card_id=? AND shop_id='D' AND day=?",(r,source_id,run['current_day']))
+            if source:
+                receipt=one(c,"SELECT response_json FROM idempotency_records WHERE principal_id='native_orchestrator' AND run_scope=? AND path='native/negotiation' AND key=?",(r,retry['operation_id']+':D'))
+                nid=receipt['response'].get('negotiation_id') if receipt and receipt['response'] else None
+                neg=one(c,"SELECT * FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id='D' AND day=?",(r,nid,run['current_day'])) if nid else None
+                terminal=neg['terminal_receipt'] if neg and neg['terminal_receipt'] else {}
+                status=retry['status'] if retry['status'] in {'queued','running'} else (neg['status'] if neg and neg['status'] in {'agreed','failed'} else 'unknown')
+                reason=self.s.safe_text(c,r,terminal.get('reason_vi') or '')
+                if status=='failed' and not reason:reason='Agent chưa đưa ra được gói điều chỉnh.'
+                if status=='unknown':reason='Tác vụ thương lượng chưa hoàn tất hoặc chưa rõ kết quả.'
+                changed=None
+                if status=='agreed' and neg['final_proposal_id'] and source['proposal_id']:
+                    previous=self.s.entity(c,'proposals',r,'proposal_id',source['proposal_id'])
+                    final=self.s.entity(c,'proposals',r,'proposal_id',neg['final_proposal_id'])
+                    changed=previous['package']!=final['package']
+                    if not changed:reason='Các agent giữ nguyên gói trước, chưa đưa ra điều chỉnh theo góp ý.'
+                renegotiation={'source_card_id':source_id,'negotiation_id':nid,'status':status,'reason_vi':reason,
+                               'referee_action':terminal.get('referee_action'),'changed':changed}
         current=self.s.product(c,r,"D")
         trace=one(c,"SELECT result_json FROM operations WHERE run_id=? AND json_extract(result_json,'$.trace_shop_id')='D' AND json_extract(result_json,'$.trace_url') IS NOT NULL ORDER BY rowid DESC LIMIT 1",(r,))
         rules,rules_version=self.s.rules(c,r,'D')
@@ -124,6 +146,7 @@ class Facade:
         return {"run_id":r,"day":run["current_day"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"step":step,"brief":run['brief'],"brief_preset":preset,"brief_editable":preset is None,"rules_version":rules_version,"confirmed_style_notes":rules['content_style_notes'],
                 "simulation_days":run["simulation_days"],"execution_profile":run["execution_profile"],"data_source":run["config"].get("source","simulation"),"busy":busy,
                 "active_operation":self.s.operation_view(operation,p.role) if operation else None,
+                "renegotiation":renegotiation,
                 "learning_status":handoff["status"] if handoff else None,"learning_error":handoff["error_code"] if handoff else None,"learning_version":handoff['version'] if handoff else None,"learning_day":handoff['day'] if handoff else None,"learning_retry_allowed":self.s.learning_retry_allowed(c,run,handoff),
                 "content_refs":{"active_content_id":current["active_content_id"],"original_content_id":seed_content["content_id"],"product_version":current["version"]},
                 "capabilities":{"trace":bool(trace),"faithful_llm_replay":False,"content_undo":True,"comparison":True,"external_workers":True},

@@ -157,12 +157,16 @@ class ContentService:
                 except MediaError as exc:
                     return {'status':'unknown' if exc.unknown else 'failed','error':exc.code}
 
-            a_remote = await launch('A', image_bodies['A'])
-            a = await finish('A', a_remote) if a_remote.get('job_id') or a_remote.get('asset_id') else a_remote
-            if a.get('status') == 'unknown':
-                raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
-            remote = {}
-            if a.get('status') == 'done' and a.get('source_asset_id') and job['retry_scope'] != 'images':
+            async def generate(slot, body):
+                remote = await launch(slot, body)
+                return await finish(slot, remote) if remote.get('job_id') or remote.get('asset_id') else remote
+
+            image_tasks = {slot: asyncio.create_task(generate(slot, image_bodies[slot])) for slot in 'ABC'}
+
+            async def generate_video():
+                a = await image_tasks['A']
+                if a.get('status') != 'done' or not a.get('source_asset_id') or job['retry_scope'] == 'images':
+                    return {'status':'failed','error':'REFERENCE_IMAGE_FAILED'}
                 narration = ' '.join((product['name'] + ', ' + ', '.join(facts)).split()[:20])
                 video_body = {'input_asset_id':a['source_asset_id'],'product_name':product['name'],'product_kind':product_kind,
                     'verified_facts':facts,'script':narration,'mode':'muse','output_type':'realistic_human','duration':5,
@@ -170,18 +174,17 @@ class ContentService:
                     'setting':'Bối cảnh sáng tự nhiên.' if bright else 'Bối cảnh tự nhiên.',
                     'motion_prompt':('One adult naturally holds the same handheld fan by its handle.' if product_kind == 'handheld_fan'
                                      else 'One adult naturally demonstrates the same desktop fan, preserving its base and controls.')}
-                remote['video'] = await launch('video', video_body)
-                if remote['video'].get('status') == 'unknown':
-                    raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
-            for slot in 'BC':
-                remote[slot] = await launch(slot, image_bodies[slot])
-                if remote[slot].get('status') == 'unknown':
-                    raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
-            outputs = {'A':a}
-            for slot, value in remote.items():
-                outputs[slot] = await finish(slot, value) if value.get('job_id') or value.get('asset_id') else value
-                if outputs[slot].get('status') == 'unknown':
-                    raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
+                return await generate('video', video_body)
+
+            tasks = {**image_tasks, 'video':asyncio.create_task(generate_video())}
+            results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException):
+                    raise result
+            outputs = dict(zip(tasks, results))
+            if any(value.get('status') == 'unknown' for value in outputs.values()):
+                raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
+            a = outputs['A']
             images = [{'option':slot,'status':'done' if outputs[slot].get('status')=='done' else 'failed',
                        'asset_id':outputs[slot].get('asset_id'),'source':outputs[slot].get('source','unavailable'),
                        'error':outputs[slot].get('error')} for slot in 'ABC']

@@ -558,3 +558,113 @@ def test_pending_renegotiation_and_failed_night_are_truthful(tmp_path):
         assert response.status_code==409 and response.json()['error']['code']=='REFLECTION_UNKNOWN'
         with service.store.connect() as c:
             assert c.execute("SELECT COUNT(*) FROM operations WHERE run_id=? AND kind='night'",(run,)).fetchone()[0]==1
+
+
+def test_seller_renegotiation_exposes_ask_human_reason(tmp_path):
+    defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
+    app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,set()))
+    with TestClient(app) as client:
+        run=client.get('/api/state').json()['run_id']
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF.copy(),headers=headers('brief')).status_code==200
+        assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
+        with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
+        worker._operation(op)
+        card=client.get('/api/state').json()['pending_card']
+        assert card
+        request={'card_id':card['card_id'],'expected_card_version':card['version'],'expected_brief_version':card['brief_version'],
+                 'action':'negotiate','note_vi':'giảm thêm dc khong'}
+        queued=client.post('/api/decision',json=request,headers=headers('renegotiate'))
+        assert queued.status_code==202,queued.text
+        with service.store.connect() as c:op=one(c,'SELECT * FROM operations WHERE run_id=? AND operation_id=?',(run,queued.json()['operation_id']))
+        class AskHumanTransport(NativeTransport):
+            def invoke_tools(self, messages, **kwargs):
+                response=super().invoke_tools(messages, **kwargs)
+                returned=[m for m in messages if isinstance(m,ToolMessage)]
+                if ':referee:' in kwargs['run_name'] and returned:
+                    ctx=json.loads(returned[-1].content)
+                    if ctx['turns'][-1]['actor']=='shop':
+                        return AIMessage(content='',tool_calls=[tool('finish_referee',{
+                            'action':'ask_human','reason_vi':'Dự báo chưa bảo đảm mục tiêu; cần người bán xem xét.',
+                            'evidence_refs':[ctx['turns'][-1]['turn_id']],'unresolved_terms':[],
+                            'next_actor':'seller','focused_question':None},'finish')])
+                return response
+        worker.llm_factory=lambda run,settings,store:AskHumanTransport(settings,set())
+        worker._operation(op)
+        state=client.get('/api/state').json()
+        assert not state['pending_card']
+        outcome=state.get('renegotiation') or {}
+        assert outcome.get('source_card_id')==card['card_id'] and outcome.get('status')=='failed',state
+        assert outcome['referee_action']=='ask_human'
+        assert outcome['reason_vi']=='Dự báo chưa bảo đảm mục tiêu; cần người bán xem xét.'
+        events=all_events(client,run)
+        finished=next(e for e in reversed(events) if e['type']=='negotiation_finished' and e['data']['negotiation_id']==outcome['negotiation_id'])
+        assert finished['data']['source_card_id']==card['card_id']
+        assert finished['data']['referee_action']=='ask_human' and finished['data']['reason_vi']==outcome['reason_vi']
+
+
+def test_seller_code_checks_cite_actual_rules_finance_and_reference_document(tmp_path):
+    defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
+    app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    initial={'content_refresh':True,'ads_daily_budget':45000,'voucher_pct':10,'stop_roas_below':4.0,'stop_after_days':2,'duration_days':3}
+    worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,set(),initial))
+    with TestClient(app) as client:
+        run=client.get('/api/state').json()['run_id']
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF.copy(),headers=headers('brief')).status_code==200
+        assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
+        with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
+        worker._operation(op)
+        events=all_events(client,run)
+        checks=[e for e in events if e['type']=='code_check' and e['shop_id']=='D']
+        failed=next(e for e in checks if e['data']['ok'] is False)
+        violations={check['code']:check for check in failed['data']['checks']}
+        for code in ('VOUCHER_OVER_CAP','PROFIT_BELOW_MIN','BREAKEVEN_TOO_HIGH','STOP_BELOW_BREAKEVEN'):
+            assert violations[code]['ok'] is False and violations[code]['sources'],violations[code]
+        assert any(s['kind']=='shop_rules' and s['version']==1 for s in violations['VOUCHER_OVER_CAP']['sources'])
+        assert any(s['kind']=='product_cost' and s['version']==1 for s in violations['PROFIT_BELOW_MIN']['sources'])
+        sources=violations['STOP_BELOW_BREAKEVEN']['sources']
+        assert any(s['kind']=='fee_policy' and s['version']=='demo-fees-v1' for s in sources)
+        doc=next(s for s in sources if s['kind']=='reference_document')
+        assert doc['document_id']=='fee_calculation_guide_demo'
+        response=client.get(doc['download_url'])
+        assert response.status_code==200 and response.json()['data']['document_version']==doc['version']
+        passed={check['code']:check for check in checks[-1]['data']['checks']}
+        for code in ('VOUCHER_OVER_CAP','PROFIT_BELOW_MIN','BREAKEVEN_TOO_HIGH','STOP_BELOW_BREAKEVEN'):
+            assert passed[code]['ok'] is True and passed[code]['sources'],passed.get(code)
+        token=service.issue_token('platform_agent',runs=(run,),shops=('D',))
+        public=client.get(f'/api/v1/runs/{run}/events?limit=100',headers={'Authorization':'Bearer '+token})
+        assert public.status_code==200
+        assert not any(e['type']=='code_check' for e in public.json()['data'])
+
+
+def test_running_content_exposes_only_verified_assets_of_current_job(tmp_path):
+    from app.infrastructure.data_content import DataContentBridge
+    defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
+    app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,set()))
+    with TestClient(app) as client:
+        run=client.get('/api/state').json()['run_id']
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF.copy(),headers=headers('brief')).status_code==200
+        assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
+        with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
+        worker._operation(op)
+        card=client.get('/api/state').json()['pending_card']
+        body={'card_id':card['card_id'],'expected_card_version':card['version'],'expected_brief_version':card['brief_version'],'action':'accept'}
+        assert client.post('/api/decision',json=body,headers=headers('accept')).status_code==200
+        draft=client.get('/api/state').json()['content_draft'];job_id=draft['job_id']
+        bridge=DataContentBridge(service);bridge.reserve_slot(run,job_id,'A',{'fixture':'A'})
+        buf=io.BytesIO();Image.new('RGB',(8,8),(70,40,90)).save(buf,'PNG')
+        asset_id=bridge.import_asset(run,job_id,data=buf.getvalue(),mime_type='image/png',kind='image')
+        bridge.update_slot(run,job_id,'A',{'status':'done','asset_id':asset_id,'source':'fixture'})
+        draft=client.get('/api/state').json()['content_draft']
+        a,b,c=draft['images']
+        assert draft['status'] in ('queued','running') and a['status']=='done' and a['path'],a
+        assert client.get(a['path']).content==buf.getvalue()
+        assert b['path'] is None and c['path'] is None
+        with service.store.connect(write=True) as conn:
+            conn.execute('DELETE FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?',(run,job_id,asset_id))
+        a=client.get('/api/state').json()['content_draft']['images'][0]
+        assert a['path'] is None and a['status']!='done'

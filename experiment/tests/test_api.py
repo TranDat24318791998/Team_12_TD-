@@ -1,5 +1,6 @@
 import io
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -134,10 +135,50 @@ def test_expired_tampered_invalid_range_and_full_play(api):
 def test_restart_does_not_repeat_paid_calls(api):
     client, app = api
     asset = upload(client)
-    row, _ = app.state.store.create('alice', 'recover-job', 'hash', payload(asset), 4)
-    app.state.store.claim()
+    rows = [app.state.store.create('alice', f'recover-job-{i}', 'hash', payload(asset), 4)[0] for i in range(4)]
+    for _ in range(3):
+        app.state.store.claim()
     app.state.store.recover()
-    assert app.state.store.job(row['id'])['status'] == 'failed'
+    assert all(app.state.store.job(row['id'])['stage'] == 'interrupted' for row in rows[:3])
+    assert app.state.store.job(rows[3]['id'])['status'] == 'queued'
+    replay, created = app.state.store.create('alice', 'recover-job-0', 'hash', payload(asset), 4)
+    assert not created and replay['id'] == rows[0]['id'] and replay['stage'] == 'interrupted'
+
+
+def test_worker_runs_three_image_jobs_at_once(tmp_path):
+    settings = Settings(data_dir=tmp_path, storage_backend='local', openai_api_key='fake',
+                        video_api_token=TOKEN, playback_secret='test-playback-' + 'y' * 32)
+    started = set()
+    three_started = threading.Event()
+    release = threading.Event()
+    lock = threading.Lock()
+
+    def processor(settings, store, storage, row):
+        with lock:
+            started.add(row['id'])
+            if len(started) == 3:
+                three_started.set()
+        release.wait(3)
+        store.update(row['id'], status='failed', stage='failed', error='fake provider')
+
+    with TestClient(create_app(settings, processor=processor)) as client:
+        try:
+            asset = upload(client)
+            ids = []
+            for index, style in enumerate(('clean_white', 'pastel_lifestyle', 'premium_studio', 'clean_white')):
+                response = client.post('/v1/image-jobs', headers=headers() | {'Idempotency-Key': f'parallel-image-{index}'},
+                    json={'job_type':'image', 'product_asset_id':asset, 'style':style, 'product_kind':'desktop_fan', 'product_name':'Quạt'})
+                assert response.status_code == 202, response.text
+                ids.append(response.json()['job_id'])
+            assert three_started.wait(1), f'Only {len(started)} image jobs started before any could finish'
+            assert started == set(ids[:3])
+            assert all(client.get('/v1/jobs/' + job_id, headers=headers()).json()['status'] == 'running' for job_id in ids[:3])
+            assert client.get('/v1/jobs/' + ids[3], headers=headers()).json()['status'] == 'queued'
+            replay = client.post('/v1/image-jobs', headers=headers() | {'Idempotency-Key':'parallel-image-1'},
+                json={'job_type':'image', 'product_asset_id':asset, 'style':'pastel_lifestyle', 'product_kind':'desktop_fan', 'product_name':'Quạt'})
+            assert replay.json()['job_id'] == ids[1] and replay.json()['reused'] is True
+        finally:
+            release.set()
 
 
 def test_watch_page_requires_signature_and_escapes_script(api):

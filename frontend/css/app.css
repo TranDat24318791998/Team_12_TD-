@@ -360,6 +360,12 @@
 .activity-detail-body .guardian ul { list-style: none; padding: 0; font-size: 10px; line-height: 1.8; margin-top: 7px; }
 .activity-detail-body .guardian li { display: flex; align-items: flex-start; gap: 4px; margin-top: 4px; }
 .activity-detail-body .guardian li > .icon { width: 12px; height: 12px; flex-shrink: 0; margin-top: 3px; }
+.activity-detail-body .check-sources { margin-top: 2px; }
+.activity-detail-body .check-sources summary { min-height: 32px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.activity-detail-body .check-sources ul { margin: 0 0 6px; }
+.activity-detail-body .check-sources li { display: block; margin-top: 5px; }
+.activity-detail-body .check-sources a { text-decoration: underline; text-underline-offset: 3px; }
+.activity-detail-body .check-sources p { margin-top: 3px; color: #665a52; }
 @media(min-width:1000px) {
   .proof-page #root, .demo-page #root { height: 100dvh; display: flex; flex-direction: column; }
   .proof-page .proof-presentation { flex: 1; min-height: 0; gap: 6px; padding-block: 12px 6px; }

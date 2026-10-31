@@ -18,7 +18,7 @@ from PIL import Image
 from app.content.service import ContentService
 from app.core.settings import Settings
 from app.infrastructure.data_content import DataContentBridge
-from app.infrastructure.media_gateway import MediaGateway
+from app.infrastructure.media_gateway import MediaError, MediaGateway
 from app.infrastructure.llm import LLMClient
 from app.domain.models.content import ContentText
 from data.growth_data.api import create_app
@@ -110,14 +110,16 @@ def test_real_http_bridge_runs_native_content_and_imports_same_attempt_media(tmp
                 assert logo_id and logo_id!=job['provider_state']['inputs']['source_asset_id']
                 assert all(app.state.service.object_path(app.state.service.entity(c,'assets',run,'asset_id',image['asset_id'])['object_key']).is_file() for image in content['cover_options'])
             with sqlite3.connect(tmp_path/'media/jobs.sqlite3') as db:
-                requests = [json.loads(row[0]) for row in db.execute('SELECT request FROM jobs ORDER BY created')]
+                jobs = [(json.loads(row[0]), json.loads(row[1])) for row in db.execute('SELECT request,result FROM jobs ORDER BY created')]
                 logo_file = Path(db.execute('SELECT path FROM assets WHERE id=?',(logo_id,)).fetchone()[0])
             with Image.open(logo_file) as uploaded, Image.open(ROOT/'frontend/img/shoppilot-ai.png') as supplied:
                 assert uploaded.convert('RGB').tobytes()==supplied.convert('RGB').tobytes()
-            assert [request.get('job_type','video') for request in requests] == ['image','video','image','image']
+            requests = [request for request, _ in jobs]
+            assert sorted(request.get('job_type','video') for request in requests) == ['image','image','image','video']
             assert all(request['product_kind']=='desktop_fan' for request in requests)
             assert all(request['logo_asset_id']==logo_id for request in requests if request.get('job_type')=='image')
-            assert requests[1]['input_asset_id'] != requests[0]['product_asset_id']
+            reference = next(result['asset_id'] for request, result in jobs if request.get('style') == 'clean_white')
+            assert next(request['input_asset_id'] for request in requests if request.get('job_type') != 'image') == reference
     finally:
         process.terminate()
         process.wait(timeout=10)
@@ -146,6 +148,129 @@ class FakeGateway:
     async def preflight(self, kind): self.calls.append('preflight')
     async def upload(self, run, data): self.calls.append('upload'); return 'a'*32
     async def close(self): pass
+
+
+def test_images_overlap_and_video_starts_when_a_finishes(tmp_path):
+    source = tmp_path/'source.jpg'
+    Image.new('RGB', (20, 20), 'white').save(source, 'JPEG')
+    app = create_app(tmp_path/'data', content_mode='worker', product_image_path=str(source))
+    with TestClient(app) as client:
+        run, job_id = make_job(client, app.state.service)
+
+        async def exercise():
+            import io
+
+            started = {slot: asyncio.Event() for slot in ('A', 'B', 'C', 'video')}
+            release = {slot: asyncio.Event() for slot in ('A', 'B', 'C', 'video')}
+            submissions = []
+
+            class ControlledGateway(FakeGateway):
+                async def submit(self, run_id, slot, body, key):
+                    submissions.append((slot, body, key))
+                    started[slot].set()
+                    return {'job_id': slot, 'status': 'running'}
+
+                async def wait(self, run_id, remote, deadline):
+                    slot = remote['job_id']
+                    await release[slot].wait()
+                    return {'job_id': slot, 'status': 'done', 'result': {
+                        'asset_id': f'remote-{slot}', 'visual_review_passed': True,
+                        'visual_review': {'notes_vi': 'Đạt'}, 'duration_seconds': 5,
+                        'media_text_vision_calls_completed': 3}}
+
+                async def download(self, run_id, remote, *, video=False):
+                    if video:
+                        return b'1234ftypfake-video'
+                    output = io.BytesIO()
+                    Image.new('RGB', (20, 20), {'A':'red', 'B':'green', 'C':'blue'}[remote['job_id']]).save(output, 'JPEG')
+                    return output.getvalue()
+
+            bridge = DataContentBridge(app.state.service)
+            worker = ContentService(bridge, Settings(_env_file=None, media_mode='live'), NativeContent(), media_client=ControlledGateway())
+            task = asyncio.create_task(worker.process_job(run, job_id))
+            try:
+                await asyncio.wait_for(asyncio.gather(*(started[slot].wait() for slot in 'ABC')), 1)
+                assert not started['video'].is_set()
+                release['A'].set()
+                await asyncio.wait_for(started['video'].wait(), 1)
+                slots = bridge.snapshot(run, job_id)['provider_state']
+                assert slots['A']['status'] == 'done' and slots['A']['asset_id']
+                assert slots['B']['status'] == slots['C']['status'] == 'running'
+                video_body = next(body for slot, body, _ in submissions if slot == 'video')
+                assert video_body['input_asset_id'] == slots['A']['source_asset_id'] == 'remote-A'
+                assert not release['B'].is_set() and not release['C'].is_set()
+                for slot in ('B', 'C', 'video'):
+                    release[slot].set()
+                await asyncio.wait_for(task, 2)
+                with app.state.service.store.connect() as c:
+                    job = one(c, 'SELECT * FROM content_jobs WHERE run_id=? AND job_id=?', (run, job_id))
+                    content = app.state.service.entity(c, 'content_versions', run, 'content_id', job['output_content_ids'][0])
+                assert job['status'] == 'succeeded', job['error_code']
+                assert all(image['status'] == 'done' for image in content['cover_options'])
+                assert content['video_job']['reference_asset_id'] == content['cover_options'][0]['asset_id']
+                assert [slot for slot, _, _ in submissions].count('video') == 1
+                assert len({key for _, _, key in submissions}) == 4
+            finally:
+                await worker.close()
+
+        asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('failed_slot,unknown', [('A', False), ('B', False), ('B', True)])
+def test_slot_failure_is_isolated_and_unknown_is_not_retried(tmp_path, failed_slot, unknown):
+    import io
+
+    source = tmp_path/'source.jpg'
+    Image.new('RGB', (20, 20), 'white').save(source, 'JPEG')
+    app = create_app(tmp_path/'data', content_mode='worker', product_image_path=str(source))
+    with TestClient(app) as client:
+        run, job_id = make_job(client, app.state.service)
+        submissions = []
+
+        class FailingGateway(FakeGateway):
+            async def submit(self, run_id, slot, body, key):
+                submissions.append(slot)
+                if slot == failed_slot:
+                    raise MediaError('MEDIA_SUBMIT_UNKNOWN' if unknown else 'MEDIA_JOB_FAILED', unknown=unknown)
+                return {'job_id':slot, 'status':'running'}
+
+            async def wait(self, run_id, remote, deadline):
+                return {'job_id':remote['job_id'], 'status':'done', 'result':{
+                    'asset_id':f"remote-{remote['job_id']}", 'visual_review_passed':True,
+                    'visual_review':{'notes_vi':'Đạt'}, 'duration_seconds':5,
+                    'media_text_vision_calls_completed':3}}
+
+            async def download(self, run_id, remote, *, video=False):
+                if video:
+                    return b'1234ftypfake-video'
+                output = io.BytesIO()
+                Image.new('RGB', (20, 20), {'A':'red', 'B':'green', 'C':'blue'}[remote['job_id']]).save(output, 'JPEG')
+                return output.getvalue()
+
+        async def exercise():
+            worker = ContentService(DataContentBridge(app.state.service), Settings(_env_file=None, media_mode='live'),
+                                    NativeContent(), media_client=FailingGateway())
+            await worker.process_job(run, job_id)
+            await worker.process_job(run, job_id)
+            await worker.close()
+
+        asyncio.run(exercise())
+        with app.state.service.store.connect() as c:
+            job = one(c, 'SELECT * FROM content_jobs WHERE run_id=? AND job_id=?', (run, job_id))
+            content = app.state.service.entity(c, 'content_versions', run, 'content_id', job['output_content_ids'][0])
+        assert submissions.count(failed_slot) == 1
+        assert submissions.count('video') == (0 if failed_slot == 'A' else 1)
+        assert job['provider_state'][failed_slot]['status'] == ('unknown' if unknown else 'failed')
+        assert all(job['provider_state'][slot]['status'] == 'done' for slot in 'ABC' if slot != failed_slot)
+        if unknown:
+            assert job['status'] == 'failed' and job['provider_state']['video']['status'] == 'done'
+            response = client.post('/api/content/retry', json={'feedback_vi':'Ảnh sáng hơn', 'retry_scope':'all'}, headers=headers('retry-unknown'))
+            assert response.status_code == 409 and response.json()['error']['code'] == 'PROVIDER_OUTCOME_UNKNOWN'
+            assert submissions == ['A', 'B', 'C', 'video']
+        else:
+            assert job['status'] == 'succeeded'
+            assert next(image for image in content['cover_options'] if image['option'] == failed_slot)['status'] == 'failed'
+            assert content['video_job']['status'] == ('failed' if failed_slot == 'A' else 'done')
 
 
 @pytest.mark.parametrize('lease', [None, '2000-01-01T00:00:00+00:00'])
@@ -490,8 +615,11 @@ def test_malformed_accepted_job_is_unknown_and_blocks_new_attempt(tmp_path, resp
         submitted=[]
         def accept_malformed(request):
             assert request.url.path=='/v1/image-jobs'
-            submitted.append((request.headers['Idempotency-Key'],request.content))
-            reply=responses[len(submitted)-1]
+            style=json.loads(request.content)['style']
+            submitted.append((style,request.headers['Idempotency-Key'],request.content))
+            if style!='clean_white':
+                return httpx.Response(400,content=b'known rejection')
+            reply=responses[sum(value[0]=='clean_white' for value in submitted)-1]
             return httpx.Response(400 if reply is None else 202,content=reply or b'no')
         settings=Settings(_env_file=None,media_mode='live',media_api_token=TOKEN,media_api_base_url='http://media.test')
         async def run_worker():
@@ -503,10 +631,12 @@ def test_malformed_accepted_job_is_unknown_and_blocks_new_attempt(tmp_path, resp
         with app.state.service.store.connect() as c:
             job=one(c,'SELECT * FROM content_jobs WHERE run_id=? AND job_id=?',(run,job_id))
         assert job['status']=='failed' and job['provider_state']['A']['status']=='unknown'
-        assert len(submitted)==2 and submitted[0]==submitted[1]
-        assert submitted[0][0]==job['provider_state']['A']['idempotency_key']
+        a_submissions=[value for value in submitted if value[0]=='clean_white']
+        assert len(a_submissions)==2 and a_submissions[0]==a_submissions[1]
+        assert a_submissions[0][1]==job['provider_state']['A']['idempotency_key']
+        assert len(submitted)==4 and all(job['provider_state'][slot]['status']=='failed' for slot in 'BC')
         response=client.post('/api/content/retry',json={'feedback_vi':'Ảnh nền sáng hơn','retry_scope':'all'},headers=headers('retry'))
         assert response.status_code==409 and response.json()['error']['code']=='PROVIDER_OUTCOME_UNKNOWN'
         with app.state.service.store.connect() as c:
             assert c.execute("SELECT count(*) FROM content_jobs WHERE run_id=? AND shop_id='D'",(run,)).fetchone()[0]==1
-        assert len(submitted)==2
+        assert len(submitted)==4

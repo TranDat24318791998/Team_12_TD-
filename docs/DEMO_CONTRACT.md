@@ -56,7 +56,7 @@ Dùng `ContentService(bridge, settings, llm, *, media_client=None)`, `await proc
 
 Media API qua `MEDIA_API_BASE_URL`/`MEDIA_API_TOKEN`, không import `experiment` vào app. Upload nguồn một lần/binding; image JSON `/v1/image-jobs`, video JSON `/v1/jobs`. Raw Muse `/v1/videos` là tầng API khác; xem [MUSE_API](MUSE_API.md).
 
-- Service hỗ trợ desktop_fan/handheld_fan, optional logo, bright preference. D hiện dùng desktop_fan. Một draft A/B/C; A xong thì queue video5giây realistic_human từ A cùng attempt rồi B/C. Chọn B/C không tạo video mới.
+- Service hỗ trợ desktop_fan/handheld_fan, optional logo, bright preference. D hiện dùng desktop_fan. Ba ảnh A/B/C của một draft chạy song song; A được nhập và kiểm bytes xong thì khởi chạy video5giây realistic_human từ A cùng attempt, không chờ B/C. Mỗi slot đã sẵn sàng được hiển thị riêng. Chọn B/C không tạo video mới.
 - Logo ShopPilot AI do người dùng cung cấp được giữ nguyên ở `frontend/img/shoppilot-ai.png`, dùng cho giao diện và `DEMO_LOGO_IMAGE_PATH`. Live media upload logo cùng ảnh sản phẩm; video nhận ảnh A của cùng attempt. Thay logo không đổi tên shop hoặc số kinh doanh và không tự tạo lại media cũ.
 - Initial+2retry, tối đa9image/3video submissions cho cả run; media text/vision tối đa3/video ghi riêng native64. Request body/hash/key/remote ID/status/unknown ở Data; queue limit không thay budget.
 - Retry nền sáng là all, giữ images-only semantics của caller cũ. Feedback chỉ tác động draft hiện tại; night tạo candidate, seller Yes mới đổi default.

@@ -33,7 +33,7 @@ LLM_MODE=offline MEDIA_MODE=offline .venv/bin/python scripts/local_stack.py star
 1. Mở seller URL `http://127.0.0.1:8000/?preview=0`, xem đúng run/mode/sản phẩm.
 2. Xem mục tiêu đặt sẵn **24 đơn trong 3 ngày**, ngân sách tối đa **45.000đ/ngày**, bấm xác nhận rồi Bắt đầu ngày. Các số của demo D không cho sửa; backend cũng từ chối body khác preset. Worker chạy nền, UI poll operation/events. Brief của run cũ đã xác nhận vẫn giữ nguyên lịch sử.
 3. Xem tools/Platform/Shop/Referee, chọn Accept/Negotiate/Reject. Content-refresh accept chưa bật campaign.
-4. Content worker tạo chữ, A rồi video từ A, sau đó B/C. Feedback nền sáng có tối đa hai lần làm lại, gửi all để video cùng attempt.
+4. Content worker tạo chữ rồi tạo A/B/C song song. Video bắt đầu khi A đã sẵn sàng và chạy đồng thời với B/C; ảnh nào hoàn tất sẽ hiện trước. Feedback nền sáng có tối đa hai lần làm lại, gửi all để video cùng attempt.
 5. Chọn cover, xem video; clip chưa pass review cần ack hoặc chọn bỏ video. Missing/corrupt cover không được Apply. Apply mới publish+activate.
 6. Kết thúc ngày. Data settle và night học; không thao tác ngày sau khi operation chưa xong. Ngày sau seller trả lời câu hỏi preference; Yes mới thành Rules/default.
 7. Proof “Phiên hiện tại” chỉ có dữ liệu khi active run nằm trong một cặp hoàn tất. Sau reset chưa có cặp thì báo chưa sẵn sàng. “Báo cáo mô phỏng đã chạy” là nguồn riêng; cả hai nguồn tải nhật ký của đúng cặp ON/OFF. Preview7ngày vẫn là mẫu riêng.

@@ -118,3 +118,13 @@ test('event reader drains hidden-only pages and rejects non-advancing cursors',a
   await assert.rejects(readEvents({request:async()=>({run_id:'r',events:[],last_seq:0,has_more:true})},'r'),/không tiến/);
   await assert.rejects(readEvents({request:async()=>({run_id:'other',events:[],last_seq:0,has_more:false})},'r'),/Phiên đã thay đổi/);
 });
+
+test('preview cannot claim an arbitrary request was accepted as a voucher change',async()=>{
+  let clock=0;const client=createClient({preview:true,storage:storage(),now:()=>clock});
+  let state=await client.request('/api/state');await client.request('/api/brief/confirm',{method:'POST',body:state.brief_preset});
+  await client.request('/api/day/start',{method:'POST'});clock+=6000;state=await client.request('/api/state');
+  const source=state.pending_card.card_id;await client.request('/api/decision',{method:'POST',body:{card_id:source,action:'negotiate',note_vi:'giảm thêm dc khong'}});
+  state=await client.request('/api/state');assert.equal(state.step,'negotiating');assert.equal(state.renegotiation.source_card_id,source);
+  clock+=3000;state=await client.request('/api/state');
+  assert.equal(state.pending_card,null);assert.equal(state.renegotiation.status,'failed');assert.match(state.renegotiation.reason_vi,/xem trước/i);
+});

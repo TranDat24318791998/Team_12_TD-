@@ -58,10 +58,14 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
     store = Store(settings.data_dir)
     storage = storage or create_storage(settings)
     stopping = threading.Event()
+    claim_lock = threading.Lock()
 
     def work():
-        while not stopping.is_set():
-            row = store.claim()
+        while True:
+            with claim_lock:
+                if stopping.is_set():
+                    return
+                row = store.claim()
             if not row:
                 stopping.wait(0.25)
                 continue
@@ -85,7 +89,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
         if len(settings.video_api_token.get_secret_value()) < 24 or len(settings.playback_secret.get_secret_value()) < 24:
             raise RuntimeError('Chạy python scripts/init_config.py để tạo token và playback secret trước khi mở API')
         lock = None
-        thread = None
+        threads = []
         if worker_enabled:
             lock = (settings.data_dir / 'worker.lock').open('a')
             try:
@@ -94,18 +98,26 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 lock.close()
                 raise RuntimeError('Chỉ chạy một worker/API process cho mỗi DATA_DIR')
             store.recover()
-            thread = threading.Thread(target=work, name='video-worker', daemon=True)
-            thread.start()
+            threads = [threading.Thread(target=work, name=f'media-worker-{index}', daemon=True) for index in range(3)]
+            for thread in threads:
+                thread.start()
         try:
             yield
         finally:
-            stopping.set()
-            if thread:
-                await asyncio.to_thread(thread.join, 5)
+            with claim_lock:
+                stopping.set()
+            if threads:
+                await asyncio.gather(*(asyncio.to_thread(thread.join, 5) for thread in threads))
             if lock:
-                # Keep process lock until a running job finishes or process exits.
-                if thread and thread.is_alive():
+                if any(thread.is_alive() for thread in threads):
+                    # Keep the process lock until every in-flight job exits.
                     app.state.worker_lock = lock
+                    def release_lock():
+                        for thread in threads:
+                            thread.join()
+                        lock.close()
+                        app.state.worker_lock = None
+                    threading.Thread(target=release_lock, name='media-worker-cleanup', daemon=True).start()
                 else:
                     lock.close()
 

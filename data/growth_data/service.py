@@ -133,6 +133,58 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         result=check(pkg,prod["list_price_vnd"],cost["unit_cost_vnd"]+cost["other_unit_cost_vnd"],rules,inv["available_units"],fees)
         return result,dict(rules_version=rv,cost_version=cost["cost_version"],inventory_version=inv["version"],fee_policy_version=policy)
 
+    def check_details(self,c,r,s,result,versions):
+        rules,rv=self.rules(c,r,s)
+        require(rv==versions['rules_version'],'RULES_CHANGED','Luật đã thay đổi')
+        rule_text={
+            'VOUCHER_OVER_CAP':f"Voucher tối đa {rules['voucher_max_pct']}%.",
+            'ADS_NOT_ALLOWED':'Đối chiếu quyền chạy quảng cáo đã đặt.',
+            'ADS_OVER_CAP':f"Ngân sách ngày tối đa {rules['ads_daily_max']:,}đ.".replace(',','.'),
+            'PROFIT_BELOW_MIN':'Đối chiếu lãi mỗi đơn với mức tối thiểu đã đặt.',
+            'BREAKEVEN_TOO_HIGH':'Đối chiếu ROAS hòa vốn với giới hạn đã đặt.',
+        }
+        passed_text={
+            'VOUCHER_OVER_CAP':'Voucher trong giới hạn shop.',
+            'ADS_NOT_ALLOWED':'Quyền chạy quảng cáo phù hợp.',
+            'ADS_OVER_CAP':'Ngân sách trong giới hạn shop.',
+            'STOCK_TOO_LOW_FOR_ADS':'Tồn kho đáp ứng điều kiện quảng cáo.',
+            'PROFIT_BELOW_MIN':'Gói đạt lãi tối thiểu.',
+            'LOSS_MAKING':'Gói không gây lỗ theo phép tính.',
+            'BREAKEVEN_TOO_HIGH':'ROAS hòa vốn trong giới hạn shop.',
+            'STOP_BELOW_BREAKEVEN':'Ngưỡng dừng bảo vệ shop theo hòa vốn.',
+        }
+        finance_codes={'PROFIT_BELOW_MIN','LOSS_MAKING','BREAKEVEN_TOO_HIGH','STOP_BELOW_BREAKEVEN'}
+        run=self.entity(c,'runs',r,'run_id',r)
+        policy=one(c,'SELECT * FROM run_policies WHERE run_id=?',(r,))
+        guide=one(c,"""SELECT * FROM knowledge_documents WHERE document_id='fee_calculation_guide_demo'
+            AND collection_scope='shared' AND index_status='ready' AND knowledge_release=?
+            AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?) ORDER BY document_version DESC LIMIT 1""",
+            (policy['knowledge_release'],business_date(run['current_day']),business_date(run['current_day'])))
+        # The demo guide describes this pinned fee policy; it is reference material, not an input to the calculation.
+        guide_ref=None
+        if guide and versions['fee_policy_version']=='demo-fees-v1':
+            path=self.object_path(guide['source_object_key'])
+            if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==guide['checksum']:
+                guide_ref={'kind':'reference_document','title_vi':'Tài liệu tham khảo phí giả lập','version':guide['document_version'],
+                           'document_id':guide['document_id'],'download_url':f"/api/v1/runs/{r}/knowledge/documents/{guide['document_id']}?version={guide['document_version']}"}
+        details=[]
+        for item in result['checks']:
+            code=item['code'];sources=[]
+            if code in rule_text:
+                sources.append({'kind':'shop_rules','title_vi':'Quy tắc shop','version':versions['rules_version'],'excerpt_vi':rule_text[code]})
+            if code in finance_codes:
+                sources.extend([{'kind':'product_cost','title_vi':'Giá vốn sản phẩm','version':versions['cost_version']},
+                                {'kind':'fee_policy','title_vi':'Chính sách phí áp dụng','version':versions['fee_policy_version']}])
+                if guide_ref:sources.append(guide_ref)
+            if code=='STOP_BELOW_BREAKEVEN':
+                sources.append({'kind':'calculation','title_vi':'Điều kiện dừng theo hòa vốn','version':versions['fee_policy_version'],
+                                'excerpt_vi':'Ngưỡng dừng không thấp hơn ROAS hòa vốn, làm tròn lên bậc 0,5.'})
+            if code=='STOCK_TOO_LOW_FOR_ADS':
+                sources.extend([{'kind':'inventory','title_vi':'Tồn kho','version':versions['inventory_version']},
+                                {'kind':'platform_policy','title_vi':'Điều kiện tồn kho','version':policy['platform_policy_version'],'excerpt_vi':'Cần ít nhất 30 sản phẩm để chạy quảng cáo.'}])
+            details.append({**item,'message_vi':passed_text[code] if item['ok'] else violation_message(code),'sources':sources})
+        return details
+
     def event(self,c,r,day,kind,role,s=None,payload=None,visibility="shared",text="Đã cập nhật trạng thái",eid=""):
         seq=c.execute("SELECT COALESCE(MAX(seq),0)+1 FROM events WHERE run_id=?",(r,)).fetchone()[0]
         insert(c,"events",run_id=r,seq=seq,day=day,type=kind,actor_role=role,shop_id=s,entity_type="business",entity_id=eid,
@@ -309,7 +361,7 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         c.execute("UPDATE negotiations SET platform_rounds=?,status=?,final_proposal_id=?,expected_next_role=?,version=version+1,updated_at=? WHERE run_id=? AND negotiation_id=?",(rounds,status,pid if accepted else None,"shop_agent" if p.role=="platform_agent" else "platform_agent",now(),r,b.negotiation_id))
         self.event(c,r,run["current_day"],"platform_turn" if p.role=="platform_agent" else "shop_turn",p.role,s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"parent_proposal_id":b.parent_proposal_id,"turn_id":b.turn_id,"round":rounds,"package":pkg,"stance":b.stance,"action":b.native_action or b.stance,"message_vi":shared},text=shared or "Agent gửi đề xuất",eid=pid)
         if pkg is not None:
-            self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":violation_message(code)} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
+            self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":self.check_details(c,r,s,result,versions)},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
         return self.shared_proposal(c,p,r,self.entity(c,"proposals",r,"proposal_id",pid))
 
     def finalize_negotiation(self,c,p,r,nid,body):
@@ -333,7 +385,8 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
             require(b.final_proposal_id is None, 'FINAL_PROPOSAL_INVALID', 'Thương lượng thất bại không có gói cuối')
         receipt=b.model_dump()
         c.execute("UPDATE negotiations SET status=?,final_proposal_id=?,terminal_receipt_json=?,terminal_hash=?,version=version+1,updated_at=? WHERE run_id=? AND negotiation_id=?",(b.status,b.final_proposal_id,dumps(receipt),fingerprint(receipt),now(),r,nid))
-        self.event(c,r,neg['day'],'negotiation_finished','orchestrator',neg['shop_id'],{'negotiation_id':nid,'kind':neg['kind'],'status':b.status,'proposal_id':b.final_proposal_id,'package':prop['package'] if b.status=='agreed' else None,'rounds':b.rounds,'reason_vi':self.safe_text(c,r,b.reason_vi)},text='Thương lượng đã kết thúc')
+        source=self.negotiation_operation(c,r,neg)
+        self.event(c,r,neg['day'],'negotiation_finished','orchestrator',neg['shop_id'],{'negotiation_id':nid,'source_card_id':source['result'].get('source_card_id') if source and source['result'] else None,'kind':neg['kind'],'status':b.status,'proposal_id':b.final_proposal_id,'package':prop['package'] if b.status=='agreed' else None,'rounds':b.rounds,'reason_vi':self.safe_text(c,r,b.reason_vi),'referee_action':b.referee_action},text='Thương lượng đã kết thúc')
         return self.entity(c,'negotiations',r,'negotiation_id',nid)
 
     def persist_copy(self,c,table,row,**changes):

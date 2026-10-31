@@ -74,8 +74,11 @@ class DataEventLog:
             if kind=='code_check':
                 proposal=s.entity(c,'proposals',run_id,'proposal_id',self.last_proposal)
                 require(proposal['shop_id']==shop_id and proposal['negotiation_id']==self.negotiation_id,'EVIDENCE_INVALID','Kiểm tra không thuộc lượt thương lượng')
+                existing=one(c,"SELECT payload_json FROM events WHERE run_id=? AND entity_id=? AND type='code_check' ORDER BY seq DESC LIMIT 1",(run_id,proposal['proposal_id']))
+                checks=existing['payload']['checks'] if existing else []
+                checks=[*checks,*[{'code':code,'ok':False,'message_vi':violation_message(code),'sources':[]} for code in data.get('codes',[]) if code not in {item['code'] for item in checks}]]
                 safe.update(proposal_id=proposal['proposal_id'],round=proposal['round'],ok=bool(data['ok']),
-                    checks=[{'code':code,'ok':False,'message_vi':violation_message(code)} for code in data.get('codes',[])])
+                    checks=checks)
             if kind=='referee_review':
                 safe['focused_question']=s.safe_text(c,run_id,data['focused_question']) if data.get('focused_question') else None
                 safe['unresolved_terms']=[s.safe_text(c,run_id,term) for term in data.get('unresolved_terms',[])]

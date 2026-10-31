@@ -15,6 +15,13 @@ from .storage import dumps, fingerprint, insert, many, now, one, timestamps, uid
 
 
 class IntegrationMixin:
+    def negotiation_operation(self, c, r, negotiation):
+        return one(c,"""SELECT o.* FROM operations o JOIN idempotency_records i
+            ON i.run_scope=o.run_id AND i.key=o.operation_id||':'||?
+            WHERE o.run_id=? AND o.day=? AND i.principal_id='native_orchestrator'
+              AND i.path='native/negotiation' AND json_extract(i.response_json,'$.negotiation_id')=?""",
+            (negotiation['shop_id'],r,negotiation['day'],negotiation['negotiation_id']))
+
     @staticmethod
     def operation_view(op,role=None):
         result={key: op.get(key) for key in ("operation_id", "day", "kind", "status", "result", "error_code", "version", "lease_until")}

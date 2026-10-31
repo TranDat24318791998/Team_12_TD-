@@ -165,3 +165,40 @@ test('agent diagram is compact with package details closed by default',()=>{
   const html=renderToStaticMarkup(<AgentActivity state={{...state,step:'negotiating'}} events={[]}/>);
   assert.match(html,/compact-activity/);assert.match(html,/<details class="activity-details">/);assert.doesNotMatch(html,/class="agent-node |class="interaction-steps"/);
 });
+
+test('seller feedback waits for a renegotiation outcome before offering to end the day',()=>{
+  const sent={seq:2,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type:'seller_decision',ts:'12:00',text_vi:'Người bán đã góp ý',data:{card_id:'c-1',action:'negotiate',note_vi:'giảm thêm dc khong'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:{...state,step:'day_done',pending_card:null},events:[sent],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.doesNotMatch(html,/Đã ghi nhận lựa chọn của chị/);
+  assert.doesNotMatch(html,/data-night/);
+  assert.match(html,/đang trao đổi|đang thương lượng/i);
+  assert.match(html,/giảm thêm dc khong/);
+});
+
+test('seller sees the exact current negotiation outcome, not an earlier refusal or a made-up choice',()=>{
+  const mk=(seq,type,data,text_vi='')=>({seq,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type,ts:'12:00',text_vi,data});
+  const feedback=mk(4,'seller_decision',{card_id:'c-2',action:'negotiate',note_vi:'giảm thêm dc khong'});
+  const old=mk(3,'negotiation_finished',{source_card_id:'c-1',negotiation_id:'n-1',status:'failed',reason_vi:'Lý do của phiên cũ'});
+  const value={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-2',negotiation_id:'n-2',status:'failed',referee_action:'ask_human',reason_vi:'Chưa rõ khả năng giảm thêm, cần người bán xem lại.'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[old,feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(html,/Chưa có gói điều chỉnh/);assert.match(html,/Chưa rõ khả năng giảm thêm/);assert.match(html,/data-night/);
+  assert.ok(!html.includes('Đã ghi nhận lựa chọn của chị'));assert.ok(!html.includes('Lý do của phiên cũ'));assert.ok(!html.includes('đã từ chối'));
+  const stale={...value,renegotiation:{source_card_id:'c-1',status:'failed',reason_vi:'Lý do của phiên cũ'}};
+  const pending=renderToStaticMarkup(<DemoPage run={{state:stale,events:[old,feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.ok(!pending.includes('Lý do của phiên cũ'));assert.ok(!pending.includes('data-night'));assert.match(pending,/đang trao đổi|đang thương lượng/i);
+});
+
+test('the check panel shows only supplied safe sources, versions and excerpts with accessible same-origin links',()=>{
+  const pkg={content_refresh:true,ads_daily_budget:70000,voucher_pct:10,stop_roas_below:4,stop_after_days:2,duration_days:3};
+  const make=(seq,type,data)=>({seq,type,data,actor:type==='code_check'?'code':'platform_agent',run_id:state.run_id,day:1,shop_id:'Z',ts:'12:00'});
+  const checks=[{ok:false,message_vi:'Vượt mức',sources:[{kind:'rule',title_vi:'Luật shop <b>',version:4,excerpt_vi:'Ngân sách tối đa <45.000đ>',download_url:'/api/v1/runs/database-run/knowledge/documents/rule-1'}]},{ok:false,message_vi:'Nguồn xấu',sources:[{title_vi:'Nguồn không an toàn',version:'v1',download_url:'javascript:alert(1)'},{title_vi:'Ngoài trang',download_url:'https://evil.example/file'}]},{ok:true,message_vi:'Không có nguồn'}];
+  const html=renderToStaticMarkup(<AgentActivity state={{...state,step:'negotiating'}} events={[make(1,'platform_turn',{negotiation_id:'n',action:'propose',package:pkg}),make(2,'code_check',{negotiation_id:'n',ok:false,checks})]}/>);
+  assert.match(html,/<summary[^>]*>Nguồn kiểm tra/);assert.match(html,/Luật shop &lt;b&gt;/);assert.match(html,/Phiên bản 4/);assert.match(html,/Ngân sách tối đa &lt;45\.000đ&gt;/);
+  assert.match(html,/href="\/api\/v1\/runs\/database-run\/knowledge\/documents\/rule-1"/);assert.ok(!html.includes('href="javascript:'));assert.ok(!html.includes('href="https://evil.example'));
+});
+
+test('completed images appear while the other media slots are still running',()=>{
+  const draft={version:1,status:'running',title:'Tiêu đề',description:'Mô tả',images:[{option:'A',status:'done',path:'/api/v1/runs/r/assets/a/download',source:'live'},{option:'B',status:'running',path:null},{option:'C',status:'reserved',path:null}],video:{status:'running',path:null},feedback_history:[]};
+  const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
+  assert.match(html,/alt="Phương án ảnh bìa A"/);assert.equal((html.match(/Đang tạo ảnh/g)||[]).length,2);assert.match(button(html,'retry'),/disabled/);
+});
