@@ -17,7 +17,7 @@ Hệ thống agent cho một sàn thương mại điện tử **mô phỏng** (t
 - **Người bán** (giám khảo đóng vai chị Lan, chủ shop D) duyệt thẻ đề xuất: Đồng ý, Thương lượng thêm, Từ chối.
 - **Agent nội dung** viết lại tiêu đề, mô tả, tạo 3 ảnh bìa và 1 video (qua Muse); người bán góp ý và bấm Làm lại, tối đa 3 lần.
 - **Mỗi tối** hệ thống học từ kết quả: lịch sử gói, sở thích người bán, hiệu chỉnh dự báo, bài học chiến lược. Hôm sau agent đọc bộ nhớ và làm tốt hơn.
-- **Bằng chứng**: chạy lại 6 ngày cùng seed, bộ nhớ bật và tắt, so sánh chỉ số.
+- **Bằng chứng**: chạy lại 7 ngày cùng seed, bộ nhớ bật và tắt, so sánh chỉ số.
 
 Toàn bộ shop, thị trường và người bán là dữ liệu giả lập. Không có dữ liệu thật của sàn nào.
 
@@ -26,7 +26,9 @@ Toàn bộ shop, thị trường và người bán là dữ liệu giả lập. 
 - Python 3.11, FastAPI + uvicorn, Pydantic v2, httpx, pytest.
 - LangGraph (StateGraph, Send, interrupt, InMemorySaver, store), langchain-openai (`ChatOpenAI`).
 - SQLite qua module chuẩn `sqlite3`.
-- Frontend: HTML, CSS, JavaScript thuần trong `frontend/`, không có bước build.
+- Frontend: React 19 trong `frontend/src/`, CSS trong `frontend/css/`; `npm run build` dùng esbuild tạo `frontend/js/app.js`, FastAPI phục vụ tại `/`. Đổi sang React theo yêu cầu người dùng; xem `docs/FRONTEND_HANDOFF.md`.
+- Thiết kế dữ liệu hiện hành: `data/growth_agents_data_api_design.md` v1.1. Frontend giữ 9 API seller, dùng 7 ngày và trạng thái `complete` theo mục 10.
+- Khi ghép backend/data với giao diện, đọc `docs/FRONTEND_REQUIREMENTS.md` và `docs/FRONTEND_DATA_REQUIREMENTS.md`: payload React đang hỗ trợ, phân quyền, event cursor, phiên bản và yêu cầu persistence. Các mở rộng ghi `TODO(contract)` cần được chốt vào hợp đồng trước khi bật trên API thật.
 - Tuỳ chọn: Langfuse để trace.
 - Ghim version trong `requirements.txt` ngay sau khi cài được bản chạy.
 
@@ -49,7 +51,7 @@ app/
   memory/               gateway.py, night.py, prompts.py
   simulation/           world.py, market.py, runner.py
   infrastructure/       llm.py, images.py, muse.py, eventlog.py, store.py, tracing.py
-frontend/               HTML/CSS/JS thuần, được phục vụ tại /
+frontend/               React source, CSS, ảnh và bundle đã build; được phục vụ tại /
 data/                   seed.json (dữ liệu nguồn)
 assets/products/        ảnh sản phẩm gốc
 contracts/              JSON mẫu của API

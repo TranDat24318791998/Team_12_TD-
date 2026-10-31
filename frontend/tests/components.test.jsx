@@ -1,0 +1,92 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {Product} from '../src/components/Product.jsx';
+import {Proposal} from '../src/components/Proposal.jsx';
+import {ContentReview} from '../src/components/ContentReview.jsx';
+import {EventFeed} from '../src/components/EventFeed.jsx';
+import {AgentActivity} from '../src/components/AgentActivity.jsx';
+import {Progress} from '../src/components/Shell.jsx';
+import {ControlPanel} from '../src/pages/Shop.jsx';
+import {NightPage} from '../src/pages/Night.jsx';
+import {ProofReport} from '../src/pages/Proof.jsx';
+const noop=()=>{};
+const shop={shop_id:'Z',name:'Shop Ánh Dương <b>',title:'Đèn bàn USB & đế gỗ',description:'Đèn bàn có đế gỗ.',category:'den_ban',price:299000,stock:17,rating:4.9,images:['https://demo.test/media/lamp.jpg'],attributes:['Sạc USB','2 màu: Đen, Nâu'],active_voucher_pct:7,listing_quality:.81,search_rank_page:1};
+const state={run_id:'database-run',day:1,step:'idle',demo_shop:shop,demo_shop_original:shop,memory_enabled:true,mode:'offline',last_night:null,active_package:null};
+const button=(html,name)=>html.match(new RegExp('<button\\b[^>]*data-'+name+'="true"[^>]*>'))?.[0];
+
+test('React product renders a different database product without seed-specific labels',()=>{
+  const html=renderToStaticMarkup(<Product shop={shop} onAddCart={noop} onNotice={noop}/>);
+  assert.match(html,/299\.000đ/);assert.match(html,/<strong>17<\/strong>/);assert.match(html,/Shop Ánh Dương &lt;b&gt;/);
+  assert.match(html,/Đèn bàn USB &amp; đế gỗ/);assert.match(html,/lamp\.jpg/);assert.match(html,/data-color="Đen"/);assert.match(html,/data-color="Nâu"/);
+  assert.doesNotMatch(html,/Nhà Bé Lan|Quạt mini|data-color="Hồng"/);assert.doesNotMatch(html,/<b>/);
+});
+test('missing images and missing color attributes do not invent product variants',()=>{
+  const html=renderToStaticMarkup(<Product shop={{...shop,images:[],attributes:['Sạc USB']}} onAddCart={noop} onNotice={noop}/>);
+  assert.match(html,/product-placeholder\.svg/);assert.doesNotMatch(html,/data-color=/);
+});
+test('question-only cards render explicit answers with no new spending proposal',()=>{
+  const card={card_id:'q-1',kind:'question',package:null,rule_question:{text_vi:'Lần sau dùng nền sáng?'}};
+  const html=renderToStaticMarkup(<Proposal card={card} onDecision={noop} onNegotiate={noop}/>);
+  assert.match(html,/data-question="true"/);assert.match(html,/data-question="false"/);assert.doesNotMatch(html,/data-decision|LÃI ƯỚC TÍNH|Quảng cáo/);
+});
+test('offer shows server amounts, warnings and an optional rule question separately',()=>{
+  const card={kind:'offer',package:{content_refresh:true,ads_daily_budget:45000,voucher_pct:3,stop_roas_below:6.5,stop_after_days:2,duration_days:3},forecast:{low:18,high:30},profit_after_fees_per_unit:27136,breakeven_roas_display:6.5,warnings_vi:['Đây là dự báo.'],reasons_vi:['Từ dữ liệu đã quan sát.'],rule_question:{text_vi:'Ghi nhớ ảnh nền sáng?'}};
+  const html=renderToStaticMarkup(<Proposal card={card} pending onDecision={noop} onNegotiate={noop}/>);
+  assert.match(html,/45\.000đ\/ngày/);assert.match(html,/27\.136đ/);assert.match(html,/6,5/);assert.match(html,/Chưa trừ chi quảng cáo/);
+  assert.match(html,/name="rule-answer"/);assert.match(html,/Đây là dự báo/);assert.match(html,/data-decision="accept" disabled/);
+});
+test('content attempt 3 disables retry; running covers disable publication while failed video is tolerated',()=>{
+  const draft={version:3,title:'Tiêu đề đã duyệt',description:'Mô tả',images:[{option:'A',status:'running',path:null},{option:'B',status:'failed',path:null}],video:{status:'failed',path:null},checks:[],feedback_history:[]};
+  const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
+  assert.match(button(html,'retry'),/disabled/);assert.match(button(html,'apply'),/disabled/);assert.match(html,/Chưa tạo được video/);assert.match(html,/Lần 3 \/ 3/);
+});
+test('ready covers permit publication without waiting for video',()=>{
+  const draft={version:1,title:'Tiêu đề',description:'Mô tả',images:[{option:'A',status:'cached',path:'https://demo.test/media/a.jpg'}],video:{status:'running'},feedback_history:[]};
+  const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
+  assert.ok(button(html,'apply'));assert.doesNotMatch(button(html,'apply'),/disabled/);
+});
+test('seller backstage escapes event text and excludes other shops',()=>{
+  const events=[{seq:1,run_id:state.run_id,day:1,shop_id:'Z',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'<img src=x onerror=alert(1)>',data:{private_note_vi:'Ghi chú riêng của shop Z.'}},{seq:2,run_id:state.run_id,day:1,shop_id:'A',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'Bí mật shop khác',data:{private_note_vi:'Không hiển thị.'}}];
+  const html=renderToStaticMarkup(<EventFeed state={state} events={events} preview={false}/>);
+  assert.match(html,/&lt;img/);assert.match(html,/Ghi chú riêng của shop Z/);assert.doesNotMatch(html,/Bí mật shop khác|<img src=x/);
+});
+test('day seven complete disables start and has no day eight control',()=>{
+  const html=renderToStaticMarkup(<ControlPanel state={{...state,day:7,step:'complete'}} preview={false} onReset={noop} onStart={noop} onEndDay={noop}/>);
+  assert.match(button(html,'start'),/disabled/);assert.match(html,/Đã hoàn tất 7 ngày/);assert.doesNotMatch(html,/Bắt đầu demo|Tiếp tục demo/);
+});
+test('final night uses seven-day completion and null ROAS is not reported as zero',()=>{
+  const finalState={...state,day:7,step:'complete',last_night:{day:7,history_updates:[],pref_candidates:[],calibration:{factor:1,points:0,mape_today:null},lesson_ops:[],rejected_ops:0,memory_md_path:'/api/reports/memory-7'}};
+  const html=renderToStaticMarkup(<NightPage run={{state:finalState,events:[{day:7,shop_id:'Z',type:'market_result',data:{metrics:{orders:0,roas:null,ads_spend:0}}}]}} preview={false}/>);
+  assert.match(html,/Hoàn tất 7 ngày/);assert.match(html,/ROAS hôm nay/);assert.match(html,/class="metric-value">—/);assert.match(html,/Tải báo cáo bộ nhớ/);assert.doesNotMatch(html,/Sang ngày 8/);
+});
+test('proof respects the response horizon and does not fabricate missing values',()=>{
+  const report={days:7,seed:42,run_on:'r-on',run_off:'r-off',metrics:[{key:'forecast_mape',label_vi:'Sai số dự báo',better:'lower',on:null,off:12,unit:'%'}],note_vi:'Một phía chưa có đủ điểm dự báo.'};
+  const html=renderToStaticMarkup(<ProofReport report={report} preview={false} onReset={noop} onExport={noop}/>);
+  assert.match(html,/id="proof-days">7/);assert.match(html,/Chưa có dữ liệu/);assert.doesNotMatch(html,/NaN|Số liệu minh họa/);
+  const legacy=renderToStaticMarkup(<ProofReport report={{...report,days:6}} preview={false} onReset={noop} onExport={noop}/>);assert.match(legacy,/Báo cáo tương thích 6 ngày/);
+});
+
+test('agent overview shows package changes, safe referee text and distinct validation',()=>{
+  const make=(seq,type,data,text_vi,actor)=>({seq,type,data,text_vi,actor,run_id:state.run_id,day:1,shop_id:'Z',ts:'12:00'});
+  const initial={content_refresh:true,ads_daily_budget:70000,voucher_pct:10,stop_roas_below:4,stop_after_days:2,duration_days:3};
+  const events=[make(1,'platform_turn',{negotiation_id:'n-1',round:1,action:'propose',package:initial},'Gói đầu','platform_agent'),make(2,'shop_turn',{negotiation_id:'n-1',round:1,action:'counter',package:{...initial,ads_daily_budget:45000,voucher_pct:3},private_note_vi:'Giá vốn riêng không hiện ở sơ đồ'},'Đề nghị điều chỉnh','shop_agent'),make(3,'referee_review',{negotiation_id:'n-1',round:1,action:'refocus',focused_question:'Giữ nguyên ngân sách?'},'Lý do <script>không an toàn</script>','referee')];
+  const html=renderToStaticMarkup(<AgentActivity state={{...state,step:'negotiating'}} events={events} preview={false}/>);
+  assert.match(html,/Vòng 1 \/ tối đa 3/);assert.match(html,/70\.000đ/);assert.match(html,/45\.000đ/);assert.match(html,/is-changed/);
+  assert.match(html,/Cần tập trung lại/);assert.match(html,/Chưa có kết quả kiểm tra/);assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>|Giá vốn riêng không hiện/);
+});
+test('missing telemetry does not invent processing; connection loss hides running indicators',()=>{
+  const negotiating={...state,step:'negotiating'};
+  const task={seq:1,run_id:state.run_id,day:1,shop_id:'Z',actor:'platform_agent',type:'agent_activity',text_vi:'Đang xem gói',data:{negotiation_id:'n',task_id:'t',phase:'proposal',round:1,status:'running',label_vi:'Agent sàn đang xem gói'}};
+  assert.doesNotMatch(renderToStaticMarkup(<AgentActivity state={negotiating} events={[]}/>),/data-working="true"/);
+  assert.match(renderToStaticMarkup(<AgentActivity state={negotiating} events={[task]}/>),/data-working="true"/);
+  const disconnected=renderToStaticMarkup(<AgentActivity state={negotiating} events={[task]} error="Mất mạng"/>);
+  assert.match(disconnected,/Kết nối gián đoạn/);assert.doesNotMatch(disconnected,/data-working="true"/);
+});
+test('completed journey has six completed markers and rejected content is skipped',()=>{
+  const html=renderToStaticMarkup(<Progress state={{...state,step:'complete'}}/>);
+  assert.equal((html.match(/class="done"/g) || []).length,6);assert.doesNotMatch(html,/aria-current/);
+  const rejection={seq:1,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',data:{action:'reject'}};
+  const rejected=renderToStaticMarkup(<Progress state={{...state,step:'day_done'}} events={[rejection]}/>);
+  assert.equal((rejected.match(/class="skipped"/g) || []).length,2);
+});

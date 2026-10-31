@@ -12,7 +12,12 @@ def test_health_and_static_page():
         assert response.json() == {"ok": True}
         page = client.get("/")
         assert page.status_code == 200
-        assert "sàn·demo đang dựng" in page.text
+        assert 'id="root"' in page.text
+        assert 'type="module"' in page.text
+        assert client.get("/js/app.js").status_code == 200
+        assert client.get("/css/app.css").status_code == 200
+        for name in ("demo", "updated", "night", "proof"):
+            assert client.get(f"/{name}.html").status_code == 200
 
 
 def test_static_serving_does_not_depend_on_working_directory(tmp_path, monkeypatch):

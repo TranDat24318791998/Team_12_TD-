@@ -4,7 +4,7 @@ Dự án cho SEAxOpenAI Hackathon: hai agent đại diện sàn và shop thươn
 
 ## Trạng thái
 
-Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, app factory, `/health` và frontend tĩnh chạy được; agent, thị trường và bộ nhớ hiện là khung để triển khai theo từng task.
+Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, app factory và `/health` đã có triển khai. Frontend React gồm 5 màn hình, có bundle và bản xem trước 7 ngày; các route nghiệp vụ, agent, thị trường và bộ nhớ đang được các thành viên triển khai.
 
 ## Cấu trúc codebase
 
@@ -19,7 +19,7 @@ Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, a
 | `app/simulation/` | Seed world, thị trường và chạy đối chứng |
 | `app/infrastructure/` | Client LLM/ảnh/Muse, SQLite/store và tracing |
 | `app/core/` | Biến môi trường và đường dẫn |
-| `frontend/` | HTML/CSS/JS thuần |
+| `frontend/` | React, CSS, ảnh, bundle phục vụ trực tiếp qua FastAPI |
 | `tests/unit/`, `tests/integration/` | Kiểm thử theo package và luồng ghép nối |
 
 Xem [kiến trúc chi tiết](docs/ARCHITECTURE.md) để biết hướng import, chủ sở hữu module và model.
@@ -46,6 +46,29 @@ python -m pip check
 git check-ignore .env
 ```
 
+## Frontend React
+
+Bundle đã được tạo tại `frontend/js/app.js`; FastAPI hiện phục vụ `frontend/` tại `/`. Mở http://localhost:8000/?preview=1 để thử giao diện cam với dữ liệu mẫu, hoặc `?preview=0` để gọi 9 API của backend. Bản xem trước không gọi API trả phí và không phải bằng chứng thực nghiệm.
+
+Để sửa và build lại giao diện, dùng Node 20 trở lên:
+
+```sh
+cd frontend
+npm install
+npm run build
+npm test
+```
+
+`npm run dev` theo dõi source và build lại; trình duyệt vẫn mở qua FastAPI. Để xem riêng frontend khi chưa cài backend, chạy `python3 -m http.server 8000 --directory frontend` tại gốc repo, rồi mở `/?preview=1`.
+
+Xem [bàn giao React và ghép dữ liệu](docs/FRONTEND_HANDOFF.md). Giao diện theo [thiết kế dữ liệu v1.1](data/growth_agents_data_api_design.md): 7 ngày, `complete`, `next_day=null` ở ngày cuối và Idempotency-Key cho thao tác ghi. Các endpoint `/api/v1` có envelope do backend adapter xử lý; frontend tiếp tục dùng 9 endpoint `/api/*` dành cho seller.
+
+## Requirement for frontend
+
+Agent backend đọc [yêu cầu tích hợp giao diện](docs/FRONTEND_REQUIREMENTS.md) trước khi nối workflow/API: mapping state/events sang sơ đồ hai agent, payload telemetry/trọng tài, polling và checklist nghiệm thu. Khối tương tác mới nằm ở `frontend/src/components/AgentActivity.jsx`, projection ở `frontend/src/activity.js`.
+
+Agent data đọc [yêu cầu về data](docs/FRONTEND_DATA_REQUIREMENTS.md): grain và identity, quan hệ đề xuất–duyệt–áp dụng, phiên bản, cursor, quyền public/private, nguồn số liệu và transaction. Các mở rộng chưa có trong hợp đồng được ghi `TODO(contract)`; backend thật cần thống nhất trước khi bật. Bản `?preview=1` đã minh họa luồng; bản `?preview=0` chờ các API nghiệp vụ.
+
 ## Tài liệu và phân công
 
 - [Plan riêng của Toàn — Agent + Tools + Knowledge](docs/plans/toan/README.md): toàn bộ đặc tả, task code và hướng dẫn review trong `docs/plans/toan/`.
@@ -58,7 +81,7 @@ git check-ignore .env
 - `app/`: backend; `frontend/`: giao diện; `tests/`: kiểm thử.
 - `data/`, `assets/products/`, `contracts/`: dữ liệu, ảnh gốc và JSON mẫu.
 - `replay/`, `media/replay/`: bản phát lại được đưa vào Git; `runs/` và media sinh mới chỉ lưu cục bộ.
-- [Nhật ký Codex](docs/CODEX_LOG.md): việc thực hiện và kết quả kiểm thử.
+- [Bàn giao frontend](docs/FRONTEND_HANDOFF.md): cấu trúc React, dữ liệu, cách build và kết quả kiểm tra.
 
 ## Link demo
 
