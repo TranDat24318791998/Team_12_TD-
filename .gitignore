@@ -14,3 +14,7 @@ media/*
 !media/replay/**
 runs/
 .DS_Store
+
+# React development dependencies and generated test bundles
+frontend/node_modules/
+frontend/.test-build/

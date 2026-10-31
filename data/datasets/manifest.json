@@ -1,0 +1,113 @@
+{
+  "files": {
+    "knowledge/advertising_guide_demo.md": {
+      "access": "public",
+      "sha256": "12726ce7e7aa57e7440c3edad7acdcd57585804122c7f36c1dd5b6cabb95341a"
+    },
+    "knowledge/content_standards_demo.md": {
+      "access": "public",
+      "sha256": "fbd1baf2d80328efffe1ebe234d46b25da35bc927e24b14447a8aec56ea7359f"
+    },
+    "knowledge/fee_calculation_guide_demo.md": {
+      "access": "public",
+      "sha256": "4936386e29412cd2ad488deab05823bfef390993728b750af16bdb056d38a385"
+    },
+    "knowledge/product_SP001.md": {
+      "access": "public",
+      "sha256": "ca49f42471b557df620da3c2e761e146c760fb6c74e52de189979408f66b71f5"
+    },
+    "knowledge/product_SP002.md": {
+      "access": "public",
+      "sha256": "0d46aa04f299bda2c34a055357eb491fb3b59c76f2a225adab58230608e7ad1a"
+    },
+    "knowledge/product_SP003.md": {
+      "access": "public",
+      "sha256": "4da53037175c52e89e12c7b52ceffbf31d21d1e2b85aead9dfb748000906e8a2"
+    },
+    "knowledge/product_SP004.md": {
+      "access": "public",
+      "sha256": "4c8eb07ecbebabdf39557947004997a2733694044b6913a934f62b1694cb1bc6"
+    },
+    "knowledge/product_SP005.md": {
+      "access": "public",
+      "sha256": "73386e6a6955b62b239e9aaeb957ecba3dfe5bcdf95944f294bdbe7a2e4d892a"
+    },
+    "knowledge/selling_policy_demo.md": {
+      "access": "public",
+      "sha256": "70cb9de7c1bfda16c9cf5327f0c34c77543058a4e2a67237c56fd44cd9dd7346"
+    },
+    "originals/A-placeholder.png": {
+      "access": "public",
+      "is_placeholder": true,
+      "sha256": "bb290701e6c903d22ff6fcb41fec3c6b4a3422dde32f6b7a97b388a070bce7d7"
+    },
+    "originals/B-placeholder.png": {
+      "access": "public",
+      "is_placeholder": true,
+      "sha256": "bc6ace0489ce3544b3c6c0bdb6cc2611a243516375e44ef89c0b3bfc613c3752"
+    },
+    "originals/C-placeholder.png": {
+      "access": "public",
+      "is_placeholder": true,
+      "sha256": "0e34ed4660cb7d32e1838daf7aa83fb0c42ee98698251907d3315a1b6b272d4f"
+    },
+    "originals/D-placeholder.png": {
+      "access": "public",
+      "is_placeholder": true,
+      "sha256": "b1009a30bb91544abaee529580b865ea10c7e152157b0c5dd0a9843b024fb6a5"
+    },
+    "originals/E-placeholder.png": {
+      "access": "public",
+      "is_placeholder": true,
+      "sha256": "28cd8f188bf144d90f03ad35694a8d5f377bc9a7f945245b740cc944da0caaac"
+    },
+    "pdf/advertising_guide_demo.pdf": {
+      "access": "backend_only",
+      "sha256": "38b6b29d14bf216b97bb8013b1d84ca67549067bdde88e38dd5bd9e4a2fd8741"
+    },
+    "pdf/content_standards_demo.pdf": {
+      "access": "backend_only",
+      "sha256": "61f93591323247245220f97dbc08faaadc441502d847d3ee8dc573570f308ff9"
+    },
+    "pdf/fee_calculation_guide_demo.pdf": {
+      "access": "backend_only",
+      "sha256": "df387dfa8cea51f32ec0e4a578c85c001e4c052ad751bb95f90b7aeabdbd6646"
+    },
+    "pdf/selling_policy_demo.pdf": {
+      "access": "backend_only",
+      "sha256": "d7d29bf7b096eeb68af80a5142dab85fc0178f8f1daac5c40ae04f89de0306e0"
+    },
+    "public/shops.json": {
+      "access": "public",
+      "sha256": "a45e77ab0b900b795d4a8aadd7f01fd4ba727dc8656d56c90bc1772b04c6c1aa"
+    },
+    "seed.json": {
+      "access": "backend_only",
+      "sha256": "da324a15e235be0d83678447f51d68a76edc001155e9def6831276bbbe52eed2"
+    },
+    "simulator/market_parameters.json": {
+      "access": "backend_only",
+      "sha256": "a0aff59cbb5ef5303e0d9cce3e6a84e2b1c0bb1623736d3152a707cb8b4eb59a"
+    },
+    "simulator/market_schedule.json": {
+      "access": "backend_only",
+      "sha256": "584a464f7021d45493b4d810ec29066e6d1ca6b2aa74a7be4f2ba7b233461260"
+    },
+    "simulator/scenario.json": {
+      "access": "backend_only",
+      "sha256": "b3ab79d41cceecaa0fdcc213a2d341b53ece40164c6e608c99c2e1b78e722ec1"
+    },
+    "simulator/seller_behaviors.json": {
+      "access": "backend_only",
+      "sha256": "7531d8a6943b214251e25b771d30cafda051264ff56e166e300d9cb2d2f2a06a"
+    }
+  },
+  "history_days": 14,
+  "proof_of_learning": false,
+  "scenario_version": "demo-v1",
+  "schema_version": 1,
+  "seed": 42,
+  "simulation_days": 7,
+  "simulator_version": "market-v1",
+  "synthetic": true
+}

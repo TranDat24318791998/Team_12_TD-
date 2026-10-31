@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ee4d2d">
+  <meta name="description" content="Growth Agents: trải nghiệm mô phỏng trợ lý tăng trưởng, người bán duyệt và hệ thống học qua bộ nhớ.">
+  <title>Trang shop | sàn·demo</title>
+  <script>
+    // FastAPI may serve index.html at /. Other pages live at /static/.
+    if (location.protocol !== 'file:' && (location.pathname === '/' || location.pathname === '/index.html')) {
+      const base = document.createElement('base'); base.href = '/static/'; document.head.append(base);
+    }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ee4d2d'/%3E%3Cpath d='M10 13h20v19H10zM15 13V9a5 5 0 0110 0v4' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/preview.js" defer></script>
+  <script src="js/common.js" defer></script>
+  <script src="js/index.js" defer></script>
+</head>
+<body>
+  <a class="sr-only" href="#main-content">Đi tới nội dung chính</a>
+  <div data-header></div>
+  <div data-context></div>
+  <div class="wrap"><nav class="breadcrumb" aria-label="Đường dẫn"><a data-page="index.html">sàn·demo</a><span>›</span><span data-category>Danh mục</span><span>›</span><span data-product-name>Sản phẩm</span></nav><main id="main-content"><div id="shop-content" class="page-grid"><div class="loading-block">Đang mở cửa hàng…</div></div></main></div>
+  <div data-footer></div>
+  <noscript><p class="error-box">Hãy bật JavaScript để sử dụng bản demo tương tác.</p></noscript>
+</body>
+</html>
