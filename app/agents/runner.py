@@ -41,6 +41,31 @@ def _same(a, b):
     return a is not None and b is not None and a.model_dump(mode='json') == b.model_dump(mode='json')
 
 
+def _content_matches_facts(text, sources):
+    neutral = {'và', 'với', 'có', 'của', 'cho', 'là', 'được', 'từ', 'như', 'để', 'trong',
+               'theo', 'bằng', 'sản', 'phẩm', 'khi', 'một', 'các', 'dùng', 'sử', 'dụng'}
+    def clauses(value):
+        value = unicodedata.normalize('NFC', value).casefold()
+        return [[word for word in re.findall(r'\w+', clause) if word not in neutral]
+                for clause in re.split(r'[,;:!?]|(?<!\d)\.(?!\d)', value)]
+    source_clauses = [tokens for source in sources for tokens in clauses(source)]
+    allowed = {word for tokens in source_clauses for word in tokens} | neutral
+    output = clauses(text)
+    if not set(re.findall(r'\w+', unicodedata.normalize('NFC', text).casefold())) <= allowed:
+        return False
+    source_pairs = {(a,b) for tokens in source_clauses for a,b in zip(tokens,tokens[1:])}
+    for tokens in output:
+        for index, token in enumerate(tokens):
+            if not re.search(r'\d', token):
+                continue
+            pairs = set()
+            if index: pairs.add((tokens[index-1],token))
+            if index+1 < len(tokens): pairs.add((token,tokens[index+1]))
+            if not pairs.intersection(source_pairs):
+                return False
+    return True
+
+
 def _can_finish(role, output, successful, tools):
     def seen(name):
         return successful.get(name, [])
@@ -58,18 +83,20 @@ def _can_finish(role, output, successful, tools):
         forecasted = any(_same(args.package, package) for args, _ in seen('forecast_package'))
         return bool(checked and forecasted)
     if role == 'shop':
-        if not seen('get_shop_private_context') or not seen('read_memory') or not seen('evaluate_shop_package'):
+        evaluations = seen('evaluate_shop_package')
+        if not seen('get_shop_private_context') or not seen('read_memory') or not evaluations:
             return False
         expected = tools['evaluate_shop_package'].expected_package
-        for args, result in seen('evaluate_shop_package'):
-            if expected is not None and not _same(args.package, expected):
-                continue
-            if output.action == 'reject':
-                return output.package is None
-            if output.action == 'accept':
-                return _same(output.package, args.package) and result.ok
-            if output.action == 'counter':
-                return _same(output.package, result.corrected_package) and not result.violations_after
+        originals = [(args, result) for args, result in evaluations if _same(args.package, expected)]
+        if expected is None or not originals:
+            return False
+        if output.action == 'reject':
+            return output.package is None
+        if output.action == 'accept':
+            return _same(output.package, expected) and any(result.ok for _, result in originals)
+        if output.action == 'counter':
+            return any(_same(output.package, result.corrected_package) and not result.violations_after
+                       for _, result in evaluations)
         return False
     if role == 'referee':
         if not seen('get_referee_context'):
@@ -81,13 +108,8 @@ def _can_finish(role, output, successful, tools):
         if not seen('get_content_context'):
             return False
         context = seen('get_content_context')[-1][1]
-        facts = unicodedata.normalize('NFC', ' '.join([context.title, context.description,
-            *context.attributes, *context.memory.confirmed_style_notes])).casefold()
-        text = unicodedata.normalize('NFC', f'{output.title} {output.description}').casefold()
-        neutral = {'và', 'với', 'có', 'của', 'cho', 'là', 'được', 'từ', 'như', 'để', 'trong',
-                   'theo', 'bằng', 'sản', 'phẩm', 'khi', 'một', 'các', 'dùng', 'sử', 'dụng'}
-        allowed = set(re.findall(r'\w+', facts)) | neutral
-        return bool(output.title.strip()) and set(re.findall(r'\w+', text)) <= allowed
+        sources = [context.title, context.description, *context.attributes, *context.memory.confirmed_style_notes]
+        return bool(output.title.strip()) and _content_matches_facts(f'{output.title}. {output.description}', sources)
     if role == 'learning':
         return bool(seen('read_learning_evidence'))
     return False

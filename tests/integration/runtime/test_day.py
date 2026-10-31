@@ -92,3 +92,39 @@ def test_string_skip_video_cannot_bypass_approval(tmp_path):
     with pytest.raises(WorkflowError) as error:
         apply_reviewed_content(session,card.card_id,1,1,'A',skip_video='false')
     assert error.value.code=='INVALID_APPLY' and session.states['D'].active is None
+
+
+@pytest.mark.parametrize('fail_after_append',[False,True])
+def test_failed_market_event_append_does_not_settle_twice(tmp_path,monkeypatch,fail_after_append):
+    session=session_with_content(tmp_path); card=session.pending_card
+    submit_decision(session,SellerDecision(card_id=card.card_id,expected_card_version=1,expected_brief_version=1,action='accept'))
+    apply_reviewed_content(session,card.card_id,1,1,'A')
+    before=session.states['D'].public.stock
+    original=session.log.add
+    failed=[]
+    def flaky(run_id,day,type,actor,shop_id,text_vi,data):
+        if type=='market_result' and not failed:
+            failed.append(True)
+            if fail_after_append: original(run_id,day,type,actor,shop_id,text_vi,data)
+            raise OSError('fixture event sink error')
+        return original(run_id,day,type,actor,shop_id,text_vi,data)
+    monkeypatch.setattr(session.log,'add',flaky)
+    with pytest.raises(OSError): close_day(session,1)
+    assert session.market.calls==1 and session.states['D'].public.stock==before-3
+    result=close_day(session,1)
+    assert result['next_day']==2 and session.market.calls==1
+    assert session.states['D'].public.stock==before-3
+    assert len([e for e in session.log.since(session.run_id,0) if e.type=='market_result'])==1
+
+
+def test_horizon_can_match_team_seven_day_run_without_changing_demo_default(tmp_path):
+    session=session_with_content(tmp_path)
+    assert session.simulation_days==2
+    session.simulation_days=7
+    card=session.pending_card
+    submit_decision(session,SellerDecision(card_id=card.card_id,expected_card_version=1,expected_brief_version=1,action='accept'))
+    apply_reviewed_content(session,card.card_id,1,1,'A')
+    assert close_day(session,1)['next_day']==2
+    start_day(session)
+    assert session.step=='day_done'
+    assert close_day(session,2)['next_day']==3 and session.step=='idle'

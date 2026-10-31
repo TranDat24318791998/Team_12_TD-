@@ -1,6 +1,6 @@
 # Chạy và bàn giao Agent + Tools + Knowledge
 
-Trạng thái: core thương lượng, native tool runner, 5 ngăn knowledge, seller approval và điều phối ngày đã có code. Các adapter market, media và route HTTP của member khác chưa được nối trong phiên bản này. Script bên dưới dùng fixture cho market/media; không coi kết quả đó là bằng chứng về doanh thu hoặc đã tạo ảnh/video thật.
+Trạng thái: core thương lượng, native tool runner, 5 ngăn knowledge, seller approval và điều phối ngày đã có code. Data service và React đã có code riêng, nhưng adapter market/media và route HTTP vẫn chưa được nối vào workflow agent. Xem [các điểm ghép cần chốt](TEAM_INTEGRATION.md). Script bên dưới dùng fixture cho market/media; không coi kết quả đó là bằng chứng về doanh thu hoặc đã tạo ảnh/video thật.
 
 ## Kiểm thử và chạy luồng
 

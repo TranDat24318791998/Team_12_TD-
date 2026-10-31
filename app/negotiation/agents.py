@@ -27,7 +27,7 @@ def decide_platform(session, shop_id, turns, memory_view, *, negotiation_id='neg
     tools = bind_role_tools(session, 'platform', shop_id, turns=turns, initial_propose=initial_propose, invocation_id=invocation_id)
     latest_shop = turns[-1] if turns and turns[-1].actor == 'shop' and turns[-1].action == 'counter' else None
     def fallback(dispatch):
-        public = dispatch('get_public_context', {})
+        dispatch('get_public_context', {})
         memory = dispatch('read_memory', {})
         if initial_propose:
             dispatch('search_campaign_catalog', {'query': ''})

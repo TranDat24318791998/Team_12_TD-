@@ -9,8 +9,9 @@ from app.domain.finance import breakeven_roas, profit_per_unit, stop_threshold
 from app.domain.models.cards import Card, RuleQuestion, SellerDecision
 from app.domain.models.intent import IntentBrief
 from app.domain.models.packages import ActivePackage
+from app.domain.models.metrics import DayMetrics
 from app.domain.policies import MIN_STOCK, REJECT_COOLDOWN_DAYS
-from app.domain.validators import final_check
+from app.domain.validators import brief_side_check, final_check
 from app.memory.night import run_night
 from app.negotiation.graph import run_negotiation
 
@@ -249,7 +250,7 @@ def activate_approved_package(session, card, *, snapshots=None):
     if session.approved_card_id != card.card_id or not card.package:
         raise WorkflowError('APPROVAL_REQUIRED','Cần người bán duyệt đúng thẻ.')
     state=session.states[card.shop_id]
-    if final_check(card.package,state.public,state.private,session.world.fees):
+    if final_check(card.package,state.public,state.private,session.world.fees) or brief_side_check(card.package,session.brief):
         raise WorkflowError('PACKAGE_INVALID','Gói không còn hợp lệ.')
     snapshots=_forecast_snapshots(session,card) if snapshots is None else snapshots
     active=ActivePackage(package=card.package,start_day=session.day,end_day=session.day+card.package.duration_days-1,
@@ -298,7 +299,7 @@ def apply_reviewed_content(session, card_id, brief_version, draft_version, cover
         if (draft.video.status not in ('done','cached') or not _local_media_exists(session, draft.video.path)) and not skip_video:
             raise WorkflowError('VIDEO_NOT_READY','Video chưa sẵn sàng; chọn bỏ qua nếu muốn tiếp tục.')
         state=session.states[card.shop_id]
-        if final_check(card.package,state.public,state.private,session.world.fees):
+        if final_check(card.package,state.public,state.private,session.world.fees) or brief_side_check(card.package,session.brief):
             raise WorkflowError('PACKAGE_INVALID','Gói không còn hợp lệ.')
         snapshots=_forecast_snapshots(session,card)
         listing=session.content.apply(card.shop_id,cover_option,skip_video=skip_video)
@@ -323,23 +324,40 @@ def close_day(session, expected_day):
         if expected_day not in session.settled_days:
             previous_states=deepcopy(session.states)
             try:
-                metrics=session.market.simulate_day(session,expected_day)
+                raw_metrics=session.market.simulate_day(session,expected_day)
+                if not isinstance(raw_metrics, dict):
+                    raise ValueError('market must return per-shop metrics')
+                metrics={}
+                for shop_id,value in raw_metrics.items():
+                    result=DayMetrics.model_validate(value)
+                    if shop_id not in session.states or result.shop_id != shop_id or result.day != expected_day:
+                        raise ValueError('market returned metrics for another shop or day')
+                    metrics[shop_id]=result
+                for shop_id,result in metrics.items():
+                    session.states[shop_id].metrics[expected_day]=result
             except Exception:
                 session.states=previous_states
                 raise
-            for shop_id,result in metrics.items():
-                session.states[shop_id].metrics[expected_day]=result
-                active=session.states[shop_id].active
-                card_id=active.card_id if active else None
-                snapshot=session.forecast_snapshots.get((shop_id,expected_day))
-                _event(session,'market_result','market',shop_id,'Đã có kết quả thị trường.',
-                    {'card_id':card_id,'negotiation_id':session.active_negotiations.get(card_id),
-                     'prediction_id':snapshot.prediction_id if snapshot else None,'metrics':result.model_dump(mode='json'),
-                     'source':getattr(session.market,'source','adapter')})
+            # Preserve the successful settlement before an event sink can fail.
+            session.settlement_metrics[expected_day]=deepcopy(metrics)
             session.settled_days.add(expected_day)
+        metrics=session.settlement_metrics[expected_day]
+        for shop_id,result in metrics.items():
+            settlement_key=f'{expected_day}:{shop_id}'
+            already_logged=any(e.type=='market_result' and e.data.get('settlement_key')==settlement_key
+                               for e in session.log.since(session.run_id,0))
+            if already_logged:
+                continue
+            active=session.states[shop_id].active
+            card_id=active.card_id if active else None
+            snapshot=session.forecast_snapshots.get((shop_id,expected_day))
+            _event(session,'market_result','market',shop_id,'Đã có kết quả thị trường.',
+                {'settlement_key':settlement_key,'card_id':card_id,'negotiation_id':session.active_negotiations.get(card_id),
+                 'prediction_id':snapshot.prediction_id if snapshot else None,'metrics':result.model_dump(mode='json'),
+                 'source':getattr(session.market,'source','adapter')})
         summary=run_night(session,expected_day)
         with session.lock:
-            next_day=expected_day+1 if expected_day<2 else None
+            next_day=expected_day+1 if expected_day<session.simulation_days else None
             session.day=next_day if next_day is not None else expected_day
             session.step='idle' if next_day is not None else 'complete'
             receipt={'summary':summary,'next_day':next_day}

@@ -32,8 +32,8 @@ def _quantile(values, fraction):
 
 def _derive_history(session, snapshot, shop_id, all_events):
     history_by_id = {item.negotiation_id: item for item in session.memory.get_history(shop_id)}
-    new_ids = {e.negotiation_id for e in snapshot.events if e.negotiation_id and e.type in
-               {'platform_turn','shop_turn','seller_decision','package_applied','market_result'}}
+    new_ids = {e.negotiation_id for e in snapshot.events if e.seq >= snapshot.from_seq and e.negotiation_id and e.type in
+               {'platform_turn','shop_turn','seller_decision','package_applied','market_result','negotiation_finished'}}
     result = []
     for negotiation_id in sorted(new_ids & set(snapshot.valid_negotiation_ids)):
         events = [e for e in all_events if e.shop_id == shop_id and e.data.get('negotiation_id') == negotiation_id]
@@ -43,16 +43,18 @@ def _derive_history(session, snapshot, shop_id, all_events):
         applied = next((_package(e.data.get('package')) for e in reversed(events) if e.type == 'package_applied'), None)
         seller = next((e.data.get('action') for e in reversed(events) if e.type == 'seller_decision'), None)
         market = next((e for e in reversed(events) if e.type == 'market_result' and isinstance(e.data.get('metrics'),dict)), None)
+        finished = next((e for e in reversed(events) if e.type == 'negotiation_finished'), None)
         outcome = None
         if market:
             data = market.data['metrics']
             outcome = PublicOutcome.model_validate({k:data[k] for k in ('orders','revenue','ads_spend','roas')})
-        relevant = [e.seq for e in events if e.type in {'platform_turn','shop_turn','seller_decision','package_applied','market_result'}]
+        relevant = [e.seq for e in events if e.type in {'platform_turn','shop_turn','seller_decision','package_applied','market_result','negotiation_finished'}]
         if not relevant:
             continue
         result.append(PublicHistory(negotiation_id=negotiation_id,shop_id=shop_id,
-            day=prior.day if prior else min(e.day for e in events),kind=prior.kind if prior else 'propose',
-            status='agreed' if agreed or applied else 'failed',
+            day=prior.day if prior else min(e.day for e in events),
+            kind=finished.data['kind'] if finished else prior.kind if prior else 'propose',
+            status=finished.data['status'] if finished else prior.status if prior else 'agreed' if agreed or applied else 'failed',
             rounds=max((e.data.get('round',0) for e in events if e.type=='platform_turn'),default=0),
             proposed_package=proposed or (prior.proposed_package if prior else None),
             agreed_package=agreed or (prior.agreed_package if prior else None),

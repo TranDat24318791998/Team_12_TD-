@@ -8,6 +8,7 @@ Thư mục `docs/plans/toan/` chứa bộ plan/code task riêng của Toàn. B�
 docs/plans/toan/
   README.md                  Phạm vi, lịch và prompt giao coder/reviewer
   DEMO_RUNBOOK.md            Lệnh chạy và đầu nối còn chờ team
+  TEAM_INTEGRATION.md         Khác biệt cần chốt với Data/Frontend
   AGENT_TOOL_KNOWLEDGE.md     Đặc tả agent, tool calling và quyền
   KNOWLEDGE_CONTRACT.md      Năm ngăn memory, retrieval và learning
   AGENT_SCOPE_MAP.md         Phần việc gốc và đầu nối với team
