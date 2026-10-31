@@ -1,6 +1,6 @@
 # Kiến trúc codebase Growth Agents
 
-Ứng dụng chạy trong một tiến trình FastAPI. Backend chia theo tính năng; model và luật thuần dùng chung nằm trong domain. Frontend là HTML/CSS/JS thuần, giao tiếp qua HTTP. Lệnh chạy giữ nguyên: `uvicorn app.main:app --reload`.
+Ứng dụng chạy trong một tiến trình FastAPI. Backend chia theo tính năng; model và luật thuần dùng chung nằm trong domain. Frontend dùng React, giao tiếp qua 9 API HTTP dành cho seller; esbuild tạo bundle được FastAPI phục vụ trực tiếp. Lệnh chạy giữ nguyên: `uvicorn app.main:app --reload`.
 
 ## Bổ sung được chốt cho phần Agent + Tools + Knowledge
 
@@ -62,7 +62,7 @@ app/
     ├── store.py            Store cho bộ nhớ
     └── tracing.py          Langfuse tuỳ chọn
 
-frontend/                   index.html, css/, js/; các màn sau tạo theo task
+frontend/                   src/ (React), css/, img/, js/app.js; 5 HTML entry dùng chung bundle
 assets/products/            Ảnh nguồn
 data/                       seed.json
 contracts/                  JSON mock đúng hợp đồng HTTP
@@ -146,6 +146,20 @@ Settings, FeeConfig, policies, app factory, `/health`, frontend và media đã c
 
 Không duy trì shim tại các đường dẫn phẳng cũ: code nghiệp vụ chưa được triển khai và các tài liệu đang dùng đã cập nhật. PDF trong `docs/reference/` là kế hoạch gốc; đường dẫn triển khai lấy từ tài liệu Markdown hiện hành.
 
+<<<<<<< HEAD
 ## Hợp đồng ghép tính năng hiện hành
 
 Các điểm night/idle, retry async, ba phiên bản tổng cộng, replay thiếu key đã được chốt tại [DEMO_CONTRACT](DEMO_CONTRACT.md). Native tools/budget/typed memory theo hai contract mới ở trên. Coder sửa cả caller/fixture của task khi thực hiện các thay đổi đã được chốt; không giữ TODO cũ như một quyết định chưa có.
+=======
+## Ghép với thiết kế dữ liệu hiện hành
+
+`data/growth_agents_data_api_design.md` v1.1 chốt adapter dành cho giao diện tại mục 10. Bản React đã dùng các quy ước này; nhóm backend triển khai cùng adapter và persistence tương ứng:
+
+- Giữ 9 endpoint `/api/*` và response JSON trực tiếp; `/api/v1` có envelope riêng.
+- Mô phỏng chính 7 ngày; ngày cuối ở `complete`, `next_day=null`; các ngày trước tăng một lần rồi về `idle`, giữ `last_night`.
+- Retry nội dung trả trạng thái running để polling; 3 attempt tổng cộng, gồm bản đầu và hai lần làm lại.
+- Frontend gửi Idempotency-Key và X-Request-ID cho POST; server kiểm tra phiên bản/ownership và transaction.
+- Replay đọc cache không cần key, không tự chuyển live để gọi dịch vụ trả phí. Phần Settings hiện vẫn cần nhóm backend cập nhật theo quy ước này.
+
+Hướng dẫn build React, nguồn dữ liệu, kiểm tra và các phần chưa triển khai nằm trong `docs/FRONTEND_HANDOFF.md`. Tài liệu dữ liệu là thiết kế; không coi nó là bằng chứng backend đã chạy.
+>>>>>>> 21d6dbf (feat: update frontend and handoff docs)
