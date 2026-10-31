@@ -14,11 +14,13 @@ from test_workflow import start,accept
 def test_concurrent_apply_different_keys_has_one_business_effect(client,service,run):
     card=start(client)
     with service.store.connect() as c:prop=service.entity(c,"proposals",run,"proposal_id",one(c,"SELECT * FROM cards WHERE run_id=? AND card_id=?",(run,card["card_id"]))["proposal_id"])
-    response=client.post(f"/api/v1/runs/{run}/decisions",json={"target_type":"proposal","target_id":prop["proposal_id"],"target_version":prop["version"],"action":"approve"},headers={"Idempotency-Key":"approve","X-Request-ID":"approve"})
+    # This case exercises direct campaign activation without a content workflow.
+    # Content-refresh packages now require publication first (separate tests).
+    response=client.post(f"/api/v1/runs/{run}/decisions",json={"target_type":"proposal","target_id":prop["proposal_id"],"target_version":prop["version"],"action":"approve","edited_package":{**prop["package"],"content_refresh":False}},headers={"Idempotency-Key":"approve","X-Request-ID":"approve"})
     assert response.status_code==201,response.text
     decision=response.json()["data"]
     p=Principal("test_orchestrator","orchestrator",None,(run,),("D",))
-    body={"proposal_id":prop["proposal_id"],"approval_decision_id":decision["decision_id"],"expected_inventory_version":1,"expected_rules_version":1}
+    body={"proposal_id":decision["target_id"],"approval_decision_id":decision["decision_id"],"expected_inventory_version":1,"expected_rules_version":1}
     def apply(key):return service.command(p,run,"/apply",key,body,lambda c:service.apply(c,p,run,body))
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(apply,["key-1","key-2"]))
     assert results[0]["campaign_id"]==results[1]["campaign_id"]

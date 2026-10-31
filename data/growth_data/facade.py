@@ -10,7 +10,7 @@ class Facade:
     def __init__(self, service): self.s=service
 
     def current(self,c,p):
-        row=one(c,"SELECT * FROM runs WHERE session_id=? ORDER BY rowid DESC LIMIT 1",(p.session_id,))
+        row=one(c,"SELECT r.* FROM active_runs a JOIN runs r ON r.run_id=a.run_id WHERE a.session_id=?",(p.session_id,))
         require(row,"RUN_REQUIRED","Cần đặt lại hoặc khởi tạo phiên",404)
         return row
 
@@ -20,7 +20,7 @@ class Facade:
     def forecast_view(self,c,r,fid):
         if not fid:return None
         f=self.s.entity(c,"forecasts",r,"forecast_id",fid)
-        return {k:f[k] for k in ("low","point","high","factor_used","stock_warning")}
+        return {**{k:f[k] for k in ("low","point","high","factor_used")},"stock_warning":bool(f["stock_warning"])}
 
     def card(self,c,r,card):
         if not card:return None
@@ -38,12 +38,13 @@ class Facade:
         job=one(c,"SELECT * FROM content_jobs WHERE run_id=? AND shop_id=? ORDER BY rowid DESC LIMIT 1",(r,s))
         if not job:return None
         content=self.s.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
+        if content["status"] in {"published","superseded","rejected"}:return None
         return {"shop_id":s,"version":job["attempt"],"title":content["title"],"description":content["description"],
                 "images":[{k:v for k,v in x.items() if k!="asset_id"} for x in content["cover_options"]],
                 "video":{k:v for k,v in content["video_job"].items() if k!="asset_id"},"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
 
-    def state(self,c,p):
-        run=self.current(c,p);r=run["run_id"];self.s.scope(c,p,r,"D",{"seller"})
+    def state(self,c,p,run_id=None):
+        run=self.s.run(c,p,run_id) if run_id else self.current(c,p);r=run["run_id"];self.s.scope(c,p,r,"D",{"seller"})
         card=one(c,"SELECT * FROM cards WHERE run_id=? AND shop_id='D' AND status='pending'",(r,))
         active=one(c,"SELECT * FROM campaigns WHERE run_id=? AND shop_id='D' AND status='active'",(r,))
         handoff=one(c,"SELECT * FROM learning_handoffs WHERE run_id=? ORDER BY day DESC LIMIT 1",(r,))
@@ -55,13 +56,26 @@ class Facade:
         phase=run["phase"]
         step={"ready":"idle","awaiting_seller":"awaiting_decision","negotiating":"day_done","content_review":"content_review","settling":"day_done","learning":"day_done","day_closed":"night_done","complete":"complete","failed":"day_done"}[phase]
         if card:step="awaiting_decision"
+        operation=one(c,"SELECT * FROM operations WHERE run_id=? AND status IN ('queued','running','failed') ORDER BY rowid DESC LIMIT 1",(r,))
+        busy=bool(operation and operation["status"] in {"queued","running"})
+        if run["execution_profile"]=="external" and busy and operation["kind"]=="start_day":step="negotiating"
+        current=self.s.product(c,r,"D")
+        trace=one(c,"SELECT result_json FROM operations WHERE run_id=? AND json_extract(result_json,'$.trace_shop_id')='D' AND json_extract(result_json,'$.trace_url') IS NOT NULL ORDER BY rowid DESC LIMIT 1",(r,))
         return {"run_id":r,"day":run["current_day"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"step":step,
+                "simulation_days":run["simulation_days"],"execution_profile":run["execution_profile"],"data_source":run["config"].get("source","simulation"),"busy":busy,
+                "active_operation":self.s.operation_view(operation,p.role) if operation else None,
+                "learning_status":handoff["status"] if handoff else None,"learning_error":handoff["error_code"] if handoff else None,
+                "content_refs":{"active_content_id":current["active_content_id"],"original_content_id":seed_content["content_id"],"product_version":current["version"]},
+                "capabilities":{"trace":bool(trace),"faithful_llm_replay":False,"content_undo":True,"comparison":True,"external_workers":True},
+                "links":{"trace":trace["result"]["trace_url"] if trace else None},
                 "demo_shop":self.s.public(c,r,"D"),"demo_shop_original":original,
                 "active_package":{"package":active["package_snapshot"],"start_day":active["start_day"],"end_day":active["end_day"],"ads_paused":active["ads_status"]=="paused","card_id":""} if active else None,
                 "pending_card":self.card(c,r,card),"content_draft":self.draft(c,r),"last_night":handoff["night_summary"] if handoff else None,"live_calls_left":0}
 
     def decide(self,c,p,r,body):
         self.s.scope(c,p,r,"D",{"seller"})
+        from .models import LegacyDecision
+        body=LegacyDecision.model_validate(body).model_dump(exclude_unset=True)
         require(set(body)<={"card_id","action","note_vi","edited_package","rule_answer"},"INVALID_FIELDS","Trường không được hỗ trợ",422)
         card=self.s.entity(c,"cards",r,"card_id",body["card_id"])
         require(card["shop_id"]=="D" and card["status"]=="pending","NOT_FOUND","Không tìm thấy thẻ đang chờ",404)
@@ -79,21 +93,25 @@ class Facade:
             if body["action"] in {"accept","edit"}:
                 prop=self.s.entity(c,"proposals",r,"proposal_id",decision["target_id"])
                 _,ver=self.s.evaluation(c,r,"D",prop["package"])
-                self.s.apply(c,internal,r,dict(proposal_id=prop["proposal_id"],approval_decision_id=decision["decision_id"],expected_inventory_version=ver["inventory_version"],expected_rules_version=ver["rules_version"]))
                 if prop["package"]["content_refresh"]:self.s.content_create(c,internal,r,"D",dict(proposal_id=prop["proposal_id"],product_id=prop["product_id"]))
-                else:c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
+                else:
+                    self.s.apply(c,internal,r,dict(proposal_id=prop["proposal_id"],approval_decision_id=decision["decision_id"],expected_inventory_version=ver["inventory_version"],expected_rules_version=ver["rules_version"]))
+                    c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
             elif body["action"]=="negotiate":
                 # An authorized reference driver, not an agent model, handles the local branch.
-                self.s.reference_offer(c,internal,r,"D",source_card_id=card["card_id"],owner_note=body.get("note_vi"))
+                if self.s.run(c,p,r)["execution_profile"]=="reference":
+                    self.s.reference_offer(c,internal,r,"D",source_card_id=card["card_id"],owner_note=body.get("note_vi"))
+                else:
+                    self.s.queue_renegotiation(c,p,r,card["card_id"],body.get("note_vi",""))
             else:c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
-        state=self.state(c,p)
+        state=self.state(c,p,r)
         return {"step":state["step"],"card":state["pending_card"]}
 
     def retry(self,c,p,r,body):
-        require(set(body)=={"feedback_vi"},"INVALID_FIELDS","Cần feedback_vi",422)
+        require("feedback_vi" in body and set(body)<={"feedback_vi","retry_scope"},"INVALID_FIELDS","Cần feedback_vi",422)
         job=one(c,"SELECT * FROM content_jobs WHERE run_id=? AND shop_id='D' ORDER BY rowid DESC LIMIT 1",(r,))
         require(job,"CONTENT_REQUIRED","Chưa có nội dung")
-        self.s.content_create(c,p,r,"D",dict(proposal_id=job["proposal_id"],product_id=job["product_id"],feedback_vi=body["feedback_vi"],expected_current_attempt=job["attempt"]))
+        self.s.content_create(c,p,r,"D",dict(proposal_id=job["proposal_id"],product_id=job["product_id"],feedback_vi=body["feedback_vi"],expected_current_attempt=job["attempt"],retry_scope=body.get("retry_scope","images")))
         return {"draft":self.draft(c,r)}
 
     def use_content(self,c,p,r,body):

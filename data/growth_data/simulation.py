@@ -19,7 +19,8 @@ def trend(day):
     return 1.12 ** (min(day, 7) - 1) if day > 0 else 1.0
 
 
-def channel_metrics(public, cost, *, seed, day, stock, quality, voucher=0, budget=0):
+def channel_metrics(public, cost, *, seed, day, stock, quality, voucher=0, budget=0, fees=None):
+    fees = fees or {"rate_bps": 1450, "per_order": 3000}
     sid = public["shop_id"]
     ctr = .015 + .02 * quality
     cvr = min(1, (.03 + .03 * quality + .002 * voucher) * noise(seed, day, sid, "cvr"))
@@ -29,20 +30,20 @@ def channel_metrics(public, cost, *, seed, day, stock, quality, voucher=0, budge
     spend = paid_clicks * 1800
     organic_orders = min(stock, round(organic_clicks * cvr))
     paid_orders = min(stock - organic_orders, round(paid_clicks * cvr))
-    f = financials(public["price"], cost, voucher)
+    f = financials(public["price"], cost, voucher, fees)
     results = []
     for channel, impressions, clicks, orders, ads in (
         ("organic", impr, organic_clicks, organic_orders, 0),
         ("paid", math.ceil(paid_clicks / ctr), paid_clicks, paid_orders, spend),
     ):
         revenue = orders * f["net_unit_price"]
-        fees = money(Decimal(revenue) * Decimal(".145") + orders * 3000)
+        fee_amount = money(Decimal(revenue) * Decimal(fees["rate_bps"])/10000 + orders * fees["per_order"])
         cogs = orders * cost
         profit = orders * f["unit_contribution_vnd"] - ads
         results.append(dict(channel=channel, impressions=impressions, clicks=clicks, orders=orders,
-                            units=orders, net_revenue_vnd=revenue, ad_spend_vnd=ads, fees_vnd=fees,
+                            units=orders, net_revenue_vnd=revenue, ad_spend_vnd=ads, fees_vnd=fee_amount,
                             cogs_vnd=cogs, other_cost_vnd=0, contribution_vnd=profit,
-                            rounding_adjustment_vnd=profit - (revenue-fees-cogs-ads),
+                            rounding_adjustment_vnd=profit - (revenue-fee_amount-cogs-ads),
                             realized_roas=revenue / ads if ads else None))
     return results
 

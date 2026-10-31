@@ -1,0 +1,1256 @@
+{
+  "schema_version": 2,
+  "operations": [
+    {
+      "id": "API-001",
+      "method": "GET",
+      "path": "/health",
+      "handler": "health",
+      "roles": [],
+      "public": true,
+      "scope": []
+    },
+    {
+      "id": "API-002",
+      "method": "GET",
+      "path": "/api/state",
+      "handler": "demo_state",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-003",
+      "method": "POST",
+      "path": "/api/reset",
+      "handler": "demo_reset",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-004",
+      "method": "POST",
+      "path": "/api/day/start",
+      "handler": "demo_start",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-005",
+      "method": "GET",
+      "path": "/api/events",
+      "handler": "demo_events",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-006",
+      "method": "POST",
+      "path": "/api/decision",
+      "handler": "demo_decision",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-007",
+      "method": "POST",
+      "path": "/api/content/retry",
+      "handler": "demo_retry",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-008",
+      "method": "POST",
+      "path": "/api/content/apply",
+      "handler": "demo_apply",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-009",
+      "method": "POST",
+      "path": "/api/night",
+      "handler": "demo_night",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-010",
+      "method": "GET",
+      "path": "/api/proof",
+      "handler": "demo_proof",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-011",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops",
+      "handler": "read_shops",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "platform_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-012",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/context",
+      "handler": "read_context",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-013",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/products",
+      "handler": "read_products",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-014",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/inventory",
+      "handler": "read_inventory",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-015",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/costs",
+      "handler": "read_costs",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-016",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/rules",
+      "handler": "read_rules",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-017",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/policies",
+      "handler": "read_policies",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-018",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/market/observations",
+      "handler": "read_market",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "platform_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-019",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/market/summary",
+      "handler": "read_summary",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-020",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/metrics",
+      "handler": "read_metrics",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-021",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/history",
+      "handler": "read_history",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-022",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/campaigns",
+      "handler": "read_campaigns",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-023",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/forecasts",
+      "handler": "read_forecasts",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-024",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/proposals/{pid}",
+      "handler": "read_proposal",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop"
+      ]
+    },
+    {
+      "id": "API-025",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/shops/{s}/checks",
+      "handler": "write_checks",
+      "roles": [
+        "platform_agent",
+        "shop_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-026",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/shops/{s}/proposals",
+      "handler": "write_proposal",
+      "roles": [
+        "platform_agent",
+        "shop_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-027",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/knowledge/search",
+      "handler": "write_search",
+      "roles": [
+        "content_worker",
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-028",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/knowledge/documents/{did}",
+      "handler": "read_document",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-029",
+      "method": "POST",
+      "path": "/internal/v1/knowledge/documents",
+      "handler": "write_knowledge_create",
+      "roles": [
+        "knowledge_admin"
+      ],
+      "public": false,
+      "scope": []
+    },
+    {
+      "id": "API-030",
+      "method": "POST",
+      "path": "/internal/v1/knowledge/documents/{did}/revoke",
+      "handler": "write_knowledge_revoke",
+      "roles": [
+        "knowledge_admin"
+      ],
+      "public": false,
+      "scope": []
+    },
+    {
+      "id": "API-031",
+      "method": "POST",
+      "path": "/api/v1/runs",
+      "handler": "write_create_run",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": []
+    },
+    {
+      "id": "API-032",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}",
+      "handler": "read_run",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-033",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/reset",
+      "handler": "write_reset",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-034",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/state",
+      "handler": "read_state",
+      "roles": [
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-035",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/shops/{s}/negotiations",
+      "handler": "write_negotiation",
+      "roles": [
+        "data_admin",
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-036",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/proposals/{pid}/present",
+      "handler": "write_present",
+      "roles": [
+        "data_admin",
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop"
+      ]
+    },
+    {
+      "id": "API-037",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/decisions",
+      "handler": "write_decision",
+      "roles": [
+        "seller",
+        "simulated_seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-038",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/campaigns/apply",
+      "handler": "write_apply",
+      "roles": [
+        "data_admin",
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-039",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/days/start",
+      "handler": "write_start_day",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-040",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/days/close",
+      "handler": "write_close_day",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-041",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/days/advance",
+      "handler": "write_advance_day",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-042",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/operations/{oid}",
+      "handler": "read_operation",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-043",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/content",
+      "handler": "read_content",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop",
+        "assigned_job_or_asset_acl"
+      ]
+    },
+    {
+      "id": "API-044",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/shops/{s}/content-jobs",
+      "handler": "write_content_create",
+      "roles": [
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-045",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/content-jobs/{jid}",
+      "handler": "read_job",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop",
+        "assigned_job_or_asset_acl"
+      ]
+    },
+    {
+      "id": "API-046",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/content-jobs/{jid}/result",
+      "handler": "write_content_result",
+      "roles": [
+        "content_worker"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop",
+        "assigned_job_or_asset_acl"
+      ]
+    },
+    {
+      "id": "API-047",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/assets/uploads",
+      "handler": "write_upload",
+      "roles": [
+        "content_worker",
+        "knowledge_admin",
+        "learning_worker",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "assigned_job_or_asset_acl"
+      ]
+    },
+    {
+      "id": "API-048",
+      "method": "PUT",
+      "path": "/api/v1/runs/{r}/assets/{aid}/bytes",
+      "handler": "bytes_upload",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop",
+        "assigned_job_or_asset_acl",
+        "upload_owner"
+      ]
+    },
+    {
+      "id": "API-049",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/assets/{aid}/complete",
+      "handler": "write_complete_upload",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop",
+        "assigned_job_or_asset_acl",
+        "upload_owner"
+      ]
+    },
+    {
+      "id": "API-050",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/assets/{aid}/download",
+      "handler": "read_download",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop",
+        "assigned_job_or_asset_acl"
+      ]
+    },
+    {
+      "id": "API-051",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/content/{cid}/publish",
+      "handler": "write_publish",
+      "roles": [
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop"
+      ]
+    },
+    {
+      "id": "API-052",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/shops/{s}/settle-day",
+      "handler": "write_settle",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-053",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/campaigns/{cid}/pause",
+      "handler": "write_pause",
+      "roles": [
+        "monitor",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop"
+      ]
+    },
+    {
+      "id": "API-054",
+      "method": "GET",
+      "path": "/internal/v1/runs/{r}/learning-input",
+      "handler": "read_learning_input",
+      "roles": [
+        "learning_worker"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-055",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/learning-results",
+      "handler": "write_learning_result",
+      "roles": [
+        "learning_worker"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-056",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/shops/{s}/rule-questions",
+      "handler": "write_question",
+      "roles": [
+        "learning_worker",
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-057",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/rule-questions",
+      "handler": "read_questions",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "learning_worker",
+        "orchestrator",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-058",
+      "method": "PUT",
+      "path": "/api/v1/runs/{r}/shops/{s}/rules",
+      "handler": "write_rules",
+      "roles": [
+        "seller",
+        "simulated_seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-059",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/proof",
+      "handler": "read_proof",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "both_runs",
+        "session_or_grant"
+      ]
+    },
+    {
+      "id": "API-060",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/events",
+      "handler": "read_events",
+      "roles": [
+        "content_worker",
+        "data_admin",
+        "evaluator",
+        "knowledge_admin",
+        "learning_worker",
+        "monitor",
+        "orchestrator",
+        "platform_agent",
+        "seller",
+        "shop_agent",
+        "simulated_seller",
+        "simulator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-061",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/replay/export",
+      "handler": "write_replay",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-062",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/operations",
+      "handler": "operations",
+      "roles": [
+        "data_admin",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-063",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/operations/{oid}/claim",
+      "handler": "claim",
+      "roles": [
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-064",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/operations/{oid}/result",
+      "handler": "result",
+      "roles": [
+        "orchestrator"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-065",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/days/{day}/learning/retry",
+      "handler": "control",
+      "roles": [
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-066",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/days/{day}/learning/skip",
+      "handler": "control",
+      "roles": [
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-067",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/shops/{s}/night-summary",
+      "handler": "night_summary",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller",
+        "shop_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "shop"
+      ]
+    },
+    {
+      "id": "API-068",
+      "method": "POST",
+      "path": "/api/v1/runs/{r}/content/{cid}/restore",
+      "handler": "restore",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run",
+        "entity_owner_shop"
+      ]
+    },
+    {
+      "id": "API-069",
+      "method": "POST",
+      "path": "/api/content/undo",
+      "handler": "undo",
+      "roles": [
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "seller_session",
+        "shop_D"
+      ]
+    },
+    {
+      "id": "API-070",
+      "method": "POST",
+      "path": "/api/v1/comparisons",
+      "handler": "create_comparison",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "both_runs",
+        "session_or_grant"
+      ]
+    },
+    {
+      "id": "API-071",
+      "method": "POST",
+      "path": "/api/v1/comparisons/attach",
+      "handler": "attach_comparison",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "both_runs",
+        "session_or_grant"
+      ]
+    },
+    {
+      "id": "API-072",
+      "method": "GET",
+      "path": "/api/v1/comparisons/{gid}",
+      "handler": "comparison",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "both_runs",
+        "session_or_grant"
+      ]
+    },
+    {
+      "id": "API-073",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/events",
+      "handler": "external_event",
+      "roles": [
+        "learning_worker",
+        "orchestrator",
+        "platform_agent",
+        "shop_agent"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    },
+    {
+      "id": "API-074",
+      "method": "GET",
+      "path": "/api/v1/runs/{r}/events/export",
+      "handler": "export",
+      "roles": [
+        "data_admin",
+        "evaluator",
+        "orchestrator",
+        "seller"
+      ],
+      "public": false,
+      "scope": [
+        "run"
+      ]
+    }
+  ]
+}

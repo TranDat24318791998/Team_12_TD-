@@ -99,9 +99,14 @@ def test_seven_day_reproducibility_and_no_fake_learning(service):
 
 
 def test_upload_authorization_checksum_and_traversal(client,service,run):
+    reset=client.post("/api/reset",json={"content_mode":"worker"},headers={"Idempotency-Key":"worker-reset"})
+    assert reset.status_code==200,reset.text
+    run=reset.json()["run_id"]
+    card=start(client);accept(client,card)
+    job=client.get(f"/api/v1/runs/{run}/state").json()["data"]["jobs"][0]
     token=role(service,run,"content_worker")
     content=placeholder_png(1);sha=hashlib.sha256(content).hexdigest()
-    body={"product_id":"SP004","kind":"image","mime_type":"image/png","size_bytes":len(content),"sha256":sha}
+    body={"product_id":"SP004","job_id":job["job_id"],"kind":"image","mime_type":"image/png","size_bytes":len(content),"sha256":sha}
     created=client.post(f"/api/v1/runs/{run}/assets/uploads",json=body,headers=headers(token,"upload"))
     assert created.status_code==201,created.text
     asset=created.json()["data"]["asset_id"]

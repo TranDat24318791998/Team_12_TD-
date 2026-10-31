@@ -11,7 +11,30 @@ chạy kịch bản 7 ngày. Code ứng dụng chính và frontend chưa đượ
 
 ## 1. Chạy nhanh
 
-Chạy các lệnh sau **từ gốc repo**. Cần cài sẵn [uv](https://docs.astral.sh/uv/).
+**Một lệnh cho thành viên mới** (cần cài sẵn [uv](https://docs.astral.sh/uv/)):
+
+```bash
+bash data/setup.sh --serve           # cài môi trường, tạo DB, kiểm tra, chạy API ở :8001
+bash data/setup.sh --reset --serve   # sao lưu DB cũ vào data/runtime/backups/ rồi dựng lại từ đầu
+bash data/setup.sh --help            # xem mọi tuỳ chọn
+```
+
+| Tuỳ chọn | Tác dụng |
+| --- | --- |
+| (không có) | Cài dependency theo `uv.lock`, tạo DB nếu chưa có, kiểm tra toàn vẹn. Chạy lại nhiều lần vẫn an toàn |
+| `--reset` | Sao lưu `growth.db` vào `data/runtime/backups/`, xoá DB, token và file runtime, rồi dựng lại |
+| `--proof` | Chạy 7 ngày, bộ nhớ bật và tắt, xuất `data/runtime/exports/proof.json` |
+| `--test` | Chạy test phần data (`verify-demo`), ghi `data/runtime/gate-a-report.json` |
+| `--serve`, `--host`, `--port` | Chạy API sau khi xong; `--host 0.0.0.0` để mở trong mạng LAN |
+| `--home DIR` | Dùng thư mục runtime khác thay cho `data/runtime` |
+| `--regen-datasets` | Sinh lại `data/datasets/` từ code (chỉ cần khi sửa `seed.py`) |
+
+Database tự nạp phí, luật sàn và knowledge từ code khi khởi tạo; run demo được tạo
+ở lần gọi `GET /api/state` đầu tiên. Không cần pull file DB hay token từ người khác.
+Khi pull code có migration mới, chỉ cần chạy lại `bash data/setup.sh`: script sao lưu
+DB cũ trước, rồi service tự nâng schema và giữ nguyên dữ liệu.
+
+Các bước thủ công tương đương, chạy **từ gốc repo**:
 
 ```bash
 uv sync --project data --python 3.11

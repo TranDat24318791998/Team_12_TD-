@@ -21,8 +21,10 @@ def main():
     parser.add_argument("--home",type=Path,default=Path(__file__).resolve().parents[1]/"runtime")
     sub=parser.add_subparsers(dest="command",required=True)
     sub.add_parser("init-db")
+    backup=sub.add_parser("backup-db");backup.add_argument("--output",type=Path,required=True)
     seed=sub.add_parser("seed");seed.add_argument("--output",type=Path,default=Path(__file__).resolve().parents[1]/"datasets")
     sub.add_parser("validate-data")
+    verify=sub.add_parser("verify-demo");verify.add_argument("--report",type=Path,default=Path(__file__).resolve().parents[1]/"runtime"/"gate-a-report.json")
     docs=sub.add_parser("export-docs");docs.add_argument("--output",type=Path,default=Path(__file__).resolve().parents[1]/"datasets");docs.add_argument("--font",type=Path)
     sub.add_parser("recover")
     serve=sub.add_parser("serve");serve.add_argument("--host",default="127.0.0.1");serve.add_argument("--port",type=int,default=8001)
@@ -31,7 +33,24 @@ def main():
         export=sub.add_parser(command);export.add_argument("--run-id",required=True);export.add_argument("--output",type=Path,required=True)
         if command=="export-proof":export.add_argument("--group-id",required=True);export.add_argument("--variant",choices=["full_7d","legacy_6d"],default="full_7d")
     token=sub.add_parser("issue-token");token.add_argument("--role",required=True);token.add_argument("--run-id",action="append",required=True);token.add_argument("--shop",action="append",required=True);token.add_argument("--job",action="append");token.add_argument("--output",type=Path,required=True)
-    args=parser.parse_args();service=DataService(args.home)
+    args=parser.parse_args()
+    if args.command=="backup-db":
+        import sqlite3
+        source=args.home.resolve()/"growth.db"
+        require_source=source.is_file()
+        if not require_source:parser.error("Chưa có growth.db trong --home")
+        if args.output.exists():parser.error("Backup output đã tồn tại; chọn tên mới")
+        args.output.parent.mkdir(parents=True,exist_ok=True)
+        with sqlite3.connect(source.as_uri()+"?mode=ro",uri=True) as src,sqlite3.connect(args.output) as dst:
+            src.backup(dst)
+        print(json.dumps({"backup":str(args.output),"migrated":False}));return
+    if args.command=="verify-demo":
+        import subprocess
+        import sys
+        root=Path(__file__).resolve().parents[2]
+        result=subprocess.run([sys.executable,"-m","pytest","-c",str(root/"data/pyproject.toml"),str(root/"data/tests"),"-q","--gate-a-report",str(args.report.resolve())],cwd=root)
+        raise SystemExit(result.returncode)
+    service=DataService(args.home)
     if args.command=="init-db":
         # Explicit development setup only. Never embedded into source/browser scripts.
         path=service.home/"dev-credentials.json"
