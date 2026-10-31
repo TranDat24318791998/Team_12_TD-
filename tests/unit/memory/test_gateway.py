@@ -135,11 +135,50 @@ def test_lesson_cannot_reassign_verified_number_to_different_claim():
     from app.domain.policies import DEFAULT_PACKAGE
     session=setup_session()
     values=Package(**DEFAULT_PACKAGE).model_dump(); values.update({'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
-    session.log.add(session.run_id,1,'platform_turn','platform_agent','D','Đề xuất gói.',
-        {'negotiation_id':'n1','action':'propose','package':values})
+    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
+        {'negotiation_id':'n1','package':values})
     snapshot=session.memory.freeze_learning_evidence(1)
     valid=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 3% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
     fake=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 2000% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
     batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[valid,fake],valid_negotiation_ids=['n1'])
     result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
     assert result.accepted_lesson_ops==[valid] and result.rejected_ops==1
+
+
+@pytest.mark.parametrize('roas',['4,0','4.0'])
+def test_lessons_use_executed_package_and_actual_decimal_outcome(roas):
+    from app.domain.models.packages import Package
+    from app.domain.policies import DEFAULT_PACKAGE
+    session=setup_session()
+    proposed=Package(**DEFAULT_PACKAGE).model_dump()
+    actual={**proposed,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5}
+    session.log.add(session.run_id,1,'platform_turn','platform_agent','D','Đề xuất gói.',
+        {'negotiation_id':'n1','action':'propose','package':proposed})
+    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
+        {'negotiation_id':'n1','package':actual})
+    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
+        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
+    snapshot=session.memory.freeze_learning_evidence(1)
+    valid_voucher=LessonOp(op='ADD',lesson_id=None,text_vi='Đã thực hiện gói voucher 3%.',scope='strategy',evidence=['n1'])
+    valid_roas=LessonOp(op='ADD',lesson_id=None,text_vi=f'ROAS {roas} phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
+    fake=LessonOp(op='ADD',lesson_id=None,text_vi='Đã thực hiện gói voucher 10%.',scope='strategy',evidence=['n1'])
+    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[valid_voucher,valid_roas,fake],valid_negotiation_ids=['n1'])
+    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
+    assert result.accepted_lesson_ops==[valid_voucher,valid_roas] and result.rejected_ops==1
+
+
+def test_stop_threshold_cannot_be_reported_as_actual_roas():
+    from app.domain.models.packages import Package
+    from app.domain.policies import DEFAULT_PACKAGE
+    session=setup_session()
+    package=Package(**{**DEFAULT_PACKAGE,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
+    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
+        {'negotiation_id':'n1','package':package.model_dump()})
+    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
+        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
+    snapshot=session.memory.freeze_learning_evidence(1)
+    wrong=LessonOp(op='ADD',lesson_id=None,text_vi='ROAS 6,5 phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
+    correct=LessonOp(op='ADD',lesson_id=None,text_vi='Ngưỡng ROAS 6,5 phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
+    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[wrong,correct],valid_negotiation_ids=['n1'])
+    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
+    assert result.accepted_lesson_ops==[correct] and result.rejected_ops==1

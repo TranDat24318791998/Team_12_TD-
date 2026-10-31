@@ -50,11 +50,18 @@ def leak_guard(text, shop, priv, fees):
     amounts.update(Decimal(profit_per_unit(shop, priv, voucher, fees)) for voucher in range(31))
     breakevens = [breakeven_roas(shop, priv, voucher, fees) for voucher in range(31)]
     for match in _NUMBER.finditer(text):
-        values, precision = _numeric_values(match.group())
-        if any(value in amounts and value > 0 for value in values):
-            return safe, True
-        if precision >= 3:
-            tolerance = max(0.5 * 10 ** (-min(precision, 15)), 1e-12)
-            if any(math.isfinite(be) and abs(float(value) - be) <= tolerance for value in values for be in breakevens):
+        token = match.group()
+        # A comma can separate two numbers as well as mark a decimal; inspect both interpretations.
+        fragments = [token, *re.split(r'\s*,\s*', token), *re.split(r'\s+(?=\d)', token)]
+        for fragment in fragments:
+            fragment = fragment.strip().strip('.,')
+            if not fragment:
+                continue
+            values, precision = _numeric_values(fragment)
+            if any(value in amounts and value > 0 for value in values):
                 return safe, True
+            if precision >= 3:
+                tolerance = max(0.5 * 10 ** (-min(precision, 15)), 1e-12)
+                if any(math.isfinite(be) and abs(float(value) - be) <= tolerance for value in values for be in breakevens):
+                    return safe, True
     return text, False
