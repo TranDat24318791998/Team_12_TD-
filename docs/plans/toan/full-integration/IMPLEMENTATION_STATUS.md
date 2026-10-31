@@ -1,6 +1,6 @@
 # Nghiệm thu bản local
 
-Cập nhật 31/10/2026, 15:12 UTC+7. **Đã implement và hoàn tất 9 review Astra max trong phạm vi demo.** Coder dùng Terra 6.1 max. Làm trên main; plan đã push tại `d46c812`, implementation được gom vào commit FI01 sau kiểm cuối.
+Cập nhật 31/10/2026, 15:12 UTC+7. **Đã implement và hoàn tất 9 review Astra max trong phạm vi demo.** Coder dùng Terra 6.1 max. Làm trên main; plan đã push tại `d46c812`, implementation tại `075ee58` ([FI01] integrate native agents, durable knowledge and local demo).
 
 ## Bản đang chạy
 

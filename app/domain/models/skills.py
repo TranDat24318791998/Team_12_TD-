@@ -130,5 +130,3 @@ class SeedResult(StrictModel):
 class PlatformSkillView(StrictModel):
     bundle: SkillBundle
     seed: SeedResult
-
-
