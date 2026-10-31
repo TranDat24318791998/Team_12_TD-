@@ -182,3 +182,28 @@ def test_stop_threshold_cannot_be_reported_as_actual_roas():
     batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[wrong,correct],valid_negotiation_ids=['n1'])
     result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
     assert result.accepted_lesson_ops==[correct] and result.rejected_ops==1
+
+
+@pytest.mark.parametrize(('text','expected'),[
+    ('Ngưỡng ROAS 4,0.',False),
+    ('ROAS 6,5; ngưỡng dừng 6,5.',False),
+    ('ROAS 3, voucher 3%.',False),
+    ('ROAS 4,0; ngưỡng dừng 6,5.',True),
+    ('Gói đã áp dụng 3 ngày.',True),
+    ('Gói đã áp dụng 2 ngày.',False),
+    ('Dừng sau 2 ngày.',True),
+])
+def test_lesson_numeric_fields_are_checked_in_their_own_clause(text,expected):
+    from app.domain.models.packages import Package
+    from app.domain.policies import DEFAULT_PACKAGE
+    session=setup_session()
+    package=Package(**{**DEFAULT_PACKAGE,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
+    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
+        {'negotiation_id':'n1','package':package.model_dump()})
+    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
+        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
+    snapshot=session.memory.freeze_learning_evidence(1)
+    op=LessonOp(op='ADD',lesson_id=None,text_vi=text,scope='strategy',evidence=['n1'])
+    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[op],valid_negotiation_ids=['n1'])
+    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
+    assert bool(result.accepted_lesson_ops) is expected

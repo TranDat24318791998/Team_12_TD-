@@ -254,6 +254,44 @@ class MemoryGateway:
         # No causal uplift is established by these simulated observations.
         if re.search(r'\b(?:đem lại|mang lại|khiến|làm tăng|giúp tăng|gây ra)\b.*\b(?:đơn|doanh thu|lãi|roas)\b', text):
             return False
+        packages = [event.package for event in applied]
+        outcomes = [event.outcome for event in actual]
+        def number(value):
+            return tokens(str(value))[0] if value is not None else None
+        def nearby_number(clause, index):
+            labels = {'roas', 'voucher', 'đơn', 'ngày'}
+            for following in range(index + 1, min(len(clause), index + 5)):
+                if clause[following] in labels:
+                    break
+                if re.fullmatch(r'\d+(?:\.\d+)?', clause[following]):
+                    return following
+            if index and re.fullmatch(r'\d+(?:\.\d+)?', clause[index-1]):
+                return index-1
+            return None
+        # Each numeric claim must match the right field in its own clause.
+        # A threshold in a later clause cannot change the meaning of an earlier ROAS.
+        for part in re.split(r';|\.(?!\d)|,(?=\s*[^\d\s])|\n', text):
+            clause = tokens(part)
+            for index, word in enumerate(clause):
+                if word not in {'roas', 'voucher', 'đơn', 'ngày'}:
+                    continue
+                position = nearby_number(clause, index)
+                if position is None:
+                    continue
+                value = clause[position]
+                if word == 'roas':
+                    nearby = clause[max(0,index-2):max(index,position)]
+                    threshold = any(label in {'ngưỡng','dừng'} for label in nearby)
+                    valid = {number(p.stop_roas_below) for p in packages} if threshold else {number(o.roas) for o in outcomes}
+                elif word == 'voucher':
+                    valid = {number(p.voucher_pct) for p in packages}
+                elif word == 'đơn':
+                    valid = {number(o.orders) for o in outcomes}
+                else:
+                    is_stop_interval = ('dừng' in clause or ('liên' in clause and 'tiếp' in clause)) and not ('hạn' in clause or 'kéo' in clause)
+                    valid = {number(p.stop_after_days if is_stop_interval else p.duration_days) for p in packages}
+                if value not in valid:
+                    return False
         context_words = [word for part in parts for word in tokens(part)]
         number_pattern = r'\d+(?:\.\d+)?'
         numbers = {word for word in words if re.fullmatch(number_pattern, word)}
@@ -264,7 +302,7 @@ class MemoryGateway:
                        'dựa trên kết quả dữ liệu học từ phản hồi trước sau phù hợp đúng mục tiêu đề xuất '
                        'gói chiến lược cửa hàng shop sàn hình ảnh rõ ràng mức độ và với cho của các '
                        'một là được theo có vì để vào lần tiếp theo dựa đã thực hiện áp dụng chạy kích hoạt dùng kinh nghiệm '
-                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi ngưỡng dừng roas').split())
+                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi ngưỡng dừng roas ngày liên tiếp tế kéo dài hạn sau ở trong thực tế').split())
         if not set(words) <= set(context_words) | neutral:
             return False
         glue = {'và','với','của','cho','là','được','có','theo','trong','một','các','từ','khi'}
