@@ -53,6 +53,17 @@ def leak_guard(text, shop, priv, fees):
         token = match.group()
         # A comma can separate two numbers as well as mark a decimal; inspect both interpretations.
         fragments = [token, *re.split(r'\s*,\s*', token), *re.split(r'\s+(?=\d)', token)]
+        # Also inspect grouped-thousands amounts inside a space-separated list.
+        groups = token.split()
+        for index, group in enumerate(groups):
+            if not re.fullmatch(r'\d{1,3}', group):
+                continue
+            number = group
+            for following in groups[index+1:]:
+                if not re.fullmatch(r'\d{3}', following):
+                    break
+                number += following
+                fragments.append(number)
         for fragment in fragments:
             fragment = fragment.strip().strip('.,')
             if not fragment:

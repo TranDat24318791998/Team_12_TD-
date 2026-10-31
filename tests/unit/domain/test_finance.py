@@ -49,7 +49,8 @@ def test_private_amount_lists_are_not_merged_into_an_ignored_number():
     world=load_world(); state=world.shops['D']
     examples=['Chi phí và mức sàn lần lượt là 115.000, 18.000 đồng.',
               'Các mức là 115000, 18000.', 'Các mức là 115000,18000.',
-              'Mức riêng: 115.000,18.000.', 'Chi phí một chiếc là 115,0 nghìn đồng.']
+              'Mức riêng: 115.000,18.000.', 'Các mức là 115 000 18 000 đồng.',
+              'Các mức là 115 000 180 000 đồng.', 'Chi phí một chiếc là 115,0 nghìn đồng.']
     for text in examples:
         assert leak_guard(text,state.public,state.private,world.fees)[1],text
     assert not leak_guard('Ngân sách 45.000đ, voucher 3%, ngưỡng dừng 6,5.',state.public,state.private,world.fees)[1]

@@ -270,12 +270,13 @@ class MemoryGateway:
             return None
         # Each numeric claim must match the right field in its own clause.
         # A threshold in a later clause cannot change the meaning of an earlier ROAS.
-        for part in re.split(r';|\.(?!\d)|,(?=\s*[^\d\s])|\n', text):
+        for part in re.split(r';|\.(?!\d)|,(?=\s*[^\d\s])|\b(?:và|nhưng|còn|hoặc)\b|\n', text):
             clause = tokens(part)
             for index, word in enumerate(clause):
                 if word not in {'roas', 'voucher', 'đơn', 'ngày'}:
                     continue
-                position = nearby_number(clause, index)
+                position = (index-1 if word in {'ngày','đơn'} and index and
+                            re.fullmatch(r'\d+(?:\.\d+)?', clause[index-1]) else nearby_number(clause, index))
                 if position is None:
                     continue
                 value = clause[position]
