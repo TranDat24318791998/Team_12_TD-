@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 import shutil
 import mimetypes
 import tempfile
@@ -76,3 +77,33 @@ def create_storage(settings):
     if settings.storage_backend == 'local':
         return LocalStorage(settings.data_dir)
     return MinioStorage(settings)
+
+
+def materialize_asset(storage, asset, work):
+    """Use a verified local cache or restore an input from its stored object."""
+    path = Path(asset['path'])
+    digest = asset.get('sha256')
+    size = asset.get('size_bytes')
+    if path.is_file() and (not digest or (path.stat().st_size == size and hashlib.sha256(path.read_bytes()).hexdigest() == digest)):
+        return path
+    if not asset.get('object_key') or not digest or not size:
+        raise RuntimeError('Không tìm thấy media đầu vào')
+    target = Path(work) / f"input-{asset['id']}{path.suffix}"
+    try:
+        if storage.stat(asset['object_key']) != size:
+            raise RuntimeError('Kích thước media không khớp')
+        hasher = hashlib.sha256()
+        length = 0
+        with target.open('wb') as out:
+            for chunk in storage.chunks(asset['object_key'], 0, size):
+                length += len(chunk)
+                if length > size:
+                    raise RuntimeError('Kích thước media không khớp')
+                hasher.update(chunk)
+                out.write(chunk)
+        if length != size or hasher.hexdigest() != digest:
+            raise RuntimeError('Checksum media không khớp')
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+    return target

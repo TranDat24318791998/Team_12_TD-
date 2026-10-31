@@ -15,6 +15,30 @@ from .text_validation import content_matches_facts
 
 
 class MediaMixin:
+    @staticmethod
+    def duration_matches(requested, actual):
+        if requested is None or actual is None:return None
+        return abs(actual-requested)<=max(.5,requested*.05)
+
+    def wizard_input_asset(self,c,r,job):
+        """Choose a verified active cover, or the supplied original if unavailable."""
+        product=self.product(c,r,job['shop_id'])
+        content=self.entity(c,'content_versions',r,'content_id',product['active_content_id'])
+        candidates=[]
+        if content['status']=='published' and content.get('cover_asset_id'):
+            candidates.append(content['cover_asset_id'])
+        candidates.extend(row['asset_id'] for row in many(c,"SELECT asset_id FROM assets WHERE run_id=? AND product_id=? AND kind='image' AND origin='supplied' AND source_reference LIKE 'local_import:sha256:%' AND upload_status='ready' ORDER BY created_at",(r,job['product_id'])))
+        for aid in dict.fromkeys(candidates):
+            asset=one(c,"SELECT * FROM assets WHERE run_id=? AND asset_id=? AND product_id=? AND kind='image' AND upload_status='ready'",(r,aid,job['product_id']))
+            if not asset:continue
+            if asset.get('source_reference') in {'generated_geometric_placeholder_not_product_photo','geometric_fallback_not_product_photo'}:continue
+            try:
+                path=self.object_path(asset['object_key'])
+                if path.is_file() and path.stat().st_size==asset['size_bytes'] and hashlib.sha256(path.read_bytes()).hexdigest()==asset['sha256']:
+                    return asset
+            except (Fault,OSError):pass
+        return None
+
     def content_approval(self,c,r,job):
         """Resolve the card named by the exact approval event for this job's proposal."""
         prop=one(c,"SELECT * FROM proposals WHERE run_id=? AND proposal_id=?",(r,job['proposal_id']))
@@ -128,6 +152,9 @@ class MediaMixin:
         if prior:
             require(not any(slot.get('status') in {'reserved','unknown','outcome_unknown','running'} for slot in prior['provider_state'].values()), 'PROVIDER_OUTCOME_UNKNOWN', 'Cần xử lý kết quả media chưa rõ trước khi làm lại')
         worker=run["content_mode"]=="worker" and not force_local
+        staged=(worker and s==run['demo_shop_id'] and run['config'].get('driver',{}).get('agent_version')=='native'
+                and run['config'].get('driver',{}).get('media_wizard')=='staged')
+        if staged and prior:require(b.retry_scope=='all','RETRY_SCOPE','Tạo lại nội dung cần chọn lại ảnh và video',422)
         for aid in b.input_asset_ids:
             a=self.asset_access(c,p,r,aid)
             require(a["product_id"]==b.product_id and a["upload_status"]=="ready","ASSET_INVALID","Ảnh nguồn không hợp lệ",422)
@@ -156,10 +183,12 @@ class MediaMixin:
         if worker:c.execute("UPDATE content_versions SET status='draft' WHERE run_id=? AND content_id=?",(r,cid))
         original=one(c,"SELECT asset_id FROM assets WHERE run_id=? AND product_id=? AND origin='supplied' AND source_reference LIKE 'local_import:sha256:%' ORDER BY created_at LIMIT 1",(r,b.product_id))
         source_assets=list(dict.fromkeys(b.input_asset_ids+([original['asset_id']] if original else [])+[asset]+[v["asset_id"] for v in source["cover_options"] if v.get('asset_id')]+([source["video_asset_id"]] if source["video_asset_id"] else [])))
-        insert(c,"content_jobs",run_id=r,job_id=jid,shop_id=s,product_id=b.product_id,proposal_id=b.proposal_id,attempt=attempt,brief_json={"facts":prod["facts"],"attributes":[v['text_vi'] for v in prod['facts']['verified_claims']],"confirmed_style":notes,"previous_content":{"title":source["title"],"description":source["description"],"images":source["cover_options"],"video":source["video_job"]},"retry_scope":b.retry_scope if prior else "all"},feedback_history_json=feedback,style_notes_json=notes+feedback,input_asset_ids_json=source_assets,provider="assigned_worker" if worker else "local_fallback",provider_job_id=None,cache_key=fingerprint({"r":r,"s":s,"attempt":attempt,"feedback":feedback}),status="queued" if worker else "succeeded",output_content_ids_json=[cid],fallback_used=not worker,error_code=None,lease_until=self.expires(120) if worker else None,retry_scope=b.retry_scope if prior else "all",source_content_id=source["content_id"],**timestamps())
+        brief={"facts":prod["facts"],"attributes":[v['text_vi'] for v in prod['facts']['verified_claims']],"confirmed_style":notes,"previous_content":{"title":source["title"],"description":source["description"],"images":source["cover_options"],"video":source["video_job"]},"retry_scope":b.retry_scope if prior else "all"}
+        if staged:brief['wizard']={'stage':'choose_image','background':None,'wishes':'','output_type':None,'duration':None}
+        insert(c,"content_jobs",run_id=r,job_id=jid,shop_id=s,product_id=b.product_id,proposal_id=b.proposal_id,attempt=attempt,brief_json=brief,feedback_history_json=feedback,style_notes_json=notes+feedback,input_asset_ids_json=source_assets,provider="assigned_worker" if worker else "local_fallback",provider_job_id=None,cache_key=fingerprint({"r":r,"s":s,"attempt":attempt,"feedback":feedback}),status="awaiting_image" if staged else "queued" if worker else "succeeded",output_content_ids_json=[cid],fallback_used=not worker,error_code=None,lease_until=self.expires(120) if worker and not staged else None,retry_scope=b.retry_scope if prior else "all",source_content_id=source["content_id"],**timestamps())
         for aid in set(source_assets+[x["asset_id"] for x in covers]):
             c.execute("INSERT OR IGNORE INTO asset_jobs VALUES(?,?,?)",(r,aid,jid))
-        self.event(c,r,run["current_day"],"content_job","content_worker",s,{"job_id":jid,"attempt":attempt,"feedback_vi":b.feedback_vi,"fallback_used":not worker,"kind":"draft","status":"running" if worker else "cached","version":attempt},visibility="shop_private",text="Đã giao content worker" if worker else "Nội dung local và ảnh fallback có nhãn")
+        self.event(c,r,run["current_day"],"content_job","content_worker",s,{"job_id":jid,"attempt":attempt,"feedback_vi":b.feedback_vi,"fallback_used":not worker,"kind":"draft","status":"awaiting_image" if staged else "running" if worker else "cached","version":attempt},visibility="shop_private",text="Chờ người bán chọn nền ảnh" if staged else "Đã giao content worker" if worker else "Nội dung local và ảnh fallback có nhãn")
         if s==run['demo_shop_id']: c.execute("UPDATE runs SET phase='content_review' WHERE run_id=?",(r,))
         return self.entity(c,"content_jobs",r,"job_id",jid)
 
@@ -169,6 +198,19 @@ class MediaMixin:
                         and text.get('content_version')==content['version']) else None
 
     def prepare_running_skip(self,c,r,job,content,cover_option):
+        wizard=job['brief'].get('wizard')
+        if wizard:
+            require(wizard.get('stage')=='video' and cover_option=='A','CONTENT_PENDING','Nội dung chưa được kiểm tra')
+            image=next((item for item in content['cover_options'] if item['option']=='A'),None)
+            slot=job['provider_state'].get('A',{})
+            require(image and image.get('status')=='done' and image.get('asset_id')==slot.get('asset_id')
+                    and slot.get('status')=='done' and slot.get('source')=='live' and slot.get('source_asset_id'),
+                    'ASSET_PENDING','Ảnh chưa sẵn sàng')
+            asset=self.checked_job_asset(c,r,job,image['asset_id'],'image')
+            require(asset['job_id']==job['job_id'],'ASSET_SCOPE','File không thuộc lượt hiện tại',404)
+            self.validate_content_text(c,r,job,content['title'],content['description'])
+            c.execute("UPDATE content_versions SET status='validated',version=version+1,updated_at=? WHERE run_id=? AND content_id=? AND status='draft'",(now(),r,content['content_id']))
+            return
         text=self.staged_text(job,content)
         require(text,'CONTENT_PENDING','Nội dung chưa được kiểm tra')
         self.validate_content_text(c,r,job,text['title'],text['description'])
@@ -208,6 +250,18 @@ class MediaMixin:
                     'ASSET_SCOPE','Ảnh không thuộc lượt hiện tại',404)
         video=content['video_job']
         video_id=video.get('asset_id')
+        if wizard:=job['brief'].get('wizard'):
+            slot=job['provider_state'].get('A',{})
+            require(wizard.get('stage') in {'image','video'} and decision['cover_option']=='A' and option['status']=='done'
+                    and slot.get('status')=='done' and slot.get('source')=='live' and slot.get('source_asset_id')
+                    and slot.get('asset_id')==asset['asset_id'] and asset['job_id']==job['job_id'],
+                    'IMAGE_REFERENCE_INVALID','Ảnh phải thuộc lượt tạo hiện tại')
+            if not b.skip_video:
+                require(wizard.get('stage')=='video' and video.get('status')=='done'
+                        and video.get('reference_asset_id')==asset['asset_id'],
+                        'VIDEO_REQUIRED','Cần ảnh và video đã tạo từ ảnh được chọn')
+                require(video.get('duration_matches_requested') is True or b.video_review_ack,
+                        'VIDEO_DURATION_ACK_REQUIRED','Cần xác nhận thời lượng video thực tế')
         if not b.skip_video and video.get('status') in {'done','cached'}:
             require(video_id is not None,'ASSET_PENDING','Video chưa sẵn sàng')
             self.checked_job_asset(c,r,job,video_id,'video')
@@ -221,6 +275,7 @@ class MediaMixin:
         c.execute("UPDATE content_versions SET status='published',cover_asset_id=?,video_asset_id=?,video_job_json=?,published_day=?,version=version+1 WHERE run_id=? AND content_id=?",(asset["asset_id"],video_id,dumps(video),run["current_day"],r,cid))
         c.execute("UPDATE products SET active_content_id=?,version=version+1 WHERE run_id=? AND product_id=?",(cid,r,prod["product_id"]))
         c.execute("UPDATE assets SET visibility='published' WHERE run_id=? AND asset_id=?",(r,asset["asset_id"]))
+        if video_id:c.execute("UPDATE assets SET visibility='published' WHERE run_id=? AND asset_id=?",(r,video_id))
         self.event(c,r,run["current_day"],"content_applied","orchestrator",prod["shop_id"],{"content_id":cid,"job_id":job['job_id'],"attempt":job['attempt'],"cover_option":decision["cover_option"],"skip_video":b.skip_video,"video_review_ack":b.video_review_ack},text="Xuất bản đúng nội dung người bán đã chọn")
         proposal=self.entity(c,"proposals",r,"proposal_id",job["proposal_id"])
         approval=one(c,"SELECT * FROM decisions WHERE run_id=? AND target_type='proposal' AND target_id=? AND action='approve'",(r,job["proposal_id"]))
@@ -292,7 +347,7 @@ class MediaMixin:
             require(not one(c,"SELECT * FROM content_jobs WHERE run_id=? AND proposal_id=? AND attempt>?",(r,job["proposal_id"],job["attempt"])),"SUPERSEDED_JOB","Job đã bị thay thế")
             video=candidate["video"]
             require(isinstance(video,dict) and video.get("status") in {"pending","running","done","failed","cached"},"CONTENT_SCHEMA","Video sai schema",422)
-            require(set(video)<={"status","asset_id","path","job_id","prompt","error","source","reference_asset_id","reference_job_id","reference_attempt","review_passed","review_notes","duration_seconds"},"CONTENT_SCHEMA","Video có trường không hợp lệ",422)
+            require(set(video)<={"status","asset_id","path","job_id","prompt","error","source","reference_asset_id","reference_job_id","reference_attempt","review_passed","review_notes","duration_seconds","requested_duration_seconds","duration_matches_requested","short_description"},"CONTENT_SCHEMA","Video có trường không hợp lệ",422)
             video_id=video.get("asset_id")
             if video_id:
                 a=self.asset_access(c,p,r,video_id);require(a["product_id"]==job["product_id"] and a["kind"]=="video" and a["upload_status"]=="ready")
@@ -305,6 +360,22 @@ class MediaMixin:
             else:video["path"]=None
             content=self.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
             require(content["status"]=="draft")
+            wizard=job['brief'].get('wizard')
+            if wizard:
+                first=next((image for image in candidate['images'] if image['option']=='A'),None)
+                image_slot=job['provider_state'].get('A',{})
+                require(first and first.get('status')=='done' and first.get('asset_id')==image_slot.get('asset_id')
+                        and image_slot.get('status')=='done' and image_slot.get('source_asset_id'),
+                        'IMAGE_REFERENCE_INVALID','Ảnh phải thuộc lượt tạo hiện tại',422)
+                if wizard.get('stage')=='image':
+                    require(video_id is None and video.get('status')=='pending', 'VIDEO_NOT_REQUESTED','Chưa yêu cầu tạo video',422)
+                else:
+                    require(wizard.get('stage')=='video' and candidate['images']==content['cover_options']
+                            and video_id and job['provider_state'].get('video',{}).get('asset_id')==video_id
+                            and job['provider_state']['video'].get('status')=='done',
+                            'VIDEO_REFERENCE_INVALID','Video phải thuộc lượt tạo hiện tại',422)
+                    video['requested_duration_seconds']=wizard['duration']
+                    video['duration_matches_requested']=self.duration_matches(wizard['duration'],video.get('duration_seconds'))
             prior=self.entity(c,"content_versions",r,"content_id",job["source_content_id"])
             if job["attempt"]>1 and job["retry_scope"]=="images":
                 require((candidate["title"],candidate["description"],video)==(prior["title"],prior["description"],prior["video_job"]),"RETRY_SCOPE","Retry ảnh không được đổi text/video",422)
@@ -315,7 +386,10 @@ class MediaMixin:
             raise Fault("CONTENT_REQUIRED","Job thành công cần bản nháp hợp lệ",422)
         elif b.status in {"failed","timed_out"}:
             run=self.entity(c,'runs',r,'run_id',r)
-            if run['config'].get('driver',{}).get('agent_version')=='native':
+            if job['brief'].get('wizard',{}).get('stage')=='video':
+                video={'status':'failed','asset_id':None,'path':None,'error':b.error_code or 'MEDIA_UNAVAILABLE'}
+                c.execute("UPDATE content_versions SET video_job_json=?,video_asset_id=NULL,status='validated',version=version+1 WHERE run_id=? AND content_id=?",(dumps(video),r,job['output_content_ids'][0]))
+            elif run['config'].get('driver',{}).get('agent_version')=='native':
                 unavailable=[{'option':option,'status':'failed','asset_id':None,'path':None,'error':b.error_code or 'MEDIA_UNAVAILABLE'} for option in 'ABC']
                 video={'status':'failed','asset_id':None,'path':None,'error':b.error_code or 'MEDIA_UNAVAILABLE'}
                 c.execute("UPDATE content_versions SET cover_options_json=?,video_job_json=?,video_asset_id=NULL,status='validated',version=version+1 WHERE run_id=? AND content_id=?",(dumps(unavailable),dumps(video),r,job['output_content_ids'][0]))

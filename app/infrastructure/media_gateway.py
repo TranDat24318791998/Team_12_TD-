@@ -34,7 +34,7 @@ class MediaGateway:
         if self._owns_client:
             await self.client.aclose()
 
-    async def preflight(self, product_kind):
+    async def preflight(self, product_kind, *, video=True):
         if self.settings.media_mode != 'live' or not self.settings.media_api_token:
             raise MediaError('MEDIA_OFFLINE')
         try:
@@ -43,7 +43,7 @@ class MediaGateway:
             data = response.json()
         except (httpx.HTTPError, ValueError):
             raise MediaError('MEDIA_UNAVAILABLE') from None
-        if not (data.get('ready') and data.get('openai_configured') and data.get('muse_configured')
+        if not (data.get('ready') and data.get('openai_configured') and (not video or data.get('muse_configured'))
                 and data.get('contract_version') == 'growth-media.v1'
                 and product_kind in data.get('supported_product_kinds', [])
                 and data.get('optional_logo') is True and data.get('bright_background') is True):

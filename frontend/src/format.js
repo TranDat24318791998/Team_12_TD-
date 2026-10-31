@@ -1,3 +1,4 @@
+import {resolveApiPath} from './runtime.js';
 export const vnd=value=>value==null || !Number.isFinite(Number(value))?'—':new Intl.NumberFormat('vi-VN',{maximumFractionDigits:0}).format(value)+'đ';
 export const dec=(value,digits=1)=>value==null || !Number.isFinite(Number(value))?'—':new Intl.NumberFormat('vi-VN',{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(value);
 export const baseURL=new URL('../',import.meta.url);
@@ -6,6 +7,7 @@ export function mediaURL(value,base=globalThis.location?.href || 'http://localho
   if(!value)return '';
   try{
     if(/^(media|assets)\//.test(value))value='/'+value;
+    if(value.startsWith('/'))value=resolveApiPath(value);
     const url=new URL(value,base);
     return ['http:','https:'].includes(url.protocol) || (base.startsWith('file:') && url.protocol==='file:')?url.href:'';
   }catch{return '';}

@@ -429,6 +429,16 @@ class LegacyContentApply(LegacyContentBinding):
     video_review_ack: bool = False
 
 
+class LegacyContentImage(LegacyContentBinding):
+    background: Literal['clean_white', 'pastel_lifestyle', 'premium_studio', 'summer_fresh']
+    wishes: str = Field(default='', max_length=1000)
+
+
+class LegacyContentVideo(LegacyContentBinding):
+    output_type: Literal['chibi_3d', 'realistic_human']
+    duration: Literal[5, 10, 15, 20]
+
+
 class LegacyNight(Strict):
     expected_day: int = Field(ge=1, le=7)
 
@@ -457,6 +467,9 @@ class WorkerVideo(Strict):
     review_passed: bool | None = None
     review_notes: str | None = None
     duration_seconds: float | None = None
+    requested_duration_seconds: float | None = None
+    duration_matches_requested: bool | None = None
+    short_description: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def ready_asset(self):

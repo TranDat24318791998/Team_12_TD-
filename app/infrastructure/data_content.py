@@ -6,7 +6,7 @@ import re
 from app.domain.models.shops import FeeConfig, ShopPrivate, ShopPublic
 from app.domain.privacy import leak_guard
 
-from data.growth_data.errors import require
+from data.growth_data.errors import Fault, require
 from data.growth_data.seed import world
 from data.growth_data.service import Principal
 from data.growth_data.storage import dumps, fingerprint, many, now, one, uid
@@ -82,6 +82,8 @@ class DataContentBridge:
             job={**job,'feedback_history':self._safe_notes(job['feedback_history'],safe),
                  'style_notes':self._safe_notes(job['style_notes'],safe),
                  'brief':{**job['brief'],'confirmed_style':self._safe_notes(job['brief']['confirmed_style'],safe)}}
+            if wizard:=job['brief'].get('wizard'):
+                job['brief']['wizard']={**wizard,'wishes':' '.join(self._safe_notes([wizard.get('wishes','')],safe))}
             content={**content,'feedback_history':self._safe_notes(content['feedback_history'],safe),
                      'style_notes':self._safe_notes(content['style_notes'],safe)}
             rules={'content_style_notes':self._safe_notes(rules['content_style_notes'],safe)}
@@ -103,6 +105,14 @@ class DataContentBridge:
         s=self.service
         with s.store.connect() as c:
             job,_,_=self._job(c,run_id,job_id)
+            if job['brief'].get('wizard'):
+                aid=job['brief'].get('wizard_input_asset_id')
+                if not aid:return None
+                try:
+                    asset=s.checked_job_asset(c,run_id,job,aid,'image')
+                    data=s.object_path(asset['object_key']).read_bytes()
+                    return {'asset_id':aid,'bytes':data} if len(data)==asset['size_bytes'] and hashlib.sha256(data).hexdigest()==asset['sha256'] else None
+                except (Fault,OSError):return None
             row=one(c,"SELECT a.* FROM assets a JOIN asset_jobs j ON j.run_id=a.run_id AND j.asset_id=a.asset_id WHERE j.run_id=? AND j.job_id=? AND a.product_id=? AND a.origin='supplied' AND a.source_reference LIKE 'local_import:sha256:%' AND a.upload_status='ready' ORDER BY a.created_at LIMIT 1",(run_id,job_id,job['product_id']))
             if not row: return None
             path=s.object_path(row['object_key'])
@@ -153,7 +163,7 @@ class DataContentBridge:
 
     def update_slot(self, run_id, job_id, slot, updates):
         require(slot in {'inputs', 'A', 'B', 'C', 'video'}, 'SLOT_INVALID', 'Slot không hợp lệ', 422)
-        require(set(updates) <= {'status', 'remote_id', 'asset_id', 'source_asset_id', 'logo_asset_id', 'error', 'source', 'review_passed', 'review_notes', 'duration_seconds', 'media_text_vision_calls_reserved', 'media_text_vision_calls_completed'}, 'SLOT_INVALID', 'Trường media không hợp lệ', 422)
+        require(set(updates) <= {'status', 'remote_id', 'asset_id', 'source_asset_id', 'logo_asset_id', 'error', 'source', 'review_passed', 'review_notes', 'duration_seconds', 'requested_duration_seconds', 'duration_matches_requested', 'public_url', 'public_url_expires_at', 'short_description', 'media_text_vision_calls_reserved', 'media_text_vision_calls_completed'}, 'SLOT_INVALID', 'Trường media không hợp lệ', 422)
         s = self.service
         with s.store.connect(write=True) as c:
             job, _, _ = self._job(c, run_id, job_id)

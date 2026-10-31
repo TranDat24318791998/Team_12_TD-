@@ -1,4 +1,5 @@
 import {createPreviewAPI} from './preview.js';
+import {configuredApiBase,resolveApiPath} from './runtime.js';
 export function selectPreview(location,storage){
   const query=new URLSearchParams(location.search).get('preview');
   let saved=null;try{saved=storage?.getItem('growth-agents.source');}catch{}
@@ -12,14 +13,14 @@ export function commandTarget(state,path){
   const base=[state.run_id,state.day];
   if(path==='/api/reset')return state.run_id;
   if(path==='/api/decision')return JSON.stringify([...base,state.pending_card?.card_id,state.pending_card?.version,state.pending_card?.brief_version]);
-  if(path.startsWith('/api/content/')){const d=state.content_draft;return JSON.stringify([...base,d?.card_id,d?.brief_version,d?.version,d?.job_id,d?.content_id]);}
+  if(path.startsWith('/api/content/')){const d=state.content_draft;return JSON.stringify([...base,d?.card_id,d?.brief_version,d?.version,d?.job_id,d?.content_id,...(['/api/content/image','/api/content/video'].includes(path)?[d?.wizard?.stage]:[])]);}
   return JSON.stringify([...base,state.step,state.last_night?.day]);
 }
 export function commandFinished(before,after,path){
   if(path==='/api/night')return after.step==='complete' || after.day!==before.day || (after.step==='night_done' && after.last_night?.day===before.day);
   return commandTarget(before,path)!==commandTarget(after,path);
 }
-export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=globalThis.sessionStorage,now=Date.now,assetRoot}={}){
+export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=globalThis.sessionStorage,now=Date.now,assetRoot,apiBase=configuredApiBase()}={}){
   const sample=preview?createPreviewAPI({storage,now,assetRoot,fetchImpl}):null;
   const intents=new Map();
   async function request(path,{body,signal,target='',...options}={}){
@@ -39,7 +40,8 @@ export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=g
     if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
     const timeout=setTimeout(abort,path==='/api/night'?70000:20000);
     try{
-      const response=await fetchImpl(path,{credentials:'same-origin',...options,signal:controller.signal,headers,...(body?{body:JSON.stringify(body)}:{})});
+      const requestPath=resolveApiPath(path,apiBase);
+      const response=await fetchImpl(requestPath,{credentials:requestPath===path?'same-origin':'include',...options,signal:controller.signal,headers,...(body?{body:JSON.stringify(body)}:{})});
       let result;try{result=await response.json();}catch{throw new Error('Máy chủ chưa trả JSON hợp lệ. Hãy kiểm tra API hoặc mở bản xem trước.');}
       const inProgress=mutating && (response.status===202 || result?.error?.code==='COMMAND_IN_PROGRESS');
       if(mutating && !inProgress && response.status<500 && response.status!==429)intents.delete(fingerprint);

@@ -31,20 +31,29 @@ class Store:
                  stage TEXT NOT NULL, result TEXT, error TEXT, created REAL NOT NULL,
                  updated REAL NOT NULL, UNIQUE(owner, idem));
             ''')
+            # Existing installations predate storage-backed input assets.
+            columns = {row['name'] for row in conn.execute('PRAGMA table_info(assets)')}
+            for column, kind in (('object_key', 'TEXT'), ('mime_type', 'TEXT'), ('size_bytes', 'INTEGER'), ('sha256', 'TEXT')):
+                if column not in columns:
+                    conn.execute(f'ALTER TABLE assets ADD COLUMN {column} {kind}')
 
     def connect(self):
         conn = sqlite3.connect(self.db, timeout=15)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def add_asset(self, asset_id, owner, kind, path):
+    def add_asset(self, asset_id, owner, kind, path, *, object_key=None, mime_type=None, size_bytes=None, sha256=None):
         with self.connect() as conn:
-            conn.execute('INSERT INTO assets VALUES (?,?,?,?,?)',
-                         (asset_id, owner, kind, str(path), time.time()))
+            conn.execute('INSERT INTO assets (id,owner,kind,path,created,object_key,mime_type,size_bytes,sha256) VALUES (?,?,?,?,?,?,?,?,?)',
+                         (asset_id, owner, kind, str(path), time.time(), object_key, mime_type, size_bytes, sha256))
 
-    def asset(self, asset_id, owner):
+    def asset(self, asset_id, owner=None):
         with self.connect() as conn:
-            row = conn.execute('SELECT * FROM assets WHERE id=? AND owner=?', (asset_id, owner)).fetchone()
+            sql, params = 'SELECT * FROM assets WHERE id=?', [asset_id]
+            if owner is not None:
+                sql += ' AND owner=?'
+                params.append(owner)
+            row = conn.execute(sql, params).fetchone()
         return dict(row) if row else None
 
     def existing(self, owner, idem):

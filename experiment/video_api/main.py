@@ -53,6 +53,11 @@ def playback_signature(settings, job_id, expires):
                     f'play:{job_id}:{expires}'.encode(), hashlib.sha256).hexdigest()
 
 
+def asset_signature(settings, asset_id, expires):
+    return hmac.new(settings.playback_secret.get_secret_value().encode(),
+                    f'asset:{asset_id}:{expires}'.encode(), hashlib.sha256).hexdigest()
+
+
 def create_app(settings=None, storage=None, processor=process_job, worker_enabled=True):
     settings = settings or Settings.load()
     store = Store(settings.data_dir)
@@ -129,7 +134,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
     async def request_boundary(request, call_next):
         # Authenticate before parsing multipart bodies. Public playback uses a separate short-lived signature.
         path = request.url.path
-        public_media = bool(re.fullmatch(r'/v1/jobs/[a-f0-9]{32}/play|/v1/images/[a-f0-9]{32}/view', path))
+        public_media = bool(re.fullmatch(r'/v1/jobs/[a-f0-9]{32}/play|/v1/images/[a-f0-9]{32}/view|/v1/assets/[a-f0-9]{32}/view', path))
         if request.method != 'OPTIONS' and path.startswith('/v1/') and not public_media:
             expected = settings.video_api_token.get_secret_value()
             token = request.headers.get('authorization', '')
@@ -182,8 +187,32 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 return response
             response.update(video_url=f"{base}/v1/jobs/{row['id']}/play?expires={expires}&signature={signature}",
                             watch_url=f"{base}/watch/{row['id']}?expires={expires}&signature={signature}",
-                            video_url_expires_at=expires)
+                            video_url_expires_at=expires,
+                            short_description=result.get("short_description", ""))
         return response
+
+    def asset_view(row, request):
+        expires = int(time.time()) + settings.playback_ttl_seconds
+        base = (settings.public_base_url or str(request.base_url)).rstrip('/')
+        signature = asset_signature(settings, row['id'], expires)
+        return {'asset_id': row['id'], 'kind': row['kind'], 'size_bytes': row['size_bytes'],
+                'asset_url': f"{base}/v1/assets/{row['id']}/view?expires={expires}&signature={signature}",
+                'asset_url_expires_at': expires}
+
+    def persist_asset(asset_id, identity, kind, path, mime_type):
+        if not settings.storage_ready():
+            raise HTTPException(503, 'Kho media chưa sẵn sàng')
+        key = f'assets/{identity}/{asset_id}{path.suffix}'
+        try:
+            storage.put(key, path)
+            size = storage.stat(key)
+            if size != path.stat().st_size:
+                raise OSError('Stored asset size mismatch')
+            store.add_asset(asset_id, identity, kind, path, object_key=key, mime_type=mime_type, size_bytes=size,
+                            sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        except Exception:
+            raise HTTPException(503, 'Không lưu được media vào storage') from None
+        return store.asset(asset_id, identity)
 
     @app.get('/health')
     def health():
@@ -213,7 +242,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 'optional_logo': True, 'bright_background': True}
 
     @app.post('/v1/assets', status_code=201)
-    async def upload(file: UploadFile = File(...), identity=Depends(owner)):
+    async def upload(request: Request, file: UploadFile = File(...), identity=Depends(owner)):
         asset_id = uuid4().hex
         path = settings.data_dir / 'assets' / f'{asset_id}.upload'
         size = 0
@@ -259,13 +288,45 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 path, kind = normalized, 'audio'
             else:
                 raise HTTPException(415, 'Chỉ nhận PNG/JPEG/WebP, MP4/MOV, WAV/MP3/FLAC')
-            store.add_asset(asset_id, identity, kind, path)
-            return {'asset_id': asset_id, 'kind': kind, 'size_bytes': path.stat().st_size}
+            mime_type = {'image': 'image/png', 'video': 'video/mp4', 'audio': 'application/octet-stream'}[kind]
+            return asset_view(persist_asset(asset_id, identity, kind, path, mime_type), request)
         except Exception:
             path.unlink(missing_ok=True)
             raise
         finally:
             await file.close()
+
+    @app.get('/v1/assets/{asset_id}')
+    def get_asset(asset_id: str, request: Request, identity=Depends(owner)):
+        row = store.asset(asset_id, identity)
+        if not row or not row['object_key']:
+            raise HTTPException(404, 'Không tìm thấy asset')
+        return asset_view(row, request)
+
+    @app.api_route('/v1/assets/{asset_id}/view', methods=['GET', 'HEAD'])
+    def view_asset(asset_id: str, request: Request, expires: int, signature: str):
+        if expires < time.time() or not hmac.compare_digest(signature, asset_signature(settings, asset_id, expires)):
+            raise HTTPException(403, 'Link asset hết hạn hoặc không hợp lệ')
+        row = store.asset(asset_id)
+        if not row or not row['object_key'] or not row['mime_type']:
+            raise HTTPException(404, 'Không tìm thấy asset')
+        try:
+            size = storage.stat(row['object_key'])
+        except Exception:
+            raise HTTPException(503, 'Không đọc được asset từ storage') from None
+        try:
+            start, end, partial = parse_range(request.headers.get('range'), size)
+        except ValueError:
+            return Response(status_code=416, headers={'Content-Range': f'bytes */{size}'})
+        headers = {'Accept-Ranges': 'bytes', 'Content-Length': str(end - start + 1),
+                   'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer',
+                   'Content-Disposition': 'inline'}
+        if partial:
+            headers['Content-Range'] = f'bytes {start}-{end}/{size}'
+        if request.method == 'HEAD':
+            return Response(status_code=206 if partial else 200, headers=headers, media_type=row['mime_type'])
+        return StreamingResponse(storage.chunks(row['object_key'], start, end - start + 1),
+                                 status_code=206 if partial else 200, headers=headers, media_type=row['mime_type'])
 
     @app.post('/v1/jobs', status_code=202)
     def submit(payload: VideoRequest, request: Request,
@@ -325,22 +386,28 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
         return job_view(row, request) | {'reused': not created}
 
     @app.post('/v1/images', summary='Upload logo + sản phẩm + style → tạo JPG và lưu MinIO')
-    async def generate_image(request: Request, logo: UploadFile = File(...), product: UploadFile = File(...),
-                             style: ImageStyle = Form(...), style_reference: UploadFile | None = File(None),
+    async def generate_image(request: Request, product: UploadFile = File(...),
+                             logo: UploadFile | None = File(None), style: ImageStyle = Form(...),
+                             style_reference: UploadFile | None = File(None),
+                             product_kind: Literal['handheld_fan', 'desktop_fan'] = Form('desktop_fan'),
+                             product_name: str = Form('Quạt để bàn', min_length=1, max_length=90),
+                             background_preference: Literal['default', 'bright'] = Form('default'),
+                             seller_wishes: str = Form('', max_length=1000),
                              wait: bool = True,
                              idempotency_key: str = Header(..., min_length=8, max_length=120), identity=Depends(owner)):
         # Check before uploading again: never turn a client retry into another paid generation.
-        import hashlib as hashes
-        files = [logo, product] + ([style_reference] if style_reference else [])
-        contents = []
+        files = [('product', product)] + ([('logo', logo)] if logo else []) + ([('style', style_reference)] if style_reference else [])
+        hashes = {}
         try:
-            for file in files:
+            for role, file in files:
                 content = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
                 if len(content) > settings.max_upload_mb * 1024 * 1024:
                     raise HTTPException(413, 'File vượt giới hạn upload')
-                contents.append(content)
+                hashes[role] = hashlib.sha256(content).hexdigest()
                 await file.seek(0)
-            fingerprint = hashes.sha256(style.encode() + b''.join(hashes.sha256(x).digest() for x in contents)).hexdigest()
+            fields = {'style':style, 'product_kind':product_kind, 'product_name':product_name,
+                      'background_preference':background_preference, 'seller_wishes':seller_wishes, 'files':hashes}
+            fingerprint = hashlib.sha256(json.dumps(fields, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             # Store original content hashes, not randomized upload IDs, for multipart idempotency.
             existing = store.existing(identity, idempotency_key)
             if existing:
@@ -348,14 +415,16 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                     raise HTTPException(409, 'Idempotency-Key đã dùng với nội dung khác')
                 row = existing
             else:
-                ids = []
-                for file in files:
-                    asset = await upload(file, identity)
+                ids = {}
+                for role, file in files:
+                    asset = await upload(request, file, identity)
                     if asset['kind'] != 'image':
                         raise HTTPException(422, 'Chỉ nhận file ảnh')
-                    ids.append(asset['asset_id'])
-                payload = ImageRequest(logo_asset_id=ids[0], product_asset_id=ids[1], style=style,
-                                       style_asset_id=ids[2] if len(ids) > 2 else None)
+                    ids[role] = asset['asset_id']
+                payload = ImageRequest(logo_asset_id=ids.get('logo'), product_asset_id=ids['product'], style=style,
+                                       style_asset_id=ids.get('style'), product_kind=product_kind,
+                                       product_name=product_name, background_preference=background_preference,
+                                       seller_wishes=seller_wishes)
                 data = payload.model_dump() | {'upload_fingerprint': fingerprint}
                 if not settings.openai_api_key.get_secret_value() or not settings.storage_ready():
                     raise HTTPException(503, 'Cần cấu hình OpenAI và MinIO')
@@ -371,7 +440,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 row = store.job(row['id'], identity)
             return JSONResponse(job_view(row, request), status_code=200 if row['status'] == 'done' else 202)
         finally:
-            for file in files:
+            for _, file in files:
                 await file.close()
 
     @app.api_route('/v1/images/{job_id}/view', methods=['GET', 'HEAD'])
@@ -399,12 +468,12 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
 
     @app.post('/v1/videos', status_code=202, summary='Upload một ảnh quảng cáo → GPT phân tích và Muse tạo video')
     async def create_video(request: Request, image: UploadFile = File(...),
-                           output_type: Literal['chibi_3d', 'realistic_human'] = Form(...),
-                           duration: int = Form(5, description='5, 10 hoặc 15 giây'),
+                           output_type: Literal['chibi_3d', 'realistic_human'] = Form('realistic_human'),
+                           duration: int = Form(20, description='5, 10, 15 hoặc 20 giây; mặc định 20'),
                            product_name: str = Form('Quạt để bàn', max_length=90),
                            idempotency_key: str = Header(..., min_length=8, max_length=120), identity=Depends(owner)):
-        if duration not in (5, 10, 15):
-            raise HTTPException(422, 'Thời lượng chỉ nhận 5, 10 hoặc 15 giây')
+        if duration not in (5, 10, 15, 20):
+            raise HTTPException(422, 'Thời lượng chỉ nhận 5, 10, 15 hoặc 20 giây')
         # Normalize before hashing: uploads use random IDs, their content is stable across retries.
         import io
         from PIL.ImageOps import exif_transpose
@@ -429,7 +498,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
         if old:
             previous = json.loads(old['request'])
             asset = store.asset(previous.get('input_asset_id'), identity)
-            same_image = asset and hashlib.sha256(Path(asset['path']).read_bytes()).digest() == hashlib.sha256(normalized_bytes).digest()
+            same_image = asset and (asset.get('sha256') or hashlib.sha256(Path(asset['path']).read_bytes()).hexdigest()) == hashlib.sha256(normalized_bytes).hexdigest()
             if not same_image or any(previous.get(k) != v for k, v in {
                 'output_type': output_type, 'duration': duration, 'product_name': product_name}.items()):
                 raise HTTPException(409, 'Idempotency-Key đã dùng với nội dung khác')
@@ -437,7 +506,11 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
         asset_id = uuid4().hex
         path = settings.data_dir / 'assets' / f'{asset_id}.png'
         path.write_bytes(normalized_bytes)
-        store.add_asset(asset_id, identity, 'image', path)
+        try:
+            persist_asset(asset_id, identity, 'image', path, 'image/png')
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
         payload = VideoRequest(input_asset_id=asset_id, output_type=output_type,
                                duration=duration, product_name=product_name)
         return submit(payload, request, idempotency_key, identity)

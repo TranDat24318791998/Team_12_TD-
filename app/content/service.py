@@ -1,6 +1,7 @@
 """Data-bound native content worker; provider IO never holds a Data transaction."""
 
 import asyncio
+import math
 
 from app.agents.content import generate_content_from_context
 from app.domain.models.learning import ContentMemoryView
@@ -23,6 +24,143 @@ class ContentService:
             await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.media.close()
 
+    async def _process_wizard(self, run_id, job_id, snapshot):
+        """Run exactly the seller-requested stage; a video never starts with an image."""
+        job, product = snapshot['job'], snapshot['product']
+        wizard = job['brief']['wizard']
+        stage = wizard['stage']
+        if snapshot['content']['status']!='draft':
+            self.bridge.complete(run_id, job_id, {'expected_job_version':job['version'], 'status':'failed', 'error_code':'MEDIA_SKIPPED'})
+            return
+        state = snapshot['provider_state']
+        slot = 'A' if stage == 'image' else 'video'
+        # Image-stage bindings are expected when the seller starts the video stage.
+        # Any binding for the requested stage means a previous worker may have paid.
+        if slot in state or (stage == 'image' and state):
+            existing = state.get(slot, {})
+            if existing.get('status') in {'reserved', 'running'}:
+                self.bridge.update_slot(run_id, job_id, slot, {'status':'unknown','error':'CONTENT_RESTART_UNKNOWN'})
+            raise MediaError('CONTENT_RESTART_UNKNOWN', unknown=True)
+        if self.settings.media_mode != 'live':
+            raise MediaError('MEDIA_OFFLINE')
+        kind = product['facts'].get('product_kind')
+        if kind not in {'handheld_fan', 'desktop_fan'}:
+            raise MediaError('MEDIA_PRODUCT_KIND_MISSING')
+        self.bridge.heartbeat(run_id, job_id, job['version'])
+
+        async def pulse():
+            while True:
+                await asyncio.sleep(20)
+                current = self.bridge.snapshot(run_id, job_id)['job']
+                self.bridge.heartbeat(run_id, job_id, current['version'])
+
+        heartbeat = asyncio.create_task(pulse())
+        try:
+            await self.media.preflight(kind, video=stage == 'video')
+            facts = [item['text_vi'] for item in product['facts']['verified_claims']]
+            styles = snapshot['rules']['content_style_notes']
+            feedback = job['feedback_history']
+            content = snapshot['content']
+            if stage == 'image':
+                original = self.bridge.input_asset(run_id, job_id)
+                if not original:
+                    raise MediaError('MEDIA_INPUT_MISSING')
+                logo = self.media.read_input(self.settings.demo_logo_image_path) if self.settings.demo_logo_image_path else None
+                product_id = await self.media.upload(run_id, original['bytes'])
+                logo_id = await self.media.upload(run_id, logo) if logo else None
+                self.bridge.update_slot(run_id, job_id, 'inputs', {'source_asset_id':product_id, 'logo_asset_id':logo_id})
+                fact_source = product['facts']['verified_claims'][0].get('source_reference', 'product:facts') if facts else 'product:facts'
+                context = ContentContext(shop_id=job['shop_id'], title=content['title'], description=content['description'],
+                    attributes=facts, images=[], fact_source_id=fact_source,
+                    memory=ContentMemoryView(confirmed_style_notes=styles, rules_version=snapshot['rules_version'], preference_ids=snapshot.get('preference_ids', [])),
+                    feedback_history=feedback, card_id=snapshot['card']['card_id'], brief_version=snapshot['brief_version'],
+                    draft_version=job['attempt'], references=snapshot.get('references', []))
+                emit = lambda event, data: self.bridge.emit(run_id, job_id, event, data)
+                llm = self.llm(run_id) if callable(self.llm) else self.llm
+                generated = await asyncio.to_thread(generate_content_from_context, context, llm, emit,
+                                                    f'{run_id}:content:{job_id}:{job["attempt"]}')
+                title, description, checks = generated.value.title, generated.value.description, generated.value.checks
+                self.bridge.validate_text(run_id, job_id, title, description)
+                wishes = '\n'.join([*styles, *feedback, wizard.get('wishes', '')])[:1000]
+                body = {'job_type':'image', 'logo_asset_id':logo_id, 'product_asset_id':product_id,
+                        'style_asset_id':None, 'style':wizard['background'], 'product_kind':kind,
+                        'product_name':product['name'], 'background_preference':'default', 'seller_wishes':wishes}
+            else:
+                a = state.get('A', {})
+                first = next((image for image in content['cover_options'] if image['option'] == 'A'), None)
+                if not first or first.get('asset_id') != a.get('asset_id') or not a.get('source_asset_id'):
+                    raise MediaError('REFERENCE_IMAGE_FAILED')
+                title, description, checks = content['title'], content['description'], content['validation']
+                body = {'input_asset_id':a['source_asset_id'], 'product_name':product['name'], 'product_kind':kind,
+                        'verified_facts':facts, 'mode':'muse', 'output_type':wizard['output_type'],
+                        'duration':wizard['duration'], 'aspect':'9:16', 'generate_script':True,
+                        'generate_image':False, 'voice':'muse', 'music':'none',
+                        'motion_prompt':'Choose a natural demonstration for the scene. Holding or supporting the same fan is optional; preserve its type, base, proportions and visible scale.'}
+
+            reservation = self.bridge.reserve_slot(run_id, job_id, slot, body)
+            if reservation['status']=='skipped':
+                current = self.bridge.snapshot(run_id, job_id)['job']
+                self.bridge.complete(run_id, job_id, {'expected_job_version':current['version'], 'status':'failed', 'error_code':'MEDIA_SKIPPED'})
+                return
+            if not reservation.get('can_submit'):
+                raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
+            if slot == 'video':
+                self.bridge.update_slot(run_id, job_id, slot, {'media_text_vision_calls_reserved':3})
+            try:
+                remote = await self.media.submit(run_id, slot, reservation['request'], reservation['idempotency_key'])
+                self.bridge.update_slot(run_id, job_id, slot, {'status':'running','remote_id':remote['job_id']})
+                deadline = asyncio.get_running_loop().time() + self.settings.media_draft_timeout_seconds
+                result = await self.media.wait(run_id, remote, deadline)
+                data = await self.media.download(run_id, result, video=slot == 'video')
+                asset_id = self.bridge.import_asset(run_id, job_id, data=data,
+                    mime_type='video/mp4' if slot == 'video' else 'image/jpeg', kind='video' if slot == 'video' else 'image')
+                metadata = result.get('result') or {}
+                updates = {'status':'done', 'asset_id':asset_id, 'source':'live',
+                           'public_url':result.get('video_url' if slot == 'video' else 'image_url'),
+                           'public_url_expires_at':result.get('video_url_expires_at' if slot == 'video' else 'image_url_expires_at')}
+                if slot == 'video':
+                    duration = metadata.get('duration_seconds')
+                    if type(duration) not in (int, float) or not math.isfinite(duration) or duration <= 0:
+                        duration = None
+                    duration_matches = (abs(duration - wizard['duration']) <= max(0.5, wizard['duration'] * 0.05)
+                                        if duration is not None else None)
+                    review_passed = metadata.get('visual_review_passed')
+                    if duration_matches is False:
+                        review_passed = False
+                    updates.update(review_passed=review_passed,
+                        review_notes=(metadata.get('visual_review') or {}).get('notes_vi'),
+                        duration_seconds=duration, requested_duration_seconds=wizard['duration'],
+                        duration_matches_requested=duration_matches, short_description=metadata.get('short_description', ''),
+                        media_text_vision_calls_completed=metadata.get('media_text_vision_calls_completed', 0))
+                else:
+                    updates['source_asset_id'] = metadata.get('asset_id')
+                    if not updates['source_asset_id']:
+                        raise MediaError('MEDIA_RESULT_INVALID')
+                self.bridge.update_slot(run_id, job_id, slot, updates)
+            except MediaError as exc:
+                self.bridge.update_slot(run_id, job_id, slot, {'status':'unknown' if exc.unknown else 'failed','error':exc.code})
+                raise
+
+            if slot == 'A':
+                images = [{'option':'A', 'status':'done', 'asset_id':asset_id, 'source':'live'},
+                          *[{'option':option, 'status':'pending', 'asset_id':None, 'source':'unavailable'} for option in 'BC']]
+                video = {'status':'pending', 'asset_id':None, 'source':'unavailable'}
+            else:
+                images = content['cover_options']
+                video = {'status':'done', 'asset_id':asset_id, 'source':'live',
+                         'reference_asset_id':first['asset_id'], 'reference_job_id':job_id, 'reference_attempt':job['attempt'],
+                         'review_passed':updates['review_passed'], 'review_notes':updates['review_notes'],
+                         'duration_seconds':updates['duration_seconds'], 'requested_duration_seconds':updates['requested_duration_seconds'],
+                         'duration_matches_requested':updates['duration_matches_requested'], 'short_description':updates['short_description']}
+            candidate = {'title':title, 'description':description, 'images':images, 'video':video,
+                         'feedback_history':feedback, 'style_notes':styles, 'checks':checks}
+            current = self.bridge.snapshot(run_id, job_id)['job']
+            self.bridge.complete(run_id, job_id, {'expected_job_version':current['version'],
+                                                 'status':'succeeded', 'content_candidates':candidate})
+        finally:
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
+
     async def process_job(self, run_id, job_id):
         task = asyncio.current_task()
         self.tasks.add(task)
@@ -30,6 +168,9 @@ class ContentService:
         try:
             snapshot = self.bridge.snapshot(run_id, job_id)
             job = snapshot['job']
+            if job['brief'].get('wizard', {}).get('stage') in {'image', 'video'}:
+                await self._process_wizard(run_id, job_id, snapshot)
+                return
             # A previous process may have invoked a paid provider before it died.
             # Its persisted bindings do not prove whether the native call finished.
             if snapshot['provider_state']:
@@ -220,7 +361,8 @@ class ContentService:
                             self.bridge.update_slot(run_id, job_id, 'inputs', {'status':'unknown','error':'CONTENT_OUTCOME_UNKNOWN'})
                     safe_codes = {'MEDIA_INPUT_MISSING','MEDIA_INPUT_INVALID','MEDIA_OFFLINE','MEDIA_UNAVAILABLE','MEDIA_CAPABILITY_MISSING',
                                   'MEDIA_PRODUCT_KIND_MISSING','MEDIA_BUDGET_EXHAUSTED','REQUEST_CONFLICT','CONTENT_RESTART_UNKNOWN',
-                                  'MEDIA_OUTCOME_UNKNOWN','MEDIA_SUBMIT_UNKNOWN','MEDIA_JOB_FAILED','CLAIM_INVALID'}
+                                  'MEDIA_OUTCOME_UNKNOWN','MEDIA_SUBMIT_UNKNOWN','MEDIA_JOB_FAILED','MEDIA_RESULT_INVALID',
+                                  'REFERENCE_IMAGE_FAILED','CLAIM_INVALID'}
                     code = getattr(exc, 'code', None)
                     self.bridge.complete(run_id, job_id, {'expected_job_version':current['version'],'status':'failed',
                         'error_code':code if code in safe_codes else 'CONTENT_WORKER_FAILED'})

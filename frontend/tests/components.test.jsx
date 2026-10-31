@@ -4,6 +4,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {Product} from '../src/components/Product.jsx';
 import {Proposal} from '../src/components/Proposal.jsx';
 import {ContentReview} from '../src/components/ContentReview.jsx';
+import {MediaWizard} from '../src/components/MediaWizard.jsx';
 import {EventFeed} from '../src/components/EventFeed.jsx';
 import {AgentActivity} from '../src/components/AgentActivity.jsx';
 import {Logo,Progress} from '../src/components/Shell.jsx';
@@ -56,6 +57,13 @@ test('ready covers require an explicit video choice',()=>{
   const draft={version:1,title:'Tiêu đề',description:'Mô tả',images:[{option:'A',status:'cached',path:'https://demo.test/media/a.jpg'}],video:{status:'running'},feedback_history:[]};
   const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
   assert.ok(button(html,'apply'));assert.match(button(html,'apply'),/disabled/);assert.match(html,/Dùng ảnh, bỏ qua video/);
+});
+test('wizard requires acknowledgement for missing duration even after visual review passes',()=>{
+  const draft={version:1,title:'Tiêu đề',description:'Mô tả',images:[{option:'A',status:'done',path:'/api/v1/image'}],video:{status:'done',path:'/api/v1/video',review_passed:true,duration_seconds:null,duration_matches_requested:null},wizard:{stage:'video_ready',duration:20}};
+  const render=value=>renderToStaticMarkup(<MediaWizard draft={value} current={shop} onImage={noop} onVideo={noop} onRetry={noop} onApply={noop}/>);
+  const missing=render(draft);assert.match(missing,/Chưa xác nhận được thời lượng/);assert.match(missing,/Tôi đã xem video và đồng ý sử dụng bản này/);assert.match(missing,/data-use-media="true" disabled/);
+  const matched=render({...draft,video:{...draft.video,duration_seconds:20,duration_matches_requested:true}});
+  assert.doesNotMatch(matched,/Tôi đã xem video và đồng ý sử dụng bản này/);assert.doesNotMatch(matched,/data-use-media="true" disabled/);assert.match(matched,/Thực tế: 20 giây/);
 });
 test('seller backstage escapes event text and excludes other shops',()=>{
   const events=[{seq:1,run_id:state.run_id,day:1,shop_id:'Z',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'<img src=x onerror=alert(1)>',data:{private_note_vi:'Ghi chú riêng của shop Z.'}},{seq:2,run_id:state.run_id,day:1,shop_id:'A',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'Bí mật shop khác',data:{private_note_vi:'Không hiển thị.'}}];
