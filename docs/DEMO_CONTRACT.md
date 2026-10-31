@@ -24,14 +24,14 @@ Giữ nguyên các field của ShopPublic/ShopPrivate/ShopRules/FeeConfig, Packa
 
 | Model / module | Field chính xác |
 |---|---|
-| IntentBrief / `domain/models/intent.py` | `brief_id:str, version:int, shop_id:str, intent:Literal['increase_orders'], goal_vi:str, allow_ads:bool, ads_daily_cap:int|None, content_refresh:bool, duration_days:int, confirmed:bool` |
-| PublicTurn / `domain/models/negotiation.py` | `turn_id:str, actor:Literal['platform','shop'], round:int, action:str, package:Package|None, message_vi:str` |
-| RefereeDecision / `domain/models/negotiation.py` | `action:Literal['continue','refocus','ask_human','stop'], reason_vi:str, evidence_refs:list[str], unresolved_terms:list[str], next_actor:Literal['platform','shop','seller']|None, focused_question:str|None` |
+| IntentBrief / `domain/models/intent.py` | `brief_id:str, version:int, shop_id:str, intent:Literal['increase_orders'], goal_vi:str, allow_ads:bool, ads_daily_cap:int\|None, content_refresh:bool, duration_days:int, confirmed:bool` |
+| PublicTurn / `domain/models/negotiation.py` | `turn_id:str, actor:Literal['platform','shop'], round:int, action:str, package:Package\|None, message_vi:str` |
+| RefereeDecision / `domain/models/negotiation.py` | `action:Literal['continue','refocus','ask_human','stop'], reason_vi:str, evidence_refs:list[str], unresolved_terms:list[str], next_actor:Literal['platform','shop','seller']\|None, focused_question:str\|None` |
 | Card / `domain/models/cards.py` | Field cũ + `version:int=1, brief_version:int` |
 | SellerDecision | Field cũ + `expected_card_version:int, expected_brief_version:int`; HTTP P0 chỉ accept/negotiate/reject; edit/defer chưa hỗ trợ |
 | ContentDraft | Field cũ + `card_id:str, brief_version:int`; `version` 1..3 tính trong một card |
 | ContentText / `domain/models/content.py` | `title:str, description:str, checks:list[str]`; title/description chỉ dùng verified facts |
-| Preference / `domain/models/learning.py` | `pref_id:str, shop_id:str, field:Literal['content_style','voucher_max_pct'], value:str, status:Literal['candidate','asked','confirmed','declined'], evidence_seqs:list[int], asked_day:int|None, declined_until:int|None` |
+| Preference / `domain/models/learning.py` | `pref_id:str, shop_id:str, field:Literal['content_style','voucher_max_pct'], value:str, status:Literal['candidate','asked','confirmed','declined'], evidence_seqs:list[int], asked_day:int\|None, declined_until:int\|None` |
 | ForecastSnapshot / `domain/models/metrics.py` | `prediction_id:str, shop_id:str, target_day:int, raw_point:float, issued_point:int, factor_used:float, package:Package` |
 
 Public brief không tự copy hard cap 45.000đ của shop vào `ads_daily_cap`. Mặc định field này null, nghĩa là chưa có ngân sách người bán chủ động công khai; shop vẫn enforce hard rule 45.000đ. Nếu seller cung cấp public cap khác thì lấy min với hard rules ở shop. Không ép live LLM phải đề xuất 70.000đ khi public brief đã chặn mức đó.
@@ -72,9 +72,9 @@ Chỉ route dùng SessionManager. Backend không tin shop_id của browser; P0 r
 | POST /api/brief/confirm | `{intent:'increase_orders',goal_vi,allow_ads:true,ads_daily_cap:null,content_refresh:true,duration_days:3}` | `{brief,step:'brief_confirmed'}`; id/version server cấp; chỉ ở idle |
 | POST /api/day/start | — | `{day,step}`; tạo thương lượng/thẻ hoặc câu hỏi ngày2 |
 | GET /api/events?after=N | — | `{events,last_seq}` của current run, own-seller projection |
-| POST /api/decision | `{card_id,expected_card_version,expected_brief_version,action:'accept'|'negotiate'|'reject',note_vi?:'',rule_answer?:null}` | `{step,card?}` |
+| POST /api/decision | `{card_id,expected_card_version,expected_brief_version,action:'accept'\|'negotiate'\|'reject',note_vi?:'',rule_answer?:null}` | `{step,card?}` |
 | POST /api/content/retry | `{card_id,expected_brief_version,expected_draft_version,feedback_vi}` | `{draft}`; tạo bản tiếp theo ngay, job chạy nền |
-| POST /api/content/apply | `{card_id,expected_brief_version,expected_draft_version,cover_option:'A'|'B'|'C',skip_video:false}` | `{listing}`; xác nhận bản nội dung, áp dụng listing và kích hoạt gói một lần |
+| POST /api/content/apply | `{card_id,expected_brief_version,expected_draft_version,cover_option:'A'\|'B'\|'C',skip_video:false}` | `{listing}`; xác nhận bản nội dung, áp dụng listing và kích hoạt gói một lần |
 | POST /api/night | `{expected_day:int}` | `{summary,next_day}`; settle→learn→advance một lần; sau ngày2 next_day=null |
 | GET /api/proof | — | 409 `PROOF_NOT_READY` khi chưa có đối chứng thật |
 
@@ -106,19 +106,20 @@ P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, du
 
 ## 5. Media và phê duyệt
 
-- OpenAI: OPENAI_API_KEY, LLM_MODEL, LLM_MODEL_REFLECT, OPENAI_IMAGE_MODEL để trống đến khi người dùng điền. Video: MUSE_API_BASE_URL=https://muse-api.butterflyro.space, MUSE_API_KEY đã lưu local, MUSE_VIDEO_MODEL=muse-video. Đọc MUSE_API.md; không dùng endpoint useapi.net cũ. MEDIA_MODE tách biệt LLM_MODE, default offline trong Settings và live trong .env local đã chọn.
-- Input ảnh sản phẩm D là artifact bắt buộc cần cung cấp/chọn ở D00. Nếu không có ảnh gốc, cần tạo ảnh synthetic trước và ghi nguồn rõ; không dùng đường dẫn D-1.jpg chưa tồn tại.
-- Chữ tạo ngay bằng Content Agent (OpenAI hoặc template fallback có nhãn), ba ảnh dùng OpenAI và video dùng Muse chạy nền. Trước khi xác minh wire format ảnh tham chiếu của Muse, dùng text-to-video từ brief đã duyệt và ghi rõ chưa kiểm chứng giữ đúng hình dáng sản phẩm. Khi đã xác minh image-to-video, dùng cover A cùng draft; chọn B/C không tự tạo thêm video. UI ghi đúng nguồn video thực tế.
-- `start/retry` trả dưới1s với fake model/provider; live Content có thể cần tối đa24s trước khi trả chữ, UI hiển thị busy; mỗi real model call có timeout8s; Content invocation tối đa3 calls. Không chờ ảnh/video trong HTTP response.
-- Worker capture `(run_id,card_id,brief_version,draft_version)`. Trước callback ghi state, so khớp current session/draft và chưa published. Kết quả cũ được bỏ qua, không ghi đè listing.
-- Image/video status dùng enum cũ: image running/done/failed/cached; video pending/running/done/failed/cached. `path` chỉ có khi local file thực tồn tại. `cached` phải là file tương ứng input/model/prompt, không lấy media bất kỳ rồi nhận là đúng brief.
-- Ba bản tổng cộng = initial +2 retry. Feedback tạo style cho draft hiện tại; chưa thay rules dài hạn.
-- Apply chỉ khi cover đã chọn done/cached. Video phải done/cached, hoặc seller gửi `skip_video=true` sau khi xem trạng thái đang chờ/lỗi. Bản đã publish không tự gắn video trả về muộn. Đóng băng selected media.
-- Chữ ký service: `ContentService.apply(shop_id, cover_option, *, skip_video=False) -> ShopPublic`; runtime validate các ID/version trước rồi chuyển skip flag. Service không tự kích hoạt gói.
-- Constructor demo: `ContentService(session, *, image_client, video_client, executor)`; manager truyền clients và app-owned executor. Session không tự tạo thêm pool. Exact helper/callback signatures ở task D05a; không dùng taskqueue ngoài.
-- Sau apply, runtime clear content_draft/pending_card/approved_card_id, giữ listing đã publish và receipt. Callback gặp draft=None phải bỏ qua. UI xem kết quả từ ShopPublic, không giữ một draft vừa editable vừa published.
-- Cache key gồm source bytes checksum, model/config ID, prompt, style/feedback, media kind; khác version nhưng cùng request đã xác minh có thể reuse. Reset không xóa file đang được replay/cache tham chiếu.
-- No generic paid POST retry after timeout: lưu jobid nếu có, poll job đã gửi. Nếu không biết provider đã nhận hay chưa, failed/unknown và chờ xử lý tay; tránh tạo hai job trả phí.
+Cập nhật sau source `experiment/` ở commit a0a93f0. Đường triển khai mới dùng service hiện có qua HTTP, theo [media-integration contract](plans/toan/media-integration/CONTRACT.md); MI01–MI04 là plan, chưa phải code đã tích hợp. Phân biệt media service với raw Muse Gateway trong [MUSE_API](MUSE_API.md).
+
+- Native Content Agent ở core tạo title/description và đọc confirmed style. Ảnh dùng OpenAI; video dùng Muse qua experiment. MEDIA_MODE độc lập LLM_MODE; service có env/token riêng, core dùng MEDIA_API_BASE_URL/MEDIA_API_TOKEN sau khi adapter được implement.
+- Input D là ảnh đúng quạt mini cầm tay; logo tùy chọn sau MI01. Thiếu ảnh thì chặn input, không đổi SKU sang quạt bàn hoặc tự dùng text-to-video. Luồng chính tạo3ảnh, video5giây realistic_human từ A cùng draft; chọn B/C chỉ đổi cover.
+- `ContentService(session, *, media_client, executor, input_resolver)` là constructor mới; start/retry/apply giữ interface nghiệp vụ. Service cài draft trước workers, runtime không ghi đè snapshot cũ khi callback đã cập nhật. Không giữ lock qua provider IO.
+- Binding gồm run/shop/card/brief/draft/slot. Callback chỉ ghi đúng draft hiện tại chưa publish. Reset/retry/apply vô hiệu hóa callback cũ.
+- Status ảnh running/done/failed/cached; video thêm pending. Path chỉ có khi file local đúng run/replay thật đã tải và kiểm checksum; signed URL hoặc MinIO URI không thay local artifact gate.
+- Additive fields dự kiến: cover source/error; video source/reference_option/visual_review_passed/review_notes_vi. Cập nhật model/serializer/fixtures cùng MI03; client cũ không được tự suy luận review=true khi field thiếu.
+- Ba bản tổng = initial +2retry. Feedback nền sáng áp dụng draft hiện tại; Rules chỉ đổi sau seller confirmation. Một feedback event, không lặp khi poll.
+- Apply kiểm cover selected ready và file. Video ready nhưng review false/null cần video_review_ack=true, hoặc seller chọn skip_video=true. Ack không vượt lỗi file. Sau publish không tự gắn video về muộn.
+- Planned request extension: POST /api/content/apply thêm `video_review_ack:false`; runtime helper thêm keyword cùng tên và receipt payload kiểm cả ack/skip/cover. API owner chỉ bật khi schema/fixture/React cùng cập nhật; facade Data hiện chưa nhận extension này.
+- `ContentService.apply(shop_id, cover_option, *, skip_video=False) -> ShopPublic` chỉ mutate listing sau kiểm gate, không gọi mạng/activate. Runtime tạo forecast snapshots trước rồi activate exact approved package, giữ receipt và clear draft/card.
+- Root same-key/body recovery chỉ gọi API media có transactional idempotency. Raw Muse POST không tự lặp sau unknown. Budget, unknown status và replay manifest theo contract media; không âm thầm tạo job trả phí mới.
+- UI/Data dùng [handoff](plans/toan/media-integration/UI_DATA_HANDOFF.md). Data accept→activate trước content và thiếu brief/version vẫn là blocker sản phẩm; media service không sửa các semantics đó thay owner.
 
 ## 6. Memory và simulation
 

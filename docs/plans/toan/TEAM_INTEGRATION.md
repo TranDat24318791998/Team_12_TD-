@@ -1,6 +1,6 @@
 # Ghép Agent/Knowledge với Data và Frontend
 
-Đối chiếu commit Data `229b1f5`, Frontend `e627db8` với core Agent/Knowledge. Kiểm bằng TestClient trên database tạm, không gọi provider hoặc dùng run của người khác. Data service và React đã có source; chúng **chưa được nối** vào workflow trong `app/runtime/day.py`.
+Đối chiếu commit Data `229b1f5`, Frontend `e627db8` với core Agent/Knowledge. Kiểm bằng TestClient trên database tạm, không gọi provider hoặc dùng run của người khác. Data service và React đã có source; chúng **chưa được nối** vào workflow trong `app/runtime/day.py`. Media service mới ở `experiment/` (a0a93f0) có source riêng; kế hoạch nối core ở [media-integration](media-integration/README.md), phần Data/UI nhận ở [handoff](media-integration/UI_DATA_HANDOFF.md).
 
 | Đầu nối cần chốt | Hiện tại | Để ghép đúng phần Toàn |
 |---|---|---|
@@ -12,7 +12,7 @@
 | Trả lời Không | React/Data có thể dùng `action=accept, rule_answer=false`; core yêu cầu action reject cho Không | Chốt một mapping duy nhất ở facade và thêm test Có/Không, giữ active campaign |
 | Knowledge | Data có `learning-input`/`learning-results` và SQLite; core memory đang in-process theo run | Nối worker qua token đúng scope, giữ cursor, evidence IDs và authority rules; không tự copy dữ liệu private sang platform. Chỉ advance sau learning handoff thực sự hoàn tất/skipped có nhãn |
 | Số ngày | Frontend/Data mặc định 7 ngày; headless core mặc định demo 2 ngày nhưng `Session`/`SessionManager` nhận `simulation_days` (1–7) | Adapter truyền cùng horizon của Data run; đã kiểm chuyển ngày 2 sang 3 với horizon 7, chưa chạy proof tích hợp 7 ngày. Proof 7 ngày chỉ dùng dữ liệu simulator đã thực chạy; không dùng fixture hai ngày |
-| Media | Data có placeholder và local fallback; OpenAI image/Muse worker chưa được nối | Media owner cung cấp output asset và job status thật; placeholder không gắn nhãn generated |
+| Media | experiment có OpenAI Images/Muse/MinIO jobs; core ContentService vẫn khung, Data vẫn placeholder/fallback | Theo MI01–MI04: sửa product kind D, optional logo/bright style, client HTTP và local artifact/version/review gate; không viết lại provider. UI_PRODUCT vẫn chờ facade transaction |
 
 Chạy kiểm tra hiện có:
 

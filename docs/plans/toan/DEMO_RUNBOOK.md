@@ -4,6 +4,8 @@ Trạng thái: core thương lượng, native tool runner, 5 ngăn knowledge, se
 
 Lessons của demo chỉ lưu đề xuất định tính không có số; số và kết quả vẫn truy xuất từ History/Calibration. Model được hướng dẫn theo giới hạn này và gateway reject từng op vi phạm, không sửa lời model thành một bài học khác. Chi tiết và điều kiện evidence ở [Knowledge contract](KNOWLEDGE_CONTRACT.md).
 
+Thông tin media mới: [plan MI01–MI04](media-integration/README.md) tái sử dụng experiment qua HTTP. Env local đã nhập file người dùng cung cấp; vẫn thiếu OpenAI key, MinIO credentials và ảnh D. Script bên dưới hiện vẫn dùng fake media, chưa chuyển sang ContentService thật.
+
 ## Kiểm thử và chạy luồng
 
 Chạy từ gốc repo:
@@ -34,4 +36,4 @@ Script gọi OpenAI có thể phát sinh phí; market/media vẫn là fixture. M
 - API: member API nối `SessionManager` và các hàm trong `app.runtime.day` vào route, map `WorkflowError` sang HTTP code/message. Route nghiệp vụ hiện là khung; không gắn nhãn `/api` đã chạy chỉ vì headless harness thành công.
 - DB: `MemoryStore.commit_batch` và `EventLog` hiện hoạt động trong một process; member DB có thể thay adapter cùng interface và test CAS/receipt. Session/memory chưa phục hồi sau restart.
 
-OpenAI Images và Muse video thật, response parser của Muse và ảnh gốc D vẫn cần member media xác minh; ảnh nguồn hiện chưa có trong `assets/products/`. Proof nhiều ngày thuộc lane simulator, không suy ra kết quả từ fixture hai ngày.
+Provider/response parser đã có trong experiment; cần nối và smoke với SKU D trên máy hiện tại. Reports live từ máy nguồn không theo Git; ảnh D vẫn chưa có trong `assets/products/`. Proof nhiều ngày thuộc lane simulator, không suy ra kết quả từ fixture hai ngày.

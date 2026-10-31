@@ -1,84 +1,43 @@
-# Provider video cho demo
+# Media service và Muse Gateway
 
-Người dùng chốt ngày 31/10/2026: OpenAI cho agent/text/learning/ảnh; Muse Gateway chỉ tạo video. Đây là hướng dẫn implementation; chưa tạo job thật trong lượt lập plan.
+Cập nhật 31/10/2026 sau commit media `a0a93f0`. Provider giữ nguyên: OpenAI cho agents/text/ảnh; Muse Gateway cho video. `experiment/` hiện có implementation độc lập cho Images, Muse, SQLite job queue, MinIO và signed playback. **Chưa nối vào ContentService/core runtime.**
 
-Base URL: `https://muse-api.butterflyro.space`.
+Plan code của Toàn: [media-integration](plans/toan/media-integration/README.md), contract chi tiết [CONTRACT](plans/toan/media-integration/CONTRACT.md). Task provider [D05a](../tasks/demo/05a-media-api.md) dùng implementation này; không viết client/pipeline thứ hai trong app.
 
-Nguồn: [Swagger UI](https://muse-api.butterflyro.space/docs#/), [OpenAPI JSON](https://muse-api.butterflyro.space/openapi.json). Bản public đã đọc lưu tại [reference/muse-gateway-openapi.json](reference/muse-gateway-openapi.json), title Muse API Gateway, version 0.1.0.
+## Hai HTTP surface khác nhau
 
-## Cấu hình backend
+| Đích | Auth/config | API |
+|---|---|---|
+| Media service của repo, mặc định localhost:8010 | Bearer `VIDEO_API_TOKEN`; root dùng `MEDIA_API_TOKEN` cùng giá trị; owner do backend bind | Upload `/v1/assets`; JSON `/v1/image-jobs`, `/v1/jobs`; poll `/v1/jobs/{job_id}`; multipart lab `/v1/images`, `/v1/videos` |
+| Muse Gateway `https://muse-api.butterflyro.space` | Bearer `MUSE_API_KEY`, chỉ experiment sử dụng | JSON POST `/v1/videos`; poll `/v1/videos/{task_id}`; download `/v1/media/{name}` |
 
-```dotenv
-MUSE_API_BASE_URL=https://muse-api.butterflyro.space
-MUSE_API_KEY=
-MUSE_VIDEO_MODEL=muse-video
-MEDIA_MODE=live
-OPENAI_API_KEY=
-LLM_MODEL=
-LLM_MODEL_REFLECT=
-OPENAI_IMAGE_MODEL=
-```
+Không gửi multipart body/service token sang Muse Gateway. Không đưa OpenAI/Muse/service token vào browser. MinIO URI/endpoint là storage metadata, không phải URL public của listing.
 
-Token Muse đã lưu trong .env được Git bỏ qua, quyền 0600; không chép token vào tài liệu. D01 thêm field cần thiết vào Settings, che muse_api_key trong describe/repr. OpenAI key/model sẽ điền sau. MEDIA_MODE độc lập LLM_MODE; Settings mặc định offline, .env local do operator chọn live.
+## Source có thể tái sử dụng
 
-## Endpoint đã xác minh trong schema
+- [models](../experiment/video_api/models.py): ImageRequest, VideoRequest, enums/style/output; service nhận video5/10/15giây, default5.
+- [image_pipeline](../experiment/video_api/image_pipeline.py): Images edits → JPEG → MinIO → output asset_id.
+- [muse_pipeline](../experiment/video_api/muse_pipeline.py): GPT đọc ảnh/viết prompt → Muse → kiểm frame → MP4/MinIO. Video giữ native Muse motion/audio, không thay bằng zoom ảnh.
+- [MuseMedia](../experiment/video_api/muse_media.py): gửi reference bằng data URL, persist task trước poll, paid POST một lần, authenticated download cùng origin và không redirect.
+- [main](../experiment/video_api/main.py): auth/owner/idempotency, job/status, signed image/video streaming; [store](../experiment/video_api/store.py) có queue và crash state.
+- [CODEX_DEPLOY](../experiment/CODEX_DEPLOY.md): môi trường, service/MinIO/tunnel. Tunnel không bắt buộc khi core cùng máy.
 
-| Bước | HTTP | Hợp đồng |
-| --- | --- | --- |
-| Health | GET /healthz | 200 chỉ chứng minh tiến trình đang chạy; không kiểm Muse session/quota/key |
-| Submit | POST /v1/videos | Bearer ClientKey, Idempotency-Key tùy chọn; VideoRequest JSON; mô tả trả 202/task_id |
-| Poll | GET /v1/videos/{task_id} | Bearer cùng key; mô tả progress/completed/failed; response chưa có schema cụ thể |
-| Download | GET /v1/media/{name} | Bearer cùng key; backend tải bytes rồi lưu media local |
+Source đang hardcode desk fan và logo required. MI01 mở hai product kinds và optional logo/bright preference; D vẫn là quạt cầm tay theo seed. Luồng D dùng ảnh A cùng draft cho video; khi chưa có ảnh D thì chặn input, không tự rơi về text-to-video. Lab riêng vẫn có thể dùng text-to-video và phải ghi đúng nguồn.
 
-OpenAPI có ImageRequest/ChatRequest trong components nhưng không công bố route ảnh/chat tương ứng. Không suy ra endpoint từ tên schema. Ảnh dùng OpenAI. Gateway không dùng api.useapi.net, MUSE_EMAIL, /assets, /jobs/video hoặc jobid của task 4.4 cũ.
+## Contract và trạng thái bằng chứng
 
-## Submit body
+Gateway public docs: [Swagger](https://muse-api.butterflyro.space/docs#/), [OpenAPI](https://muse-api.butterflyro.space/openapi.json); snapshot đã có ở [reference](reference/muse-gateway-openapi.json). Raw gateway schema cho phép duration1–120; service cố ý giới hạn5/10/15. Parser mới đã có trong source, không còn yêu cầu coder tự đoán từ schema `{}` hoặc useapi.net cũ.
 
-```json
-{
-  "model": "muse-video",
-  "prompt": "Create a mini fan product video from this description. Bright background, slow camera movement, no added product claims or logo.",
-  "duration": 10,
-  "aspect_ratio": "9:16",
-  "resolution": "720p",
-  "timeout": 240
-}
-```
+Tài liệu experiment báo live JPG và hai video5giây ở máy nguồn. Report/file nằm dưới ignored experiment/data nên checkout hiện tại không có bằng chứng file để kiểm lại; độ dài10/15 mới có validation/tests, không được nói đã live. Kết quả frame review không xác minh tuyệt đối SKU/khẩu hình/audio, seller vẫn phải xem.
 
-prompt là field duy nhất bắt buộc, dài 1–32.000 ký tự. duration nhận 1–120 và là chỉ dẫn; output thực tế do Muse quyết định. timeout nhận 1–1800.
+Trạng thái nguồn service có thể `done` với stage `needs_visual_review`; adapter không biến nó thành đã được seller duyệt. Contract mới quy định video_review_ack hoặc skip rõ ràng, local artifact download và receipt/version; các extension đó còn cần MI01–MI04 implement trước khi facade dùng.
 
-Schema của image/images/image_url chưa có kiểu đầy đủ; reference_image là string. Chưa xác minh gateway nhận local path, data URL hay public URL. Khi bật image-to-video, kiểm định dạng được chấp nhận bằng một ảnh seller đã duyệt rồi ghi fixture. Không gửi filesystem path local với giả định provider đọc được.
+## Env local
 
-Request trên là text-to-video để kiểm transport khi chưa có reference. Output phải ghi `Video sinh từ mô tả; chưa xác minh đúng hình dáng sản phẩm` và được seller review; không giả định giữ đúng quạt nguồn.
+Root `.env`: native LLM config riêng, MEDIA_MODE độc lập LLM_MODE, MEDIA_API_BASE_URL/MEDIA_API_TOKEN cho adapter sau MI02. `experiment/.env`: provider keys/models, VIDEO_API_TOKEN, PLAYBACK_SECRET, MinIO. Không chia sẻ hai file bằng cách import settings của service vào app.
 
-## Adapter cụ thể
+Đã nhập file env người dùng cung cấp; OpenAI key và MinIO credentials vẫn trống, Muse key được giữ từ config local. Native LLM key/model và input ảnh D vẫn cần trước smoke tương ứng. Các env ignored/quyền0600; tài liệu và fixtures chỉ chứa tên biến.
 
-```python
-MuseClient(base_url, api_key, http=None)
-MuseClient.create_video(prompt, *, idempotency_key, image_reference=None) -> str
-MuseClient.poll_task(task_id) -> VideoPoll
-MuseClient.download_media(name) -> bytes
-```
+## Nghiệm thu
 
-create_video trả task_id. VideoPoll là DTO nội bộ dùng thống nhất với D05a:
-
-```python
-status: Literal["running", "done", "failed"]
-output_media_name: str | None
-error_vi: str | None
-```
-
-Normalize queued/pending của provider thành running, completed thành done. Chốt mapping media từ response thật/fixture đã xác minh. Schema hiện là `{}`; không lấy parser result.assets[0].assetId từ provider cũ.
-
-Mô tả POST nói 202 nhưng response map khai báo 200. Nhận 200/202, validate task_id không rỗng rồi lưu ngay. Poll mỗi 5 giây, deadline tổng 240 giây dùng monotonic clock; HTTP timeout 20 giây/request. Status chưa biết tiếp tục poll trong deadline và hiển thị đang chờ. Thiếu task_id hoặc thiếu media ở terminal trả ProviderProtocolError, không báo done.
-
-Idempotency key ổn định theo run/card/brief/draft/prompt digest. Không POST lại khi chưa biết kết quả lần submit trước; có task_id thì chỉ poll. Header tùy chọn chưa mô tả đầy đủ dedup, vì vậy không khẳng định provider bảo đảm exactly-once.
-
-Download chỉ gửi Bearer tới origin gateway cấu hình. Media URL phải cùng origin và thuộc /v1/media/; không chuyển token sang CDN/host khác/redirect. Lưu `media/<run>/D-<card>-v<version>.<ext>` với đuôi đúng format thực. Browser nhận /media/..., không nhận Authorization. Chỉ báo done sau khi tải xong file hợp lệ.
-
-## Test và smoke
-
-- httpx.MockTransport: submit 202/task_id, poll running → completed, download bytes, failed, response thiếu field.
-- Kiểm không submit lại khi đã có task_id; logs không chứa secrets; callback cũ bị bỏ; download tới host khác bị chặn.
-- Job thủ công đầu tiên lưu response đã loại secrets vào tests/fakes/fixtures/muse_*.json, rồi hoàn thiện parser đúng envelope. Fixture không chứa token.
-- Chưa gọi create video trong lúc lập plan. Health check không chứng minh tạo video được; gateway không dùng làm provider ảnh/LLM.
+Tests offline service và core adapter theo [MI04](plans/toan/media-integration/04-verification.md). Tách CORE_MEDIA, MEDIA_LIVE và UI_PRODUCT. Health/readiness hoặc tests fake không chứng minh đã tạo ảnh/video thật. Không chạy generation trả phí trong pytest hoặc tự resubmit khi chưa biết kết quả job cũ.

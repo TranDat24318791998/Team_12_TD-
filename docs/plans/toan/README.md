@@ -44,6 +44,7 @@ DB/market/media chưa xong: dùng fake trong tests/headless harness, ghi rõ ngu
 
 ## 3. Nguồn quyết định implementation
 
+- [Media mới — plan MI01–MI04](media-integration/README.md): nối experiment OpenAI/Muse vào Content Agent, giữ Knowledge/approval và giao rõ phần UI/Data.
 - [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md): tool catalog, quyền, flow và điều kiện agent hoàn thành.
 - [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md): schema năm ngăn, read/write interface, evidence và retrieval.
 - [AGENT_SCOPE_MAP.md](AGENT_SCOPE_MAP.md): phần việc gốc, 15 adapter và toàn bộ 32 dòng workbook.
