@@ -2,6 +2,8 @@
 
 Trạng thái: core thương lượng, native tool runner, 5 ngăn knowledge, seller approval và điều phối ngày đã có code. Data service và React đã có code riêng, nhưng adapter market/media và route HTTP vẫn chưa được nối vào workflow agent. Xem [các điểm ghép cần chốt](TEAM_INTEGRATION.md). Script bên dưới dùng fixture cho market/media; không coi kết quả đó là bằng chứng về doanh thu hoặc đã tạo ảnh/video thật.
 
+Lessons của demo chỉ lưu đề xuất định tính không có số; số và kết quả vẫn truy xuất từ History/Calibration. Model được hướng dẫn theo giới hạn này và gateway reject từng op vi phạm, không sửa lời model thành một bài học khác. Chi tiết và điều kiện evidence ở [Knowledge contract](KNOWLEDGE_CONTRACT.md).
+
 ## Kiểm thử và chạy luồng
 
 Chạy từ gốc repo:

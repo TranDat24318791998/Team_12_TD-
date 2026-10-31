@@ -3,7 +3,6 @@
 import re
 import unicodedata
 from hashlib import sha256
-from decimal import Decimal, InvalidOperation
 from threading import RLock
 from app.domain.models.learning import (Calibration, ContentMemoryView, KnowledgeCommit,
     LearningEvidence, MemoryCommit, PlatformMemoryView, Preference, PublicEvidence,
@@ -12,6 +11,15 @@ from app.domain.models.packages import Package
 from app.domain.policies import LESSON_CAP_PER_SCOPE, PREF_ASK_THRESHOLD, PREF_DECLINE_SILENCE_DAYS
 from app.domain.privacy import leak_guard
 from app.infrastructure.store import StoreConflict
+
+
+_NUMBER_WORDS = set('không một hai ba bốn năm sáu bảy tám chín mười mươi trăm nghìn ngàn triệu tỷ'.split())
+
+
+def _has_number(text):
+    normalized = unicodedata.normalize('NFC', text).casefold()
+    return any(char.isdigit() for char in normalized) or bool(
+        set(re.findall(r'[^\W\d_]+', normalized)) & _NUMBER_WORDS)
 
 
 class MemoryGateway:
@@ -197,134 +205,38 @@ class MemoryGateway:
         return snapshot.model_copy(deep=True)
 
     def _lesson_grounded(self, op, snapshot):
-        """Accept conservative facts from applied packages and settled public outcomes."""
+        """Keep demo lessons qualitative; structured history retains the numeric facts."""
         state = self.session.states[self.session.settings.demo_shop]
         evidence = [event for event in snapshot.events if event.negotiation_id in op.evidence]
         if not evidence:
             return False
-
-        def tokens(value):
-            value = unicodedata.normalize('NFC', value).casefold()
-            result = []
-            for word in re.findall(r'\d+(?:[.,]\d+)?[^\W\d_]*|[^\W\d_]+', value):
-                if re.fullmatch(r'\d+(?:[.,]\d+)?', word):
-                    try:
-                        word = format(Decimal(word.replace(',', '.')).normalize(), 'f')
-                    except InvalidOperation:
-                        pass
-                result.append(word)
-            return result
-
-        def pair(label, value):
-            if value is None:
-                return
-            number = tokens(str(value))[0]
-            pairs.add((label, number)); pairs.add((number, label))
-
+        text = unicodedata.normalize('NFC', op.text_vi).casefold().strip()
+        words = re.findall(r'[^\W\d_]+', text)
+        if _has_number(text):
+            return False
+        # Lessons are suggestions, not a place to assert unverified results or causality.
+        if not re.match(r'^(?:ưu tiên|nên|cần|xem xét)\b', text):
+            return False
+        if re.search(r'\b(?:đã|thực tế|đem lại|mang lại|khiến|làm tăng|giúp tăng|gây ra|vì|nhờ|bởi)\b', text):
+            return False
+        feedback = [event.feedback_vi for event in evidence if event.feedback_vi]
+        if re.search(r'\b(?:góp ý|phản hồi)\b', text) and not feedback:
+            return False
+        if re.search(r'\b(?:đơn|doanh thu|roas|chi tiêu|kết quả)\b', text) and not any(
+                event.type == 'market_result' and event.outcome for event in evidence):
+            return False
         parts = [state.public.title, state.public.description, *state.public.attributes]
-        pairs = set()
-        for fact in parts:
-            words = tokens(fact)
-            pairs.update(zip(words, words[1:]))
-        applied = [event for event in evidence if event.type == 'package_applied' and event.package]
-        actual = [event for event in evidence if event.type == 'market_result' and event.outcome]
-        text = unicodedata.normalize('NFC', op.text_vi).casefold()
-        words = tokens(text)
-        if re.search(r'\b(?:đã thực hiện|đã áp dụng|đã chạy|đã kích hoạt)\b', text) and not applied:
-            return False
-        for event in evidence:
-            if event.feedback_vi and ('sáng' in event.feedback_vi.casefold() or 'tối' in event.feedback_vi.casefold()):
-                parts.append('ảnh nền sáng')
-        for event in applied:
-            package = event.package
-            parts.append(package.model_dump_json())
-            for label, value in [('voucher',package.voucher_pct), ('ngân',package.ads_daily_budget),
-                                 ('sách',package.ads_daily_budget), ('ngày',package.duration_days),
-                                 ('ngày',package.stop_after_days), ('dừng',package.stop_roas_below),
-                                 ('ngưỡng',package.stop_roas_below)]:
-                pair(label, value)
-            if 'ngưỡng' in words or 'dừng' in words:
-                pair('roas', package.stop_roas_below)
-        for event in actual:
-            outcome=event.outcome
-            parts.append(outcome.model_dump_json())
-            for label,value in [('đơn',outcome.orders),('thu',outcome.revenue),
-                                ('chi',outcome.ads_spend),('roas',outcome.roas)]:
-                pair(label, value)
-        # No causal uplift is established by these simulated observations.
-        if re.search(r'\b(?:đem lại|mang lại|khiến|làm tăng|giúp tăng|gây ra)\b.*\b(?:đơn|doanh thu|lãi|roas)\b', text):
-            return False
-        packages = [event.package for event in applied]
-        outcomes = [event.outcome for event in actual]
-        def number(value):
-            return tokens(str(value))[0] if value is not None else None
-        def nearby_number(clause, index):
-            labels = {'roas', 'voucher', 'đơn', 'ngày'}
-            for following in range(index + 1, min(len(clause), index + 5)):
-                if clause[following] in labels:
-                    break
-                if re.fullmatch(r'\d+(?:\.\d+)?', clause[following]):
-                    return following
-            if index and re.fullmatch(r'\d+(?:\.\d+)?', clause[index-1]):
-                return index-1
-            return None
-        # Each numeric claim must match the right field in its own clause.
-        # A threshold in a later clause cannot change the meaning of an earlier ROAS.
-        for part in re.split(r';|\.(?!\d)|,(?=\s*[^\d\s])|\b(?:và|nhưng|còn|hoặc)\b|\n', text):
-            clause = tokens(part)
-            for index, word in enumerate(clause):
-                if word not in {'roas', 'voucher', 'đơn', 'ngày'}:
-                    continue
-                position = (index-1 if word in {'ngày','đơn'} and index and
-                            re.fullmatch(r'\d+(?:\.\d+)?', clause[index-1]) else nearby_number(clause, index))
-                if position is None:
-                    continue
-                value = clause[position]
-                if word == 'roas':
-                    preceding = clause[max(0,index-3):index]
-                    # A completed earlier number ends the preceding qualifier's scope.
-                    for offset in range(len(preceding)-1, -1, -1):
-                        if re.fullmatch(r'\d+(?:\.\d+)?', preceding[offset]):
-                            preceding = preceding[offset+1:]
-                            break
-                    between = clause[index+1:position] if position > index else []
-                    threshold = any(label in {'ngưỡng','dừng'} for label in preceding + between)
-                    valid = {number(p.stop_roas_below) for p in packages} if threshold else {number(o.roas) for o in outcomes}
-                elif word == 'voucher':
-                    valid = {number(p.voucher_pct) for p in packages}
-                elif word == 'đơn':
-                    valid = {number(o.orders) for o in outcomes}
-                else:
-                    prior_labels = [i for i in range(index) if clause[i] in {'ngày','đơn','voucher','roas'}]
-                    local = clause[(prior_labels[-1]+1 if prior_labels else 0):index]
-                    is_stop_interval = ('dừng' in local or ('liên' in local and 'tiếp' in local)) and not ('hạn' in local or 'kéo' in local)
-                    valid = {number(p.stop_after_days if is_stop_interval else p.duration_days) for p in packages}
-                if value not in valid:
-                    return False
-        context_words = [word for part in parts for word in tokens(part)]
-        number_pattern = r'\d+(?:\.\d+)?'
-        numbers = {word for word in words if re.fullmatch(number_pattern, word)}
-        if not numbers <= {word for word in context_words if re.fullmatch(number_pattern, word)}:
-            return False
-        # This whitelist favors false negatives over inventing new product or outcome facts.
+        if any('sáng' in item.casefold() for item in feedback):
+            parts.append('ảnh nền sáng')
+        context_words = {word for part in parts for word in re.findall(r'[^\W\d_]+', unicodedata.normalize('NFC', part).casefold())}
+        # Only public facts and a small vocabulary of recommendations may enter Lessons.
         neutral = set(('ưu tiên nội dung dễ đọc khi người bán có góp ý cần nên xem xét điều chỉnh '
                        'dựa trên kết quả dữ liệu học từ phản hồi trước sau phù hợp đúng mục tiêu đề xuất '
                        'gói chiến lược cửa hàng shop sàn hình ảnh rõ ràng mức độ và với cho của các '
-                       'một là được theo có vì để vào lần tiếp theo dựa đã thực hiện áp dụng chạy kích hoạt dùng kinh nghiệm '
-                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi ngưỡng dừng roas ngày liên tiếp tế kéo dài hạn sau ở trong thực tế').split())
-        if not set(words) <= set(context_words) | neutral:
-            return False
-        glue = {'và','với','của','cho','là','được','có','theo','trong','một','các','từ','khi'}
-        words = [word for word in words if word not in glue]
-        for index, word in enumerate(words):
-            if not re.search(r'\d', word):
-                continue
-            adjacent = set()
-            if index: adjacent.add((words[index-1], word))
-            if index+1 < len(words): adjacent.add((word, words[index+1]))
-            if not adjacent.intersection(pairs):
-                return False
-        return True
+                       'là được theo có để vào lần tiếp theo dùng kinh nghiệm đơn voucher ngân sách '
+                       'quảng cáo chiến dịch hiệu quả thử thay đổi ngưỡng dừng roas ngày liên tiếp '
+                       'kéo dài hạn sau ở trong').split())
+        return set(words) <= context_words | neutral
 
     def commit_memory_updates(self, batch, *, expected_revision, expected_cursor):
         with self.session.lock, self._lock:
@@ -371,7 +283,7 @@ class MemoryGateway:
                 if op.scope not in scopes or not op.evidence or not set(op.evidence) <= valid_ids:
                     rejected += 1; continue
                 _, redacted = leak_guard(op.text_vi, state.public, state.private, self.session.world.fees)
-                if redacted or len(op.text_vi) > 500 or not op.text_vi.strip() or (op.op in {'ADD','EDIT'} and not self._lesson_grounded(op, snapshot)):
+                if redacted or len(op.text_vi) > 500 or not op.text_vi.strip() or _has_number(op.text_vi) or (op.op in {'ADD','EDIT'} and not self._lesson_grounded(op, snapshot)):
                     rejected += 1; continue
                 bucket = lessons[op.scope]
                 if op.op == 'ADD':

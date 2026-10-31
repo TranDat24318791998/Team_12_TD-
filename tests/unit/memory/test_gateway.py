@@ -130,88 +130,69 @@ def test_history_preserves_authoritative_negotiation_status_and_kind(shop_id,kin
     assert len(history)==1 and history[0].kind==kind and history[0].status==expected_status
 
 
-def test_lesson_cannot_reassign_verified_number_to_different_claim():
-    from app.domain.models.packages import Package
-    from app.domain.policies import DEFAULT_PACKAGE
-    session=setup_session()
-    values=Package(**DEFAULT_PACKAGE).model_dump(); values.update({'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
-    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
-        {'negotiation_id':'n1','package':values})
-    snapshot=session.memory.freeze_learning_evidence(1)
-    valid=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 3% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
-    fake=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 2000% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
-    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[valid,fake],valid_negotiation_ids=['n1'])
-    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
-    assert result.accepted_lesson_ops==[valid] and result.rejected_ops==1
 
-
-@pytest.mark.parametrize('roas',['4,0','4.0'])
-def test_lessons_use_executed_package_and_actual_decimal_outcome(roas):
-    from app.domain.models.packages import Package
-    from app.domain.policies import DEFAULT_PACKAGE
-    session=setup_session()
-    proposed=Package(**DEFAULT_PACKAGE).model_dump()
-    actual={**proposed,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5}
-    session.log.add(session.run_id,1,'platform_turn','platform_agent','D','Đề xuất gói.',
-        {'negotiation_id':'n1','action':'propose','package':proposed})
-    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
-        {'negotiation_id':'n1','package':actual})
-    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
-        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
-    snapshot=session.memory.freeze_learning_evidence(1)
-    valid_voucher=LessonOp(op='ADD',lesson_id=None,text_vi='Đã thực hiện gói voucher 3%.',scope='strategy',evidence=['n1'])
-    valid_roas=LessonOp(op='ADD',lesson_id=None,text_vi=f'ROAS {roas} phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
-    fake=LessonOp(op='ADD',lesson_id=None,text_vi='Đã thực hiện gói voucher 10%.',scope='strategy',evidence=['n1'])
-    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[valid_voucher,valid_roas,fake],valid_negotiation_ids=['n1'])
-    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
-    assert result.accepted_lesson_ops==[valid_voucher,valid_roas] and result.rejected_ops==1
-
-
-def test_stop_threshold_cannot_be_reported_as_actual_roas():
-    from app.domain.models.packages import Package
-    from app.domain.policies import DEFAULT_PACKAGE
-    session=setup_session()
-    package=Package(**{**DEFAULT_PACKAGE,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
-    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
-        {'negotiation_id':'n1','package':package.model_dump()})
-    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
-        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
-    snapshot=session.memory.freeze_learning_evidence(1)
-    wrong=LessonOp(op='ADD',lesson_id=None,text_vi='ROAS 6,5 phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
-    correct=LessonOp(op='ADD',lesson_id=None,text_vi='Ngưỡng ROAS 6,5 phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
-    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[wrong,correct],valid_negotiation_ids=['n1'])
-    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
-    assert result.accepted_lesson_ops==[correct] and result.rejected_ops==1
-
-
-@pytest.mark.parametrize(('text','expected'),[
-    ('Ngưỡng ROAS 4,0.',False),
-    ('ROAS 6,5; ngưỡng dừng 6,5.',False),
-    ('ROAS 3, voucher 3%.',False),
-    ('ROAS 4,0; ngưỡng dừng 6,5.',True),
-    ('Gói đã áp dụng 3 ngày.',True),
-    ('Gói đã áp dụng 2 ngày.',False),
-    ('Dừng sau 2 ngày.',True),
-    ('Gói đã áp dụng 2 ngày và dừng sau 2 ngày.',False),
-    ('Gói đã áp dụng 3 ngày và dừng sau 2 ngày.',True),
-    ('Gói đã áp dụng 3 ngày và dừng sau 3 ngày.',False),
-    ('Gói đã áp dụng 2 ngày dừng sau 2 ngày.',False),
-    ('Gói đã áp dụng 3 ngày dừng sau 2 ngày.',True),
-    ('Dừng sau 2 ngày gói đã áp dụng 3 ngày.',True),
-    ('Ngưỡng dừng 6,5 ROAS 6,5.',False),
-    ('Ngưỡng dừng 6,5 ROAS 4,0.',True),
+@pytest.mark.parametrize('text', [
+    'Voucher 2000% phù hợp mục tiêu.',
+    'Ưu tiên voucher 3%.',
+    'Ưu tiên voucher ba phần trăm.',
+    'Đã thực hiện gói voucher 10%.',
+    'ROAS 6,5 phù hợp mục tiêu.',
+    'Ngưỡng dừng 4,0; ROAS 4,0.',
+    'Ngưỡng dừng 4,0 ROAS 4,0.',
+    'Ngưỡng dừng 6,5; ROAS 4,0.',
+    'Gói đã áp dụng 2 ngày dừng sau 2 ngày.',
+    'Gói đã áp dụng 3 ngày dừng sau 2 ngày.',
 ])
-def test_lesson_numeric_fields_are_checked_in_their_own_clause(text,expected):
+def test_numeric_lessons_are_rejected_even_when_public_facts_contain_numbers(text):
     from app.domain.models.packages import Package
     from app.domain.policies import DEFAULT_PACKAGE
-    session=setup_session()
-    package=Package(**{**DEFAULT_PACKAGE,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
-    session.log.add(session.run_id,1,'package_applied','system','D','Đã áp dụng gói.',
-        {'negotiation_id':'n1','package':package.model_dump()})
-    session.log.add(session.run_id,1,'market_result','market','D','Kết quả.',
-        {'negotiation_id':'n1','metrics':{'orders':3,'revenue':525000,'ads_spend':18000,'roas':4.0}})
-    snapshot=session.memory.freeze_learning_evidence(1)
-    op=LessonOp(op='ADD',lesson_id=None,text_vi=text,scope='strategy',evidence=['n1'])
-    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[op],valid_negotiation_ids=['n1'])
-    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
-    assert bool(result.accepted_lesson_ops) is expected
+    session = setup_session()
+    package = Package(**{**DEFAULT_PACKAGE, 'ads_daily_budget': 45000,
+                         'voucher_pct': 3, 'stop_roas_below': 6.5})
+    session.log.add(session.run_id, 1, 'package_applied', 'system', 'D', 'Đã áp dụng gói.',
+        {'negotiation_id': 'n1', 'package': package.model_dump()})
+    session.log.add(session.run_id, 1, 'market_result', 'market', 'D', 'Kết quả.',
+        {'negotiation_id': 'n1', 'metrics': {'orders': 3, 'revenue': 525000,
+                                              'ads_spend': 18000, 'roas': 4.0}})
+    snapshot = session.memory.freeze_learning_evidence(1)
+    good = LessonOp(op='ADD', lesson_id=None, text_vi='Ưu tiên nội dung rõ ràng.',
+                    scope='strategy', evidence=['n1'])
+    numeric = LessonOp(op='ADD', lesson_id=None, text_vi=text, scope='strategy', evidence=['n1'])
+    batch = MemoryUpdateBatch(day=1, through_seq=snapshot.through_seq, history=[], preferences=[],
+        calibration=[], lesson_ops=[good, numeric], valid_negotiation_ids=['n1'])
+    result = session.memory.commit_memory_updates(batch, expected_revision=0, expected_cursor=0)
+    assert result.accepted_lesson_ops == [good] and result.rejected_ops == 1
+
+
+@pytest.mark.parametrize(('text', 'event_type', 'accepted'), [
+    ('Ưu tiên nội dung rõ ràng khi người bán có góp ý.', None, False),
+    ('Ưu tiên nội dung rõ ràng khi người bán có góp ý.', 'content_job', True),
+    ('Ưu tiên quạt chống nước khi người bán có góp ý.', 'content_job', False),
+    ('Nên xem xét kết quả.', None, False),
+    ('Nên xem xét kết quả.', 'market_result', True),
+    ('Quảng cáo làm tăng đơn.', 'market_result', False),
+    ('Ưu tiên quảng cáo vì đã làm tăng đơn.', 'market_result', False),
+    ('Gói đã áp dụng.', 'package_applied', False),
+])
+def test_qualitative_lessons_require_relevant_evidence_and_do_not_assert_causality(text, event_type, accepted):
+    from app.domain.models.packages import Package
+    from app.domain.policies import DEFAULT_PACKAGE
+    session = setup_session()
+    session.log.add(session.run_id, 1, 'platform_turn', 'platform_agent', 'D', 'Đề xuất.',
+        {'negotiation_id': 'n1', 'action': 'propose'})
+    data = {'negotiation_id': 'n1'}
+    if event_type == 'content_job':
+        data['feedback_vi'] = 'Ảnh nền tối quá, làm nền sáng và thêm chống nước.'
+    elif event_type == 'market_result':
+        data['metrics'] = {'orders': 3, 'revenue': 525000, 'ads_spend': 18000, 'roas': 4.0}
+    elif event_type == 'package_applied':
+        data['package'] = Package(**DEFAULT_PACKAGE).model_dump()
+    if event_type:
+        session.log.add(session.run_id, 1, event_type, 'system', 'D', 'Sự kiện.', data)
+    snapshot = session.memory.freeze_learning_evidence(1)
+    op = LessonOp(op='ADD', lesson_id=None, text_vi=text, scope='strategy', evidence=['n1'])
+    batch = MemoryUpdateBatch(day=1, through_seq=snapshot.through_seq, history=[], preferences=[],
+        calibration=[], lesson_ops=[op], valid_negotiation_ids=['n1'])
+    result = session.memory.commit_memory_updates(batch, expected_revision=0, expected_cursor=0)
+    assert bool(result.accepted_lesson_ops) is accepted
+    assert result.rejected_ops == (0 if accepted else 1)

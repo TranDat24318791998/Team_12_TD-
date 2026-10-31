@@ -138,8 +138,12 @@ def run_night(session, day):
         evidence=dispatch('read_learning_evidence',{})
         if not evidence.valid_negotiation_ids:
             return LessonBatch(ops=[])
-        op=LessonOp(op='ADD',lesson_id=None,text_vi='Ưu tiên nội dung dễ đọc khi người bán có góp ý.',
-                    scope='strategy',evidence=[evidence.valid_negotiation_ids[0]])
+        feedback_id = next((event.negotiation_id for event in evidence.events
+            if event.feedback_vi and event.negotiation_id in evidence.valid_negotiation_ids), None)
+        text = ('Ưu tiên nội dung dễ đọc khi người bán có góp ý.'
+                if feedback_id else 'Ưu tiên nội dung rõ ràng.')
+        op=LessonOp(op='ADD',lesson_id=None,text_vi=text,
+                    scope='strategy',evidence=[feedback_id or evidence.valid_negotiation_ids[0]])
         return LessonBatch(ops=[op])
     def emit(type,data):
         safe={k:v for k,v in data.items() if k in {'role','tool_name','tool_call_id','requested_by','status','source','error_code','invocation_id','record_refs'}}
