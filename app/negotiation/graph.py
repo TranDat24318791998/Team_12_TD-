@@ -8,7 +8,7 @@ from app.domain.models.negotiation import NegotiationResult, PublicTurn
 from app.domain.policies import MAX_ROUNDS
 from app.domain.finance import loss_warning
 from app.domain.privacy import leak_guard
-from app.domain.validators import final_check, platform_side_check
+from app.domain.validators import brief_side_check, final_check, platform_side_check
 from app.negotiation.agents import decide_platform, decide_shop, emit_for
 from app.negotiation.referee import review_turn
 
@@ -39,8 +39,7 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
         turns = state.get('turns', [])
         try:
             turn = decide_platform(session, shop_id, turns, None, negotiation_id=negotiation_id, initial_propose=not turns, focus=state.get('focused_question'))
-            if turn.package and (platform_side_check(turn.package, shop.public) or
-                 (session.brief.ads_daily_cap is not None and turn.package.ads_daily_budget > session.brief.ads_daily_cap)):
+            if turn.package and (platform_side_check(turn.package, shop.public) or brief_side_check(turn.package, session.brief)):
                 return {'rounds':rounds, 'result':fail({'rounds':rounds}, 'Gói không hợp lệ phía sàn.'), 'route':'end'}
             last_counter = turns[-1].package if turns and turns[-1].actor == 'shop' and turns[-1].action == 'counter' else None
             if turn.action == 'accept' and (last_counter is None or turn.package != last_counter):
@@ -64,6 +63,9 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
         safe_focus,_=leak_guard(result.focused_question or '',shop.public,shop.private,session.world.fees)
         result=result.model_copy(update={'reason_vi':safe_reason,'focused_question':safe_focus or None})
         log('referee_review','referee',result.reason_vi,{'action':result.action,'evidence_refs':result.evidence_refs,'source':session.last_agent_source})
+        last=turns[-1]
+        if last.action in ('withdraw','reject'):
+            return {'result':fail(state,'Một bên từ chối gói.'), 'route':'end'}
         if result.action in ('stop','ask_human'):
             return {'result':fail(state,result.reason_vi), 'route':'end'}
         if result.action == 'refocus':
@@ -79,7 +81,7 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
             return {'result':fail(state,'Một bên từ chối gói.'), 'route':'end'}
         if last.action == 'accept':
             package=last.package
-            errors=final_check(package,shop.public,shop.private,session.world.fees)
+            errors=final_check(package,shop.public,shop.private,session.world.fees) + brief_side_check(package,session.brief)
             log('code_check','code','Kiểm tra gói cuối.',{'ok':not errors,'codes':[e.code for e in errors]})
             if errors:
                 return {'result':fail(state,'Gói cuối không đạt kiểm tra.'), 'route':'end'}
@@ -104,11 +106,12 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
             return {'result':fail(state,'Shop chấp nhận sai gói.'),'route':'end'}
         if decision.package and final_check(decision.package,shop.public,shop.private,session.world.fees):
             return {'result':fail(state,'Gói shop chưa hợp lệ.'),'route':'end'}
+        safe_message,redacted=leak_guard(decision.message_vi,shop.public,shop.private,session.world.fees)
         public=PublicTurn(turn_id=f'{negotiation_id}:shop:{state["rounds"]}', actor='shop',round=state['rounds'],
-                          action=decision.action,package=decision.package,message_vi=decision.message_vi)
+                          action=decision.action,package=decision.package,message_vi=safe_message)
         log('shop_turn','shop_agent',public.message_vi,{'turn_id':public.turn_id,'round':state['rounds'],
             'action':public.action,'package':public.package.model_dump(mode='json') if public.package else None,
-            'source':session.last_agent_source})
+            'source':session.last_agent_source,'redacted':redacted})
         log('code_check','code','Đã kiểm gói shop.',{'ok':True,'codes':[]})
         return {'turns':turns+[public], 'candidate':decision.package, 'last_action':decision.action, 'focused_question':None, 'route':'review_shop'}
     graph=StateGraph(NegotiationState)
@@ -118,4 +121,8 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
     graph.add_conditional_edges('shop',lambda s:'review' if s['route']=='review_shop' else 'end',{'review':'review','end':END})
     graph.add_conditional_edges('review',lambda s:s['route'],{'platform':'platform','shop':'shop','end':END})
     final=graph.compile().invoke({'rounds':0,'turns':[],'result':None,'route':'platform'}, {'recursion_limit':64})
-    return final['result']
+    result=final['result']
+    log('negotiation_finished','system','Thương lượng đã kết thúc.',
+        {'kind':result.kind,'status':result.status,'rounds':result.rounds,
+         'package':result.final_package.model_dump(mode='json') if result.final_package else None})
+    return result

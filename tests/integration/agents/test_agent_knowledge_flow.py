@@ -92,10 +92,24 @@ def test_two_day_workflow_learning_and_next_use(tmp_path):
 
     # Day 2 has an outcome but no new negotiation: history remains joined to the first card.
     session.pending_card=None; session.approved_card_id=None
+    def finish_day_two(messages):
+        evidence=json.loads(next(m.content for m in messages if isinstance(m,ToolMessage)))
+        old=[e for e in evidence['events'] if e['seq']<evidence['from_seq'] and e['package']]
+        new=[e for e in evidence['events'] if e['seq']>=evidence['from_seq'] and e['outcome']]
+        assert old and old[0]['package']==card.package.model_dump(mode='json')
+        assert new and new[0]['negotiation_id']==history[0].negotiation_id
+        negotiation_id=new[0]['negotiation_id']
+        return [call('finish_learning',{'ops':[
+            {'op':'ADD','lesson_id':None,'text_vi':'Ưu tiên nội dung rõ ràng.', 'scope':'strategy','evidence':[negotiation_id]},
+            {'op':'ADD','lesson_id':None,'text_vi':'Voucher 30% đem lại 500 đơn mỗi ngày.', 'scope':'strategy','evidence':[negotiation_id]}
+        ]},'finish-learning')]
+    session.llm=FakeLLM([[call('read_learning_evidence',{},'read-learning')],finish_day_two])
     result2=close_day(session,2)
     history2=session.memory.platform_view('D','quat_mini').history
     assert len(history2)==1 and history2[0].negotiation_id==history[0].negotiation_id
     assert history2[0].version==2 and result2['summary'].calibration['points']==2
+    assert result2['summary'].rejected_ops==1 and len(result2['summary'].lesson_ops)==1
+    assert session.memory.shop_view('D').preferences[0].evidence_seqs==candidates[0].evidence_seqs
 
 
 def test_content_role_uses_runner_and_rejects_unverified_claims(tmp_path):
@@ -126,3 +140,18 @@ def test_user_feedback_is_not_promoted_to_verified_product_fact(tmp_path):
         [call('finish_content',{'title':'Quạt chống nước','description':'Sạc USB','checks':[]},'finish')]])
     result=generate_content(session,'D',card_id=card.card_id,draft_version=1,feedback_history=['Thêm chống nước'])
     assert result.source=='offline' and 'chống nước' not in result.value.title.casefold()
+
+
+
+def test_content_rejects_recombined_numeric_attributes(tmp_path):
+    from app.agents.content import generate_content
+    session=Session.new(Settings(_env_file=None,llm_mode='offline'),market=FakeMarket(),log=EventLog())
+    session.content=FakeContent(session,tmp_path)
+    confirm_brief(session,{'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,
+        'ads_daily_cap':None,'content_refresh':True,'duration_days':3})
+    start_day(session); card=session.pending_card
+    submit_decision(session,SellerDecision(card_id=card.card_id,expected_card_version=1,expected_brief_version=1,action='accept'))
+    session.llm=FakeLLM([[call('get_content_context',{},'read')],
+        [call('finish_content',{'title':'Quạt mini có 3 pin 2000mAh','description':'Sạc USB','checks':[]},'finish')]])
+    result=generate_content(session,'D',card_id=card.card_id,draft_version=1)
+    assert result.source=='offline' and '3 pin' not in result.value.title.casefold()

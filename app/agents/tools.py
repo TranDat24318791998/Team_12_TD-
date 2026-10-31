@@ -11,10 +11,9 @@ from app.domain.finance import breakeven_roas, loss_warning, max_voucher_for, pr
 from app.domain.models.shops import StrictModel
 from app.domain.models.packages import Package
 from app.domain.models.metrics import Forecast
-from app.domain.models.negotiation import Violation
 from app.domain.models.tools import (CampaignCatalogResult, CampaignRecord, ContentContext, FinancialResult,
     PackageCheck, PublicContext, RefereeContext, ShopContext, ShopPackageCheck)
-from app.domain.validators import clamp_to_platform, clamp_to_rules, platform_side_check, shop_side_check
+from app.domain.validators import brief_side_check, clamp_to_platform, clamp_to_rules, platform_side_check, shop_side_check
 
 
 ROLE_TOOLS = {
@@ -78,16 +77,19 @@ def bind_role_tools(session, role, shop_id, *, turns=(), proposal=None, brief=No
 
     def validate_platform(args):
         pkg = args.package
-        errors = platform_side_check(pkg, state.public)
-        corrected = clamp_to_platform(pkg, state.public, pkg.duration_days)
-        if scoped_brief.ads_daily_cap is not None and pkg.ads_daily_budget > scoped_brief.ads_daily_cap:
-            errors.append(Violation(code='PUBLIC_ADS_CAP', side='platform', field='ads_daily_budget', message_vi='Ngân sách vượt mức công khai.'))
-            if corrected:
-                values = corrected.model_dump(); values['ads_daily_budget'] = scoped_brief.ads_daily_cap
-                if values['ads_daily_budget'] < 10000:
-                    values['ads_daily_budget'] = 0; values['stop_roas_below'] = None
-                corrected = Package.model_validate(values)
-        after = platform_side_check(corrected, state.public) if corrected else errors
+        errors = platform_side_check(pkg, state.public) + brief_side_check(pkg, scoped_brief)
+        values = pkg.model_dump()
+        values['content_refresh'] = scoped_brief.content_refresh
+        values['duration_days'] = scoped_brief.duration_days
+        if not scoped_brief.allow_ads:
+            values['ads_daily_budget'] = 0
+        if scoped_brief.ads_daily_cap is not None:
+            values['ads_daily_budget'] = min(values['ads_daily_budget'], scoped_brief.ads_daily_cap)
+        if values['ads_daily_budget'] < 10000:
+            values['ads_daily_budget'] = 0
+            values['stop_roas_below'] = None
+        corrected = clamp_to_platform(Package.model_validate(values), state.public, scoped_brief.duration_days)
+        after = (platform_side_check(corrected, state.public) + brief_side_check(corrected, scoped_brief)) if corrected else errors
         changes = [field for field in Package.model_fields if corrected and getattr(corrected, field) != getattr(pkg, field)]
         return PackageCheck(input_package=pkg, corrected_package=corrected, violations_before=errors,
                             violations_after=after, ok=not errors, warnings=[], changes=changes)

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from threading import RLock
 from uuid import uuid4
 from app.core.paths import RUNS_DIR
-from app.domain.models.events import Event
 from app.domain.models.shops import ShopPrivate, ShopPublic, SellerPersona
 from app.domain.models.packages import ActivePackage
 from app.infrastructure.eventlog import EventLog
@@ -35,6 +34,7 @@ class Session:
     content: object = None
     market: object = None
     day: int = 1
+    simulation_days: int = 2
     step: str = 'idle'
     interactive: bool = True
     brief: object = None
@@ -49,6 +49,7 @@ class Session:
     rules_version: int = 1
     forecast_snapshots: dict = field(default_factory=dict)
     settled_days: set = field(default_factory=set)
+    settlement_metrics: dict = field(default_factory=dict)
     night_receipts: dict = field(default_factory=dict)
     night_summaries: dict = field(default_factory=dict)
     apply_receipts: dict = field(default_factory=dict)
@@ -71,7 +72,9 @@ class Session:
 
     @classmethod
     def new(cls, settings, memory_enabled=True, *, seed=None, content=None, market=None,
-            llm=None, store=None, log=None):
+            llm=None, store=None, log=None, simulation_days=2):
+        if type(simulation_days) is not int or not 1 <= simulation_days <= 7:
+            raise ValueError('simulation_days must be an integer from 1 to 7')
         from app.infrastructure.llm import LLMClient
         from app.memory.gateway import MemoryGateway
         run_id = uuid4().hex
@@ -82,7 +85,7 @@ class Session:
             settings = settings.model_copy(update={'seed': seed}, deep=True)
         session = cls(run_id=run_id, settings=settings, world=world, states=states,
                       store=store or MemoryStore(), log=log or EventLog(RUNS_DIR / run_id / 'events.jsonl'),
-                      llm=llm or LLMClient(settings), content=content, market=market,
+                      llm=llm or LLMClient(settings), content=content, market=market, simulation_days=simulation_days,
                       original_public={sid: state.public.model_copy(deep=True) for sid, state in states.items()})
         session.memory = MemoryGateway(session.store, memory_enabled, log=session.log, run_id=run_id, session=session)
         return session

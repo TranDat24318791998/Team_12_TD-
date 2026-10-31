@@ -104,3 +104,42 @@ def test_reject_preference_preserves_rules_and_silences_fourteen_days():
     assert session.states['D'].private.rules.content_style_notes==[] and session.rules_version==1
     assert not session.memory.prefs_to_ask('D',15)
     assert session.memory.prefs_to_ask('D',16)[0].status=='declined'
+
+
+def test_real_id_does_not_ground_invented_outcome_claims():
+    session=setup_session()
+    valid=LessonOp(op='ADD',lesson_id=None,text_vi='Ưu tiên nội dung rõ ràng.',scope='strategy',evidence=['n1'])
+    fake=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 30% đem lại 500 đơn mỗi ngày.',scope='strategy',evidence=['n1'])
+    result=commit_ops(session,1,[valid,fake],'n1')
+    assert result.rejected_ops==1 and result.accepted_lesson_ops==[valid]
+    assert [lesson.text_vi for lesson in session.memory.list_lessons('strategy')]==[valid.text_vi]
+
+
+@pytest.mark.parametrize(('shop_id','kind','expected_status'), [('B','propose','warning_only'),('D','renew','agreed')])
+def test_history_preserves_authoritative_negotiation_status_and_kind(shop_id,kind,expected_status):
+    from app.negotiation.graph import run_negotiation
+    from app.memory.night import run_night
+    session=Session.new(Settings(_env_file=None,llm_mode='offline',demo_shop=shop_id),market=FakeMarket(),log=EventLog())
+    session.brief=IntentBrief(brief_id='brief',version=1,shop_id=shop_id,intent='increase_orders',goal_vi='Tăng đơn',
+        allow_ads=True,ads_daily_cap=None,content_refresh=True,duration_days=3,confirmed=True)
+    result=run_negotiation(session,shop_id,1,kind)
+    assert result.status==expected_status
+    session.settled_days.add(1)
+    run_night(session,1)
+    history=session.memory.get_history(shop_id)
+    assert len(history)==1 and history[0].kind==kind and history[0].status==expected_status
+
+
+def test_lesson_cannot_reassign_verified_number_to_different_claim():
+    from app.domain.models.packages import Package
+    from app.domain.policies import DEFAULT_PACKAGE
+    session=setup_session()
+    values=Package(**DEFAULT_PACKAGE).model_dump(); values.update({'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5})
+    session.log.add(session.run_id,1,'platform_turn','platform_agent','D','Đề xuất gói.',
+        {'negotiation_id':'n1','action':'propose','package':values})
+    snapshot=session.memory.freeze_learning_evidence(1)
+    valid=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 3% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
+    fake=LessonOp(op='ADD',lesson_id=None,text_vi='Voucher 2000% phù hợp mục tiêu.',scope='strategy',evidence=['n1'])
+    batch=MemoryUpdateBatch(day=1,through_seq=snapshot.through_seq,history=[],preferences=[],calibration=[],lesson_ops=[valid,fake],valid_negotiation_ids=['n1'])
+    result=session.memory.commit_memory_updates(batch,expected_revision=0,expected_cursor=0)
+    assert result.accepted_lesson_ops==[valid] and result.rejected_ops==1

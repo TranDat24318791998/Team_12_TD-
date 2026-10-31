@@ -1,6 +1,7 @@
 """Knowledge theo scope; model chỉ nhận projection, không có quyền ghi."""
 
-from copy import deepcopy
+import re
+import unicodedata
 from hashlib import sha256
 from threading import RLock
 from app.domain.models.learning import (Calibration, ContentMemoryView, KnowledgeCommit,
@@ -131,18 +132,23 @@ class MemoryGateway:
         return self.freeze_learning_evidence(day)
 
     def freeze_learning_evidence(self, day):
-        events = self.log.since(self.run_id, self.session.memory_cursor)
+        all_events = self.log.since(self.run_id, 0)
+        events = [event for event in all_events if event.seq > self.session.memory_cursor]
         through = max((e.seq for e in events), default=self.session.memory_cursor)
         shop_id = self.session.settings.demo_shop
         state = self.session.states[shop_id]
         projected, ids = [], set()
-        for event in events:
-            if event.day != day or event.shop_id not in (None, shop_id):
-                continue
+        eligible_types = {'platform_turn','shop_turn','negotiation_finished','seller_decision','package_applied','market_result'}
+
+        def project(event):
             data = event.data
             negotiation_id = data.get('negotiation_id')
-            if isinstance(negotiation_id, str) and negotiation_id:
-                ids.add(negotiation_id)
+            if not negotiation_id and data.get('card_id'):
+                reference = next((prior for prior in reversed(all_events) if prior.seq <= through
+                    and prior.shop_id == event.shop_id and prior.data.get('card_id') == data['card_id']
+                    and isinstance(prior.data.get('negotiation_id'), str)), None)
+                if reference:
+                    negotiation_id = reference.data['negotiation_id']
             package = None
             if isinstance(data.get('package'), dict):
                 try:
@@ -160,19 +166,94 @@ class MemoryGateway:
             feedback = data.get('feedback_vi') if event.type == 'content_job' else None
             if feedback:
                 feedback, _ = leak_guard(str(feedback), state.public, state.private, self.session.world.fees)
-            projected.append(PublicEvidence(seq=event.seq, type=event.type, negotiation_id=negotiation_id,
+            return PublicEvidence(seq=event.seq, type=event.type, negotiation_id=negotiation_id,
                 text_vi=text, package=package, seller_action=data.get('action') if event.type == 'seller_decision' else None,
-                feedback_vi=feedback, outcome=outcome))
+                feedback_vi=feedback, outcome=outcome)
+
+        for event in events:
+            if event.day != day or event.shop_id not in (None, shop_id):
+                continue
+            negotiation_id = event.data.get('negotiation_id')
+            if event.type in eligible_types and isinstance(negotiation_id, str) and negotiation_id:
+                ids.add(negotiation_id)
+            projected.append(project(event))
+        # Older package events are context only: from_seq/cursor still identify new support.
         for history in self.get_history(shop_id):
-            if history.approved_package:
-                ids.add(history.negotiation_id)
+            if history.negotiation_id not in ids or not history.approved_package:
+                continue
+            old_package = next((e for e in reversed(all_events) if e.seq <= self.session.memory_cursor
+                and e.shop_id == shop_id and e.type == 'package_applied'
+                and e.data.get('negotiation_id') == history.negotiation_id), None)
+            if old_package:
+                projected.append(project(old_package))
         category = state.public.category
         snapshot = LearningEvidence(day=day, from_seq=self.session.memory_cursor + 1, through_seq=through,
-            events=projected, existing_lessons=self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5],
+            events=sorted(projected, key=lambda event: event.seq),
+            existing_lessons=self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5],
             valid_negotiation_ids=sorted(ids), knowledge_revision=self.session.knowledge_revision)
         self._learning_snapshot = snapshot
         self._event('memory_read', shop_id, {'who': 'learning', 'items': [x.lesson_id for x in snapshot.existing_lessons], 'versions': {x.lesson_id:x.version for x in snapshot.existing_lessons}, 'invocation_id':f'{self.run_id}:learning:{day}'})
         return snapshot.model_copy(deep=True)
+
+    def _lesson_grounded(self, op, snapshot):
+        """Accept conservative recommendations grounded in scoped public evidence."""
+        state = self.session.states[self.session.settings.demo_shop]
+        evidence = [event for event in snapshot.events if event.negotiation_id in op.evidence]
+        if not evidence:
+            return False
+        parts = [state.public.title, state.public.description, *state.public.attributes]
+        pairs = set()
+        for fact in parts:
+            words = re.findall(r'\w+', unicodedata.normalize('NFC', fact).casefold())
+            pairs.update(zip(words, words[1:]))
+        for event in evidence:
+            if event.feedback_vi and ('sáng' in event.feedback_vi.casefold() or 'tối' in event.feedback_vi.casefold()):
+                parts.append('ảnh nền sáng')
+            if event.package:
+                package = event.package
+                parts.append(package.model_dump_json())
+                for label, value in [('voucher',package.voucher_pct), ('ngân',package.ads_daily_budget),
+                                     ('sách',package.ads_daily_budget), ('ngày',package.duration_days),
+                                     ('ngày',package.stop_after_days), ('roas',package.stop_roas_below),
+                                     ('dừng',package.stop_roas_below)]:
+                    if value is not None:
+                        pairs.add((label, str(value))); pairs.add((str(value), label))
+            if event.outcome:
+                outcome=event.outcome
+                parts.append(outcome.model_dump_json())
+                for label,value in [('đơn',outcome.orders),('thu',outcome.revenue),
+                                    ('chi',outcome.ads_spend),('roas',outcome.roas)]:
+                    if value is not None:
+                        pairs.add((label,str(value))); pairs.add((str(value),label))
+        context = unicodedata.normalize('NFC', ' '.join(parts)).casefold()
+        text = unicodedata.normalize('NFC', op.text_vi).casefold()
+        # No causal uplift is established by these simulated observations.
+        if re.search(r'\b(?:đem lại|mang lại|khiến|làm tăng|giúp tăng|gây ra)\b.*\b(?:đơn|doanh thu|lãi|roas)\b', text):
+            return False
+        numbers = set(re.findall(r'\d+(?:[.,]\d+)?', text))
+        if not numbers <= set(re.findall(r'\d+(?:[.,]\d+)?', context)):
+            return False
+        # This whitelist favors false negatives over inventing new product or outcome facts.
+        neutral = set(('ưu tiên nội dung dễ đọc khi người bán có góp ý cần nên xem xét điều chỉnh '
+                       'dựa trên kết quả dữ liệu học từ phản hồi trước sau phù hợp mục tiêu đề xuất '
+                       'gói chiến lược cửa hàng shop sàn hình ảnh rõ ràng mức độ và với cho của các '
+                       'một là được theo có vì để vào lần tiếp theo dựa đã thực hiện dùng kinh nghiệm '
+                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi').split())
+        allowed = set(re.findall(r'\w+', context)) | neutral
+        words = re.findall(r'\w+', text)
+        if not set(words) <= allowed:
+            return False
+        glue = {'và','với','của','cho','là','được','có','theo','trong','một','các','từ','khi'}
+        words = [word for word in words if word not in glue]
+        for index, word in enumerate(words):
+            if not re.search(r'\d', word):
+                continue
+            adjacent = set()
+            if index: adjacent.add((words[index-1], word))
+            if index+1 < len(words): adjacent.add((word, words[index+1]))
+            if not adjacent.intersection(pairs):
+                return False
+        return True
 
     def commit_memory_updates(self, batch, *, expected_revision, expected_cursor):
         with self.session.lock, self._lock:
@@ -219,7 +300,7 @@ class MemoryGateway:
                 if op.scope not in scopes or not op.evidence or not set(op.evidence) <= valid_ids:
                     rejected += 1; continue
                 _, redacted = leak_guard(op.text_vi, state.public, state.private, self.session.world.fees)
-                if redacted or len(op.text_vi) > 500 or not op.text_vi.strip():
+                if redacted or len(op.text_vi) > 500 or not op.text_vi.strip() or (op.op in {'ADD','EDIT'} and not self._lesson_grounded(op, snapshot)):
                     rejected += 1; continue
                 bucket = lessons[op.scope]
                 if op.op == 'ADD':

@@ -33,3 +33,13 @@ def test_leak_guard_redacts_private_but_not_offered_budget():
         assert redacted, private
     text = 'Đề xuất 45.000đ mỗi ngày, voucher 3%, dừng ở 6,5.'
     assert leak_guard(text, shop.public, shop.private, w.fees) == (text, False)
+
+
+def test_private_values_in_full_precision_and_vietnamese_units_are_redacted():
+    world=load_world(); state=world.shops['D']
+    precise=breakeven_roas(state.public,state.private,3,world.fees)
+    for text in (f'Tỷ suất cần là {precise}.', 'Chi phí một chiếc là 115,0 nghìn đồng.',
+                 'Ngưỡng nội bộ là 18.000đ.', 'Giá là 115.000 VND.'):
+        assert leak_guard(text,state.public,state.private,world.fees)[1], text
+    safe='Đề xuất 45.000đ mỗi ngày, voucher 3%, dừng ở 6,5.'
+    assert leak_guard(safe,state.public,state.private,world.fees)==(safe,False)

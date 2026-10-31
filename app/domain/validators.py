@@ -26,6 +26,20 @@ def platform_side_check(pkg, shop):
     return errors
 
 
+def brief_side_check(pkg, brief):
+    """Public constraints confirmed by the seller; never disclose private rules."""
+    errors = []
+    if pkg.content_refresh != brief.content_refresh:
+        errors.append(_violation('BRIEF_CONTENT_MISMATCH', 'platform', 'content_refresh', 'Nội dung chưa đúng mục tiêu đã duyệt.'))
+    if pkg.duration_days != brief.duration_days:
+        errors.append(_violation('BRIEF_DURATION_MISMATCH', 'platform', 'duration_days', 'Thời hạn chưa đúng mục tiêu đã duyệt.'))
+    if pkg.ads_daily_budget and not brief.allow_ads:
+        errors.append(_violation('BRIEF_ADS_DISABLED', 'platform', 'ads_daily_budget', 'Mục tiêu đã duyệt không cho phép quảng cáo.'))
+    if brief.ads_daily_cap is not None and pkg.ads_daily_budget > brief.ads_daily_cap:
+        errors.append(_violation('PUBLIC_ADS_CAP', 'platform', 'ads_daily_budget', 'Ngân sách vượt mức công khai.'))
+    return errors
+
+
 def shop_side_check(pkg, shop, priv, fees):
     errors = []
     rules = priv.rules
