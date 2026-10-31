@@ -76,7 +76,10 @@ class ContentService:
                 return
             title, description = ((previous['title'], previous['description']) if job['retry_scope'] == 'images'
                                   else (text.value.title, text.value.description))
-            self.bridge.validate_text(run_id, job_id, title, description)
+            if offline:
+                self.bridge.validate_text(run_id, job_id, title, description)
+            else:
+                self.bridge.stage_text(run_id, job_id, title, description, text.value.checks)
             if offline:
                 images = [{'option':option, 'status':'cached', 'asset_id':input_asset['asset_id'], 'source':'cache',
                            'prompt':'Ảnh gốc sản phẩm; chế độ ngoại tuyến không tạo ảnh mới.'} for option in 'ABC']
@@ -106,6 +109,8 @@ class ContentService:
 
             async def start(slot, body):
                 reservation = self.bridge.reserve_slot(run_id, job_id, slot, body)
+                if reservation['status'] == 'skipped':
+                    return reservation
                 if reservation['status'] in {'unknown', 'outcome_unknown'}:
                     raise MediaError('MEDIA_OUTCOME_UNKNOWN', unknown=True)
                 if reservation['status'] == 'failed':

@@ -163,6 +163,27 @@ class MediaMixin:
         if s==run['demo_shop_id']: c.execute("UPDATE runs SET phase='content_review' WHERE run_id=?",(r,))
         return self.entity(c,"content_jobs",r,"job_id",jid)
 
+    def staged_text(self,job,content):
+        text=job['provider_state'].get('text',{})
+        return text if (text.get('status')=='done' and text.get('content_id')==content['content_id']
+                        and text.get('content_version')==content['version']) else None
+
+    def prepare_running_skip(self,c,r,job,content,cover_option):
+        text=self.staged_text(job,content)
+        require(text,'CONTENT_PENDING','Nội dung chưa được kiểm tra')
+        self.validate_content_text(c,r,job,text['title'],text['description'])
+        entry=job['provider_state'].get(cover_option,{})
+        require(entry.get('status')=='done' and entry.get('source')=='live' and entry.get('asset_id'),
+                'ASSET_PENDING','Ảnh chưa sẵn sàng')
+        asset=self.checked_job_asset(c,r,job,entry['asset_id'],'image')
+        require(asset['job_id']==job['job_id'],'ASSET_SCOPE','File không thuộc lượt hiện tại',404)
+        images=[{'option':slot,'status':'done' if slot==cover_option else 'pending',
+                 'asset_id':asset['asset_id'] if slot==cover_option else None,
+                 'path':f"/api/v1/runs/{r}/assets/{asset['asset_id']}/download" if slot==cover_option else None,
+                 'source':'live' if slot==cover_option else 'unavailable'} for slot in 'ABC']
+        c.execute("UPDATE content_versions SET title=?,description=?,cover_options_json=?,validation_json=?,status='validated',version=version+1,updated_at=? WHERE run_id=? AND content_id=? AND status='draft'",
+                  (text['title'],text['description'],dumps(images),dumps(text['checks']),now(),r,content['content_id']))
+
     def publish(self,c,p,r,cid,body):
         content=self.entity(c,"content_versions",r,"content_id",cid)
         prod=self.entity(c,"products",r,"product_id",content["product_id"])
@@ -174,10 +195,17 @@ class MediaMixin:
         require(decision["target_version"]==content["version"])
         require(prod["active_content_id"]==b.expected_active_content_id and content["status"]=="validated")
         job=one(c,"SELECT * FROM content_jobs WHERE run_id=? AND product_id=? ORDER BY rowid DESC LIMIT 1",(r,prod["product_id"]))
-        require(job and cid in job["output_content_ids"] and job["status"] in {"succeeded","failed","timed_out"},"STALE_DRAFT","Chỉ xuất bản draft mới nhất đã sẵn sàng")
+        early=bool(job and run['config'].get('driver',{}).get('agent_version')=='native'
+                   and job['provider']=='assigned_worker' and job['status'] in {'queued','running'} and b.skip_video)
+        require(job and cid in job["output_content_ids"] and (job["status"] in {"succeeded","failed","timed_out"} or early),"STALE_DRAFT","Chỉ xuất bản draft mới nhất đã sẵn sàng")
         option=next((x for x in content["cover_options"] if x["option"]==decision["cover_option"]),None)
-        require(option and option["status"] in {"done","cached"},"ASSET_PENDING","Ảnh chưa sẵn sàng")
+        require(option and option["status"] in {"done","cached"} and option.get('asset_id'),"ASSET_PENDING","Ảnh chưa sẵn sàng")
         asset=self.checked_job_asset(c,r,job,option['asset_id'],'image')
+        if early:
+            entry=job['provider_state'].get(decision['cover_option'],{})
+            require(option['status']=='done' and entry.get('status')=='done' and entry.get('source')=='live'
+                    and entry.get('asset_id')==asset['asset_id'] and asset['job_id']==job['job_id'],
+                    'ASSET_SCOPE','Ảnh không thuộc lượt hiện tại',404)
         video=content['video_job']
         video_id=video.get('asset_id')
         if not b.skip_video and video.get('status') in {'done','cached'}:
@@ -206,7 +234,14 @@ class MediaMixin:
         asset=self.entity(c,'assets',r,'asset_id',aid)
         require(asset['kind']==kind and asset['product_id']==job['product_id'] and asset['upload_status']=='ready' and one(c,'SELECT job_id FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?',(r,job['job_id'],aid)),'ASSET_SCOPE','File không thuộc job hiện tại',404)
         path=self.object_path(asset['object_key'])
-        require(path.is_file() and path.stat().st_size==asset['size_bytes'] and hashlib.sha256(path.read_bytes()).hexdigest()==asset['sha256'],'ASSET_INVALID','File thiếu hoặc checksum không khớp',422)
+        require(path.is_file() and path.stat().st_size==asset['size_bytes'],'ASSET_INVALID','File thiếu hoặc checksum không khớp',422)
+        data=path.read_bytes()
+        require(hashlib.sha256(data).hexdigest()==asset['sha256'],'ASSET_INVALID','File thiếu hoặc checksum không khớp',422)
+        mime=asset['mime_type']
+        valid=(kind=='image' and ((mime=='image/png' and data.startswith(b'\x89PNG\r\n\x1a\n')) or
+               (mime=='image/jpeg' and data.startswith(b'\xff\xd8\xff')) or
+               (mime=='image/webp' and data[:4]==b'RIFF' and data[8:12]==b'WEBP'))) or (kind=='video' and mime=='video/mp4' and data[4:8]==b'ftyp')
+        require(valid,'MIME_INVALID','Nội dung file không khớp loại đã khai',422)
         return asset
 
     def validate_content_text(self,c,r,job,title,description):
@@ -226,7 +261,13 @@ class MediaMixin:
         require(job["version"]==b.expected_job_version)
         require(job["status"] in {"queued","running"},"JOB_TERMINAL","Job đã có kết quả cuối")
         require(b.status in {"failed","timed_out"} or (job["lease_until"] and job["lease_until"]>=now()),"LEASE_EXPIRED","Lease content đã hết hạn")
-        if b.content_candidates:
+        content=self.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
+        frozen=content['status']=='published' or (content['status']=='superseded' and content['published_day'] is not None)
+        require(content['status']=='draft' or frozen,'STALE_DRAFT','Nội dung không còn nhận kết quả')
+        if frozen:
+            require(b.status!='succeeded' or b.content_candidates,'CONTENT_REQUIRED','Job thành công cần bản nháp hợp lệ',422)
+            require(not b.content_candidates or b.status=='succeeded')
+        elif b.content_candidates:
             require(b.status=="succeeded")
             candidate=b.content_candidates
             allowed={"content_id","content_version","title","description","images","video","feedback_history","style_notes","checks"}

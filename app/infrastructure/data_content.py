@@ -26,7 +26,8 @@ class DataContentBridge:
         current = one(c, 'SELECT job_id FROM content_jobs WHERE run_id=? AND proposal_id=? ORDER BY attempt DESC LIMIT 1', (run_id, job['proposal_id']))
         content = s.entity(c, 'content_versions', run_id, 'content_id', job['output_content_ids'][0])
         run = s.entity(c, 'runs', run_id, 'run_id', run_id)
-        require(current and current['job_id'] == job_id and job['status'] in {'queued', 'running'} and content['status'] == 'draft' and run['phase'] not in {'complete', 'learning', 'day_closed'}, 'STALE_DRAFT', 'Job không còn được nhận kết quả')
+        frozen = content['status']=='published' or (content['status']=='superseded' and content['published_day'] is not None)
+        require(current and current['job_id'] == job_id and job['status'] in {'queued', 'running'} and (content['status']=='draft' or frozen) and run['phase'] not in {'complete', 'learning', 'day_closed'}, 'STALE_DRAFT', 'Job không còn được nhận kết quả')
         require(job['lease_until'] and job['lease_until'] >= now(), 'LEASE_EXPIRED', 'Lease content đã hết hạn')
         return job, content, run
 
@@ -70,7 +71,7 @@ class DataContentBridge:
             job, content, run = self._job(c, run_id, job_id)
             proposal = s.entity(c, 'proposals', run_id, 'proposal_id', job['proposal_id'])
             card, approval = s.content_approval(c,run_id,job)
-            require(card and approval and proposal['status'] == 'accepted', 'APPROVAL_REQUIRED', 'Cần approval cho nội dung')
+            require(card and approval and (proposal['status'] == 'accepted' or (proposal['status'] == 'applied' and content['published_day'] is not None)), 'APPROVAL_REQUIRED', 'Cần approval cho nội dung')
             approval = {key:approval[key] for key in ('decision_id','shop_id','target_type','target_id','target_version','action')}
             product = s.product(c, run_id, job['shop_id'])
             rules, rules_version = s.rules(c, run_id, job['shop_id'])
@@ -118,17 +119,29 @@ class DataContentBridge:
             job,_,_=self._job(c,run_id,job_id)
             return self.service.validate_content_text(c,run_id,job,title,description)
 
+    def stage_text(self, run_id, job_id, title, description, checks):
+        with self.service.store.connect(write=True) as c:
+            job,content,_=self._job(c,run_id,job_id)
+            require(content['status']=='draft','STALE_DRAFT','Nội dung đã được xuất bản')
+            self.service.validate_content_text(c,run_id,job,title,description)
+            state=job['provider_state']
+            state['text']={'status':'done','content_id':content['content_id'],'content_version':content['version'],
+                           'title':title,'description':description,'checks':checks}
+            c.execute('UPDATE content_jobs SET provider_state_json=?,updated_at=? WHERE run_id=? AND job_id=?', (dumps(state),now(),run_id,job_id))
+
     def reserve_slot(self, run_id, job_id, slot, request_body):
         require(slot in {'A', 'B', 'C', 'video'}, 'SLOT_INVALID', 'Slot không hợp lệ', 422)
         s = self.service
         digest = fingerprint(request_body)
         with s.store.connect(write=True) as c:
-            job, _, _ = self._job(c, run_id, job_id)
+            job, content, _ = self._job(c, run_id, job_id)
             state = job['provider_state']
             if slot in state:
                 existing = state[slot]
                 require(existing.get('request_hash') == digest, 'REQUEST_CONFLICT', 'Yêu cầu media đã thay đổi')
                 return {**existing, 'can_submit': False}
+            if content['status']!='draft':
+                return {'status':'skipped','can_submit':False}
             records = many(c, 'SELECT provider_state_json FROM content_jobs WHERE run_id=?', (run_id,))
             slots = [key for row in records for key in row['provider_state'] if key in {'A', 'B', 'C', 'video'}]
             used = sum(key == 'video' for key in slots) if slot == 'video' else sum(key != 'video' for key in slots)

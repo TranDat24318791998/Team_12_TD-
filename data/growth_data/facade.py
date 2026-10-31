@@ -46,6 +46,7 @@ class Facade:
         run=self.s.entity(c,'runs',r,'run_id',r)
         images=[{k:v for k,v in x.items() if k!='asset_id'} for x in content['cover_options']]
         video={k:v for k,v in content['video_job'].items() if k!='asset_id'}
+        staged=self.s.staged_text(job,content) if content['status']=='draft' else None
         if run['config'].get('driver',{}).get('agent_version')=='native' and job['provider']=='assigned_worker' and job['status'] in {'queued','running'}:
             def slot_view(slot,kind):
                 entry=job['provider_state'].get(slot,{})
@@ -62,8 +63,8 @@ class Facade:
                 return view
             images=[{'option':slot,**slot_view(slot,'image')} for slot in 'ABC']
             video=slot_view('video','video')
-        return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":content["title"],"description":content["description"],
-                "images":images,"video":video,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
+        return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":staged['title'] if staged else content["title"],"description":staged['description'] if staged else content["description"],"text_ready":bool(staged or content['status']=='validated'),
+                "images":images,"video":video,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":staged['checks'] if staged else content["validation"]}
 
     def night_summary(self,c,r,run,handoff):
         if not handoff or not handoff['night_summary']:return None
@@ -264,6 +265,10 @@ class Facade:
         require(job,"CONTENT_REQUIRED","Chưa có nội dung")
         if run['config'].get('driver',{}).get('agent_version')=='native': self._check_binding(c,r,job,body)
         content=self.s.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
+        if (run['config'].get('driver',{}).get('agent_version')=='native' and job['provider']=='assigned_worker'
+                and job['status'] in {'queued','running'} and content['status']=='draft' and body.get('skip_video')):
+            self.s.prepare_running_skip(c,r,job,content,body['cover_option'])
+            content=self.s.entity(c,"content_versions",r,"content_id",content['content_id'])
         d=self.s.decision(c,p,r,dict(target_type="content",target_id=content["content_id"],target_version=content["version"],action="approve",cover_option=body["cover_option"]))
         listing=self.s.publish(c,self.internal(p,r),r,content["content_id"],dict(approval_decision_id=d["decision_id"],expected_active_content_id=self.s.product(c,r,"D")["active_content_id"],skip_video=body.get('skip_video',False),video_review_ack=body.get('video_review_ack',False)))
         return {"listing":listing}

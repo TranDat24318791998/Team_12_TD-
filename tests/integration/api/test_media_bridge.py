@@ -150,6 +150,160 @@ class FakeGateway:
     async def close(self): pass
 
 
+def test_initial_fallback_draft_cannot_publish_without_staged_text(tmp_path):
+    source = tmp_path/'source.jpg'
+    Image.new('RGB', (20, 20), 'white').save(source, 'JPEG')
+    app = create_app(tmp_path/'data', content_mode='worker', product_image_path=str(source))
+    with TestClient(app) as client:
+        run, job_id = make_job(client, app.state.service)
+        enable_native_review(app.state.service, run)
+        bridge = DataContentBridge(app.state.service)
+        bridge.reserve_slot(run, job_id, 'A', {'fake':'image'})
+        asset_id = bridge.import_asset(run, job_id, data=source.read_bytes(), mime_type='image/jpeg', kind='image')
+        bridge.update_slot(run, job_id, 'A', {'status':'done','asset_id':asset_id,'source':'live'})
+        draft = client.get('/api/state').json()['content_draft']
+        assert draft['images'][0]['status'] == 'done' and draft['text_ready'] is False
+        binding = {'card_id':draft['card_id'], 'expected_brief_version':draft['brief_version'],
+            'expected_draft_version':draft['version'], 'expected_job_id':draft['job_id'],
+            'expected_content_id':draft['content_id'], 'cover_option':'A',
+            'skip_video':True, 'video_review_ack':False}
+        response = client.post('/api/content/apply', json=binding, headers=headers('unstaged'))
+        assert response.status_code == 409 and response.json()['error']['code'] == 'CONTENT_PENDING'
+        with app.state.service.store.connect() as c:
+            content = app.state.service.entity(c, 'content_versions', run, 'content_id', draft['content_id'])
+            assert content['status'] == 'draft'
+            assert not one(c, "SELECT * FROM decisions WHERE run_id=? AND target_type='content' AND target_id=?", (run,draft['content_id']))
+
+
+@pytest.mark.parametrize('selected,terminal,restore', [
+    ('A','succeeded',False), ('B','succeeded',False), ('A','failed',False), ('A','timed_out',False),
+    ('B','succeeded',True), ('A','failed',True), ('A','timed_out',True),
+])
+def test_apply_skips_running_video_with_ready_cover_and_late_results_preserve_listing(tmp_path, selected, terminal, restore):
+    import io
+
+    source = tmp_path/'source.jpg'
+    Image.new('RGB', (20, 20), 'white').save(source, 'JPEG')
+    app = create_app(tmp_path/'data', content_mode='worker', product_image_path=str(source))
+    with TestClient(app) as client:
+        run, job_id = make_job(client, app.state.service)
+        enable_native_review(app.state.service, run)
+
+        async def exercise():
+            started = {slot: asyncio.Event() for slot in ('A', 'B', 'C', 'video')}
+            release = {slot: asyncio.Event() for slot in ('A', 'B', 'C', 'video')}
+            submitted = []
+
+            class ControlledGateway(FakeGateway):
+                async def submit(self, run_id, slot, body, key):
+                    submitted.append(slot)
+                    started[slot].set()
+                    return {'job_id':slot, 'status':'running'}
+
+                async def wait(self, run_id, remote, deadline):
+                    slot = remote['job_id']
+                    await release[slot].wait()
+                    return {'job_id':slot, 'status':'done', 'result':{
+                        'asset_id':f'remote-{slot}', 'visual_review_passed':True,
+                        'duration_seconds':5, 'media_text_vision_calls_completed':3}}
+
+                async def download(self, run_id, remote, *, video=False):
+                    if video:
+                        return b'1234ftypfake-video'
+                    output = io.BytesIO()
+                    Image.new('RGB', (20, 20), {'A':'red', 'B':'green', 'C':'blue'}[remote['job_id']]).save(output, 'JPEG')
+                    return output.getvalue()
+
+            bridge = DataContentBridge(app.state.service)
+            worker = ContentService(bridge, Settings(_env_file=None, media_mode='live'), NativeContent(' cho sản phẩm'), media_client=ControlledGateway())
+            task = asyncio.create_task(worker.process_job(run, job_id))
+            try:
+                await asyncio.wait_for(asyncio.gather(*(started[slot].wait() for slot in 'ABC')), 2)
+                release[selected].set()
+                if selected == 'A':
+                    await asyncio.wait_for(started['video'].wait(), 2)
+                for _ in range(100):
+                    draft = client.get('/api/state').json()['content_draft']
+                    image = next(item for item in draft['images'] if item['option'] == selected)
+                    if image['status'] == 'done': break
+                    await asyncio.sleep(.01)
+                assert draft['status'] == 'running' and image['status'] == 'done'
+                assert all(item['status'] == 'running' for item in draft['images'] if item['option'] != selected)
+                assert draft['video']['status'] == ('running' if selected == 'A' else 'pending')
+                binding = {'card_id':draft['card_id'], 'expected_brief_version':draft['brief_version'],
+                    'expected_draft_version':draft['version'], 'expected_job_id':draft['job_id'],
+                    'expected_content_id':draft['content_id'], 'cover_option':selected,
+                    'skip_video':True, 'video_review_ack':False}
+                stale = client.post('/api/content/apply', json={**binding, 'expected_job_id':'other-job'}, headers=headers('stale'))
+                assert stale.status_code == 409 and stale.json()['error']['code'] == 'STALE_DRAFT'
+                no_skip = client.post('/api/content/apply', json={**binding, 'skip_video':False}, headers=headers('no-skip'))
+                assert no_skip.status_code == 409
+                pending = client.post('/api/content/apply', json={**binding, 'cover_option':'C'}, headers=headers('pending'))
+                assert pending.status_code == 409 and pending.json()['error']['code'] == 'ASSET_PENDING'
+                with app.state.service.store.connect() as c:
+                    job = one(c, 'SELECT * FROM content_jobs WHERE run_id=? AND job_id=?', (run, job_id))
+                    asset = app.state.service.entity(c, 'assets', run, 'asset_id', job['provider_state'][selected]['asset_id'])
+                state = job['provider_state']
+                wrong_version = {**state, 'text':{**state['text'], 'content_version':state['text']['content_version']+1}}
+                with app.state.service.store.connect(write=True) as c:
+                    c.execute('UPDATE content_jobs SET provider_state_json=? WHERE run_id=? AND job_id=?', (json.dumps(wrong_version),run,job_id))
+                assert client.get('/api/state').json()['content_draft']['text_ready'] is False
+                unstaged = client.post('/api/content/apply', json=binding, headers=headers('wrong-text-version'))
+                assert unstaged.status_code == 409 and unstaged.json()['error']['code'] == 'CONTENT_PENDING'
+                with app.state.service.store.connect(write=True) as c:
+                    c.execute('UPDATE content_jobs SET provider_state_json=? WHERE run_id=? AND job_id=?', (json.dumps(state),run,job_id))
+                asset_path = app.state.service.object_path(asset['object_key'])
+                original_bytes = asset_path.read_bytes()
+                asset_path.write_bytes(b'broken')
+                invalid = client.post('/api/content/apply', json=binding, headers=headers('invalid'))
+                assert invalid.status_code == 422 and invalid.json()['error']['code'] == 'ASSET_INVALID'
+                asset_path.write_bytes(original_bytes)
+                with app.state.service.store.connect(write=True) as c:
+                    c.execute("UPDATE assets SET mime_type='image/png' WHERE run_id=? AND asset_id=?", (run,asset['asset_id']))
+                invalid_mime = client.post('/api/content/apply', json=binding, headers=headers('invalid-mime'))
+                assert invalid_mime.status_code == 422 and invalid_mime.json()['error']['code'] == 'MIME_INVALID'
+                with app.state.service.store.connect(write=True) as c:
+                    c.execute('UPDATE assets SET mime_type=? WHERE run_id=? AND asset_id=?', (asset['mime_type'],run,asset['asset_id']))
+                accepted = client.post('/api/content/apply', json=binding, headers=headers('early-skip'))
+                assert accepted.status_code == 200, accepted.text
+                listing = accepted.json()['listing']
+                assert draft['text_ready'] is True and listing['description'].endswith(' cho sản phẩm')
+                assert listing['video'] is None and listing['images'] == [image['path']]
+                if restore:
+                    with app.state.service.store.connect() as c:
+                        previous = app.state.service.entity(c, 'content_versions', run, 'content_id', job['source_content_id'])
+                    response = client.post(f"/api/v1/runs/{run}/content/{previous['content_id']}/restore",
+                        json={'expected_active_content_id':draft['content_id'], 'expected_content_version':previous['version']},
+                        headers=headers('restore-previous'))
+                    assert response.status_code == 200, response.text
+                    listing = response.json()['data']['listing']
+                if terminal == 'failed':
+                    current = bridge.snapshot(run, job_id)['job']
+                    bridge.complete(run, job_id, {'expected_job_version':current['version'], 'status':'failed', 'error_code':'TEST_FAILURE'})
+                elif terminal == 'timed_out':
+                    with app.state.service.store.connect(write=True) as c:
+                        c.execute("UPDATE content_jobs SET lease_until='2000-01-01T00:00:00+00:00' WHERE run_id=? AND job_id=?", (run,job_id))
+                    assert app.state.service.recover()['content_jobs'] >= 1
+                for slot in ('A', 'B', 'C', 'video'):
+                    release[slot].set()
+                await asyncio.wait_for(task, 3)
+                with app.state.service.store.connect() as c:
+                    job = one(c, 'SELECT * FROM content_jobs WHERE run_id=? AND job_id=?', (run, job_id))
+                    content = app.state.service.entity(c, 'content_versions', run, 'content_id', draft['content_id'])
+                    assert job['status'] == terminal
+                    assert content['status'] == ('superseded' if restore else 'published') and content['video_asset_id'] is None
+                    assert content['published_day'] is not None
+                    assert content['video_job']['status'] == 'skipped'
+                    assert app.state.service.public(c, run, 'D') == listing
+                    if selected == 'B':
+                        assert 'video' not in submitted and 'video' not in job['provider_state']
+            finally:
+                for event in release.values(): event.set()
+                await worker.close()
+
+        asyncio.run(exercise())
+
+
 def test_images_overlap_and_video_starts_when_a_finishes(tmp_path):
     source = tmp_path/'source.jpg'
     Image.new('RGB', (20, 20), 'white').save(source, 'JPEG')
