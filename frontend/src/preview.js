@@ -16,9 +16,10 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     images:['fan-original','fan-white','fan-pink','fan-mint'].map(image), video:null, active_voucher_pct:0
   };
   const packageFor = (voucher=3) => ({content_refresh:true,ads_daily_budget:45000,voucher_pct:voucher,stop_roas_below:6.5,stop_after_days:2,duration_days:3});
+  const previewCheck=(ok,message_vi)=>({ok,message_vi,sources:[{kind:'preview',title_vi:'Dữ liệu kiểm tra minh họa',version:'preview-1',excerpt_vi:message_vi}]});
   const briefPreset={intent:'increase_orders',goal_vi:'Đạt 24 đơn trong 3 ngày',allow_ads:true,ads_daily_cap:45000,content_refresh:true,duration_days:3};
   function fresh(memory=true) {
-    return { state:{run_id:makeRunId(),day:1,mode:'offline',memory_enabled:memory,step:'idle',brief:null,brief_preset:clone(briefPreset),brief_editable:false,demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
+    return { state:{run_id:makeRunId(),day:1,mode:'offline',memory_enabled:memory,step:'idle',brief:null,brief_preset:clone(briefPreset),brief_editable:false,demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,renegotiation:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
   }
   function read() { try { const raw=storage.getItem(KEY),db=raw ? JSON.parse(raw) : fresh();db.state.brief_preset=clone(briefPreset);db.state.brief_editable=false;return db; } catch { const db=fresh();db.state.brief_preset=clone(briefPreset);db.state.brief_editable=false;return db; } }
   function write(db) { storage.setItem(KEY, JSON.stringify(db)); }
@@ -30,7 +31,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
   function card(db,voucher=3) {
     const question = db.state.memory_enabled && db.styleCandidate && db.state.day>1 && !db.styleConfirmed && db.state.day>(db.styleDeclinedUntil || 0);
     const onlyQuestion = question && db.state.active_package && db.state.active_package.end_day >= db.state.day;
-    return {card_id:`D-${db.state.day}-${db.negotiations}`,shop_id:'D',day:db.state.day,kind:onlyQuestion?'question':'offer',
+    return {card_id:`D-${db.state.day}-${db.negotiations}`,negotiation_id:onlyQuestion?null:`D-${db.state.day}-attempt${db.negotiations}`,shop_id:'D',day:db.state.day,kind:onlyQuestion?'question':'offer',
       package:onlyQuestion?null:packageFor(voucher),forecast:onlyQuestion?null:{low:18,point:24,high:30,factor_used:1,stock_warning:false},
       profit_after_fees_per_unit:onlyQuestion?null:(voucher===3?27136:28632),breakeven_roas_display:onlyQuestion?null:6.5,
       reasons_vi:['Sản phẩm thuộc nhóm từ khóa đang được quan tâm.','Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.','Gói được kiểm tra theo giới hạn chủ shop.'],warnings_vi:[],notices_vi:[],
@@ -48,10 +49,11 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       while(db.queue.length && db.queue[0].at<=elapsed) {
         const item=db.queue.shift();
         if(item.finish){db.state.step='day_done';}
-        else if(item.card){ db.state.pending_card=card(db,item.voucher || 3); db.state.step='awaiting_decision'; event(db,'card_sent','system','Đã gửi thẻ đề xuất để chị Lan quyết định.',{card:db.state.pending_card}); }
+        else if(item.card){ db.state.pending_card=card(db,item.voucher || 3); db.state.step='awaiting_decision'; event(db,'card_sent','system','Đã gửi thẻ đề xuất để chị Lan quyết định.',{card_id:db.state.pending_card.card_id,negotiation_id:db.state.pending_card.negotiation_id,card:db.state.pending_card}); }
         else {
           const data={...(item.data || {})};
           if(item.type==='referee_review')data.evidence_refs=db.events.filter(ev=>['platform_turn','shop_turn'].includes(ev.type) && ev.data.negotiation_id===data.negotiation_id).slice(-2).map(ev=>ev.seq);
+          if(item.type==='negotiation_finished' && db.state.renegotiation?.negotiation_id===data.negotiation_id)db.state.renegotiation={...db.state.renegotiation,...data};
           event(db,item.type,item.actor,item.text,data);
         }
       }
@@ -103,7 +105,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       if(s.step==='complete' || s.day>SIMULATION_DAYS) fail('Phiên mô phỏng đã hoàn tất. Hãy đặt lại để chạy phiên mới.');
       if(s.step!=='idle' && s.step!=='night_done') fail('Ngày hiện tại đã bắt đầu.');
       if(!s.brief?.confirmed) fail('Hãy xác nhận yêu cầu demo trước khi bắt đầu.');
-      s.step='negotiating';s.pending_card=null;s.content_draft=null;db.ready=null;db.started=now();db.negotiations=1;
+      s.step='negotiating';s.pending_card=null;s.renegotiation=null;s.content_draft=null;db.ready=null;db.started=now();db.negotiations=1;
       if(s.active_package && s.active_package.end_day<s.day) s.active_package=null;
       event(db,'day_start','system',`Bắt đầu ngày mô phỏng ${s.day}.`,{day:s.day});
       const negotiation_id=`D-${s.day}-attempt1`;
@@ -113,13 +115,13 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
         {at:800,type:'agent_activity',actor:'platform_agent',text:'Agent sàn đang chuẩn bị đề xuất.',data:{negotiation_id,task_id:negotiation_id+'-platform-1',round:1,phase:'proposal',status:'running',label_vi:'Agent sàn đang chuẩn bị gói tăng trưởng'}},
         {at:1400,type:'platform_turn',actor:'platform_agent',text:'Đề xuất làm mới nội dung, quảng cáo 70.000đ/ngày và voucher 10% trong 3 ngày.',data:{negotiation_id,round:1,action:'propose',package:{...packageFor(10),ads_daily_budget:70000,stop_roas_below:4}}},
         {at:1500,type:'agent_activity',actor:'code',text:'Code đang kiểm tra gói đề xuất.',data:{negotiation_id,task_id:negotiation_id+'-check-1',round:1,phase:'validation',status:'running',label_vi:'Code đang kiểm tra ngân sách và điều kiện dừng'}},
-        {at:2100,type:'code_check',actor:'code',text:'Gói đầu tiên chưa đáp ứng các giới hạn của chủ shop.',data:{negotiation_id,ok:false,checks:[{ok:false,message_vi:'Ngân sách quảng cáo vượt giới hạn chủ shop.'},{ok:false,message_vi:'Voucher chưa phù hợp với giới hạn của shop.'},{ok:false,message_vi:'Cần siết lại điều kiện tự dừng quảng cáo.'}]}},
+        {at:2100,type:'code_check',actor:'code',text:'Gói đầu tiên chưa đáp ứng các giới hạn của chủ shop.',data:{negotiation_id,ok:false,checks:[previewCheck(false,'Ngân sách quảng cáo vượt giới hạn chủ shop.'),previewCheck(false,'Voucher chưa phù hợp với giới hạn của shop.'),previewCheck(false,'Cần siết lại điều kiện tự dừng quảng cáo.')]}},
         {at:2300,type:'agent_activity',actor:'shop_agent',text:'Agent shop đang xây dựng phản đề xuất.',data:{negotiation_id,task_id:negotiation_id+'-shop-1',round:1,phase:'response',status:'running',label_vi:'Agent shop đang điều chỉnh gói theo giới hạn của chủ shop'}},
         {at:3000,type:'shop_turn',actor:'shop_agent',text:'Đề nghị ngân sách 45.000đ/ngày, voucher 3% và ngưỡng dừng 6,5.',data:{negotiation_id,round:1,action:'counter',package:packageFor(),private_note_vi:'Điều chỉnh gói để đáp ứng các giới hạn riêng của chủ shop.',redacted:true}},
         {at:3400,type:'referee_review',actor:'referee',text:'Phản đề xuất tập trung vào ngân sách và điều kiện dừng. Tiếp tục trao đổi về gói đã điều chỉnh.',data:{negotiation_id,round:1,action:'continue',evidence_refs:['preview-shop-turn-1'],unresolved_terms:['Ngân sách quảng cáo','Voucher'],next_actor:'platform_agent',focused_question:null}},
         {at:3800,type:'agent_activity',actor:'platform_agent',text:'Agent sàn đang xem phản đề xuất.',data:{negotiation_id,task_id:negotiation_id+'-platform-2',round:2,phase:'proposal',status:'running',label_vi:'Agent sàn đang xem gói 45.000đ/ngày và voucher 3%'}},
         {at:4300,type:'platform_turn',actor:'platform_agent',text:'Đồng ý với gói đã điều chỉnh. Chuyển chị Lan duyệt sau kiểm tra cuối.',data:{negotiation_id,round:2,action:'accept',package:packageFor()}},
-        {at:4600,type:'code_check',actor:'code',text:'Gói cuối đã qua kiểm tra các luật của chủ shop.',data:{negotiation_id,ok:true,checks:[{ok:true,message_vi:'Quảng cáo không vượt 45.000đ/ngày.'},{ok:true,message_vi:'Voucher phù hợp với giới hạn lợi nhuận.'},{ok:true,message_vi:'Có điều kiện tự dừng quảng cáo.'}]}},
+        {at:4600,type:'code_check',actor:'code',text:'Gói cuối đã qua kiểm tra các luật của chủ shop.',data:{negotiation_id,ok:true,checks:[previewCheck(true,'Quảng cáo không vượt 45.000đ/ngày.'),previewCheck(true,'Voucher phù hợp với giới hạn lợi nhuận.'),previewCheck(true,'Có điều kiện tự dừng quảng cáo.')]}},
         {at:5200,card:true}
       ];
       if(s.active_package){
@@ -138,13 +140,22 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
         if(db.negotiations>=MAX_NEGOTIATION_ATTEMPTS) fail('Đã đủ 2 phiên thương lượng trong ngày. Chị có thể đồng ý hoặc từ chối gói hiện tại.');
         db.negotiations++;s.step='negotiating';s.pending_card=null;db.started=now();
         const negotiation_id=`D-${s.day}-attempt${db.negotiations}`;
+        s.renegotiation={source_card_id:selected.card_id,negotiation_id,status:'running',reason_vi:null,referee_action:null};
+        const supported=(body.note_vi || '').trim().toLocaleLowerCase('vi').replace(/[.!?…]+$/u,'').trim()==='giảm voucher còn 2%';
+        const terminal=supported?{source_card_id:selected.card_id,negotiation_id,status:'agreed',changed:true,reason_vi:null,referee_action:'continue'}:{source_card_id:selected.card_id,negotiation_id,status:'failed',reason_vi:'Bản xem trước chỉ minh họa yêu cầu giảm voucher còn 2%; không xử lý góp ý tự do.',referee_action:null};
         db.queue=[
-          {at:300,type:'agent_activity',actor:'shop_agent',text:'Agent shop đang xem góp ý mới của chị.',data:{negotiation_id,task_id:negotiation_id+'-shop-1',round:1,phase:'response',status:'running',label_vi:'Agent shop đang xem yêu cầu điều chỉnh voucher'}},
+          {at:300,type:'agent_activity',actor:'shop_agent',text:'Agent shop đang xem góp ý mới của chị.',data:{negotiation_id,task_id:negotiation_id+'-shop-1',round:1,phase:'response',status:'running',label_vi:'Agent shop đang xem góp ý của chị'}},
+          ...(!supported?[
+            {at:700,type:'negotiation_finished',actor:'system',text:'Bản xem trước không xử lý góp ý này.',data:terminal},
+            {at:700,finish:true}
+          ]:[
           {at:700,type:'shop_turn',actor:'shop_agent',text:'Đã nhận góp ý của chị. Đề nghị giảm voucher còn 2%.',data:{negotiation_id,round:1,action:'counter',package:packageFor(2),private_note_vi:'Chỉ thay đổi trong phạm vi người bán cho phép.',redacted:true}},
-          {at:1100,type:'code_check',actor:'code',text:'Gói điều chỉnh vẫn nằm trong các giới hạn của chủ shop.',data:{negotiation_id,ok:true,checks:[{ok:true,message_vi:'Voucher 2% không làm tăng chi quảng cáo.'}]}},
+          {at:1100,type:'code_check',actor:'code',text:'Gói điều chỉnh vẫn nằm trong các giới hạn của chủ shop.',data:{negotiation_id,ok:true,checks:[previewCheck(true,'Voucher 2% không làm tăng chi quảng cáo.')]}},
           {at:1450,type:'referee_review',actor:'referee',text:'Gói điều chỉnh đáp ứng yêu cầu giảm voucher, không mở rộng phạm vi.',data:{negotiation_id,round:1,action:'continue',evidence_refs:['preview-feedback'],unresolved_terms:[],next_actor:'platform_agent',focused_question:null}},
           {at:1850,type:'platform_turn',actor:'platform_agent',text:'Đồng ý giảm voucher còn 2%. Gửi lại gói để chị Lan duyệt.',data:{negotiation_id,round:1,action:'accept',package:packageFor(2)}},
+          {at:2399,type:'negotiation_finished',actor:'system',text:'Đã hoàn tất ví dụ thương lượng.',data:terminal},
           {at:2400,card:true,voucher:2}
+          ])
         ];
       } else if(body.action==='reject' || selected.kind==='question') {s.step='day_done';s.pending_card=null;}
       else {
@@ -171,7 +182,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       event(db,'market_result','market','Đã tổng hợp kết quả ngày mô phỏng.',{metrics:{shop_id:'D',day,impressions:4200,clicks:136,orders:8,revenue:1358000,ads_spend:s.active_package?45000:0,roas:s.active_package?6.8:null,fees:220910,profit_after_fees:172090}});
       const summary={day,history_updates:s.memory_enabled?['Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày.']:[],pref_candidates:s.memory_enabled && s.content_draft?.feedback_history.length?['Chị Lan ưu tiên ảnh nền sáng. Sáng mai cần hỏi xác nhận trước khi đặt thành luật.']:[],calibration:{factor:s.memory_enabled?0.87:1,points:s.memory_enabled?Math.min(day*3,30):0,mape_today:0.24},lesson_ops:s.memory_enabled?[{op:'ADD',lesson_id:'preview-lesson',text_vi:'Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.',scope:'quat_mini',evidence:[`D-${day}`]}]:[],rejected_ops:0,memory_md_path:""};
       if(summary.pref_candidates.length)db.styleCandidate=true;
-      s.last_night=summary;event(db,'memory_write','memory',s.memory_enabled?'Đã cập nhật bộ nhớ cho ngày tiếp theo.':'Bộ nhớ đang tắt; không ghi nhận bài học.',{compartment:'history',summary_vi:'Tóm tắt ngày mô phỏng.'});event(db,'night_summary','memory','Hoàn tất tổng kết ban đêm.',{summary});const complete=s.day===SIMULATION_DAYS;if(!complete)s.day++;s.step=complete?'complete':'idle';s.pending_card=null;s.content_draft=null;db.ready=null;
+      s.last_night=summary;event(db,'memory_write','memory',s.memory_enabled?'Đã cập nhật bộ nhớ cho ngày tiếp theo.':'Bộ nhớ đang tắt; không ghi nhận bài học.',{compartment:'history',summary_vi:'Tóm tắt ngày mô phỏng.'});event(db,'night_summary','memory','Hoàn tất tổng kết ban đêm.',{summary});const complete=s.day===SIMULATION_DAYS;if(!complete)s.day++;s.step=complete?'complete':'idle';s.pending_card=null;s.renegotiation=null;s.content_draft=null;db.ready=null;
       result={summary,next_day:s.step==='complete'?null:s.day};
     } else if(url.pathname==='/api/proof' && method==='GET') result=db.proof || proof;
     else fail('Chưa có dữ liệu xem trước cho thao tác này.');

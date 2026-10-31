@@ -202,3 +202,56 @@ test('completed images appear while the other media slots are still running',()=
   const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
   assert.match(html,/alt="Phương án ảnh bìa A"/);assert.equal((html.match(/Đang tạo ảnh/g)||[]).length,2);assert.match(button(html,'retry'),/disabled/);
 });
+
+test('the seller sees a verified new card or unchanged terms without treating either as approval',()=>{
+  const source={seq:4,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type:'seller_decision',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',action:'negotiate'}};
+  const pkg={content_refresh:false,ads_daily_budget:0,voucher_pct:2,stop_roas_below:null,stop_after_days:null,duration_days:3};
+  const card={card_id:'c-2',negotiation_id:'n-2',kind:'offer',package:pkg,forecast:{low:10,high:12},reasons_vi:[],warnings_vi:[]};
+  const render=changed=>renderToStaticMarkup(<DemoPage run={{state:{...state,step:'awaiting_decision',pending_card:card,renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'agreed',changed}},events:[source],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  const changed=render(true);assert.match(changed,/gói điều chỉnh để chị xem lại/);assert.match(changed,/data-decision="accept"/);assert.ok(!changed.includes('data-night'));
+  const unchanged=render(false);assert.match(unchanged,/giữ nguyên điều khoản của gói trước/);assert.ok(!unchanged.includes('gói điều chỉnh để chị xem lại'));assert.match(unchanged,/data-decision="accept"/);
+});
+
+test('unknown renegotiation outcomes do not offer to end the day',()=>{
+  const value={...state,step:'day_done',renegotiation:{source_card_id:'c-1',status:'unknown',reason_vi:'Kết quả tác vụ chưa rõ.'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(html,/Chưa xác định được kết quả thương lượng/);assert.match(html,/Kết quả tác vụ chưa rõ/);assert.ok(!html.includes('data-night'));
+});
+
+test('historical code-check events show the supplied source names, versions and document links in the event feed',()=>{
+  const rules={kind:'shop_rules',title_vi:'Quy tắc shop',version:2,excerpt_vi:'Voucher tối đa 3%.'};
+  const cost={kind:'product_cost',title_vi:'Giá vốn sản phẩm',version:1};
+  const fees={kind:'fee_policy',title_vi:'Chính sách phí áp dụng',version:'demo-fees-v1'};
+  const guide={kind:'reference_document',title_vi:'Tài liệu tham khảo phí giả lập',version:1,document_id:'fee_calculation_guide_demo',download_url:'/api/v1/runs/database-run/knowledge/documents/fee_calculation_guide_demo?version=1'};
+  const calculation={kind:'calculation',title_vi:'Điều kiện dừng theo hòa vốn trong code',excerpt_vi:'Ngưỡng dừng không thấp hơn ROAS hòa vốn.'};
+  const checks=[
+    {ok:false,message_vi:'Voucher vượt mức.',sources:[rules]},
+    {ok:false,message_vi:'Quảng cáo không phù hợp.',sources:[rules]},
+    {ok:true,message_vi:'Ngân sách trong giới hạn.',sources:[rules]},
+    {ok:true,message_vi:'Tồn kho đủ.',sources:[{kind:'inventory',title_vi:'Tồn kho',version:1},{kind:'calculation',title_vi:'Điều kiện tồn kho trong code'}]},
+    {ok:true,message_vi:'Đạt lãi tối thiểu.',sources:[rules,cost,fees,guide]},
+    {ok:true,message_vi:'Gói không lỗ.',sources:[cost,fees,guide]},
+    {ok:true,message_vi:'ROAS trong giới hạn.',sources:[rules,cost,fees,guide]},
+    {ok:true,message_vi:'Ngưỡng dừng hợp lệ.',sources:[cost,fees,guide,calculation]}
+  ];
+  const event={seq:24,run_id:state.run_id,day:1,shop_id:'Z',type:'code_check',actor:'code',ts:'10:00',text_vi:'Code kiểm tra luật shop',data:{checks}};
+  const html=renderToStaticMarkup(<EventFeed state={state} events={[event]} preview={false}/>);
+  assert.ok(html.includes('Quy tắc shop'),'event feed must show the source title');
+  assert.ok(html.includes('Tài liệu tham khảo phí giả lập'),'event feed must show the document title');
+  assert.ok(html.includes('Phiên bản 2'),'event feed must show the source version');
+  assert.ok(html.includes('/api/v1/runs/database-run/knowledge/documents/fee_calculation_guide_demo?version=1'),'event feed must link to the supplied document');
+  assert.ok(html.includes('Ngưỡng dừng không thấp hơn ROAS hòa vốn.'));
+});
+
+test('event citations escape source text, reject unsafe links and do not fabricate missing sources',()=>{
+  const event={seq:24,run_id:state.run_id,day:1,shop_id:'Z',type:'code_check',actor:'code',ts:'10:00',text_vi:'Kiểm tra',data:{checks:[
+    {ok:false,message_vi:'Không đạt',sources:[{title_vi:'<script>alert(1)</script>',version:'v<2',excerpt_vi:'<img src=x onerror=alert(1)>',download_url:'javascript:alert(1)'},{title_vi:'Ngoài trang',download_url:'https://evil.example/file'},{title_vi:'Không phải API',download_url:'/unsafe'}]},
+    {ok:true,message_vi:'Không có nguồn'}
+  ]}};
+  const html=renderToStaticMarkup(<EventFeed state={state} events={[event]} preview={false}/>);
+  assert.match(html,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/);assert.match(html,/&lt;img src=x/);assert.match(html,/Phiên bản v&lt;2/);
+  assert.ok(!html.includes('<script>'));assert.ok(!html.includes('<img src=x'));assert.ok(!html.includes('href="javascript:'));assert.ok(!html.includes('href="https://evil.example'));assert.ok(!html.includes('href="/unsafe"'));
+  assert.equal((html.match(/Nguồn:/g)||[]).length,1);
+  const legacy=renderToStaticMarkup(<EventFeed state={state} events={[{...event,data:{checks:[{ok:true,message_vi:'Không có nguồn'}]}}]} preview={false}/>);
+  assert.ok(!legacy.includes('Nguồn:'));
+});

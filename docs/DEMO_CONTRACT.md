@@ -29,7 +29,7 @@ Giữ JSON trực tiếp tại `/api/*`; `/api/v1` dùng envelope. Mọi POST g�
 
 | Endpoint | Body / response quan trọng |
 | --- | --- |
-| GET /api/state | run_id/day/step/mode/memory, simulation_days, brief hoặc null, brief_preset/brief_editable, rules_version, confirmed_style_notes, busy/active_operation, learning_retry_allowed, current card/draft và nguồn thực |
+| GET /api/state | run_id/day/step/mode/memory, simulation_days, brief hoặc null, brief_preset/brief_editable, rules_version, confirmed_style_notes, busy/active_operation, renegotiation, learning_retry_allowed, current card/draft và nguồn thực |
 | POST /api/reset | `{memory,seed}`; run mới, profile do backend chọn external/worker/external; không xóa lịch sử run cũ |
 | POST /api/brief/confirm | Gửi nguyên `state.brief_preset` cho demo D → `{brief,step:'idle'}`; ID/version/confirmation do server persist. Sai mục tiêu/ngân sách preset trả422; brief đã xác nhận không được thay thế |
 | POST /api/day/start | `{}`; cần brief đã confirmed; operation async →202 với ID/status khi chưa xong |
@@ -48,7 +48,9 @@ State chính: idle (brief chưa/đã confirmed) → negotiating → awaiting_dec
 
 Demo native D lưu preset trong config của run: `{intent:'increase_orders',goal_vi:'Đạt 24 đơn trong 3 ngày',allow_ads:true,ads_daily_cap:45000,content_refresh:true,duration_days:3}`. UI chỉ đọc và xác nhận, không có ô sửa mục tiêu/ngân sách; `brief_editable=false`. Run D native cũ chưa xác nhận nhận cùng preset, nhưng brief lịch sử đã xác nhận giữ nguyên. Backend không tự xác nhận khi khởi tạo và từ chối body khác preset. Mục tiêu là yêu cầu mô phỏng, không phải lời hứa hoặc kết quả đã đạt. Run/reference khác giữ hợp đồng brief riêng.
 
-Question Yes dùng accept/true; No reject/false. Chỉ đổi Rules/preference, giữ campaign hiện hành. Offer accept ghi approval; refresh phải chờ Content Apply mới activate. Reject không tạo content/spend. Negotiate tạo attempt/card mới theo giới hạn Data; preset demo giảm voucher còn2%. Referee stop/ask_human hoặc lỗi kết thúc attempt có lý do, không bịa agreed/card.
+Question Yes dùng accept/true; No reject/false. Chỉ đổi Rules/preference, giữ campaign hiện hành. Offer accept ghi approval; refresh phải chờ Content Apply mới activate. Reject không tạo content/spend. Negotiate tạo attempt mới theo giới hạn Data; gói hợp lệ và được hai agent thống nhất mới tạo thẻ duyệt mới. Referee stop/ask_human hoặc lỗi kết thúc attempt có lý do, không bịa agreed/card.
+
+`state.renegotiation` là null hoặc `{source_card_id,negotiation_id,status,reason_vi,referee_action,changed}` của yêu cầu thương lượng mới nhất trong đúng run/ngày/shop. Status queued/running chờ phản hồi, agreed chờ thẻ mới, failed/unknown hiện lý do thực. `changed=false` nghĩa là các agent giữ nguyên điều khoản, không gọi đó là offer đã điều chỉnh. UI không biến seller action negotiate thành quyết định đã hoàn tất hoặc mở nút kết thúc ngày trước phản hồi. Projection lấy từ operation/command receipt/negotiation đã lưu, phục hồi sau reload; không lấy lý do của attempt cũ. Ask_human chưa có thỏa thuận không được đổi thành đồng ý hoặc tự áp dụng gói.
 
 ## 4. Media và publication
 
@@ -84,7 +86,7 @@ Báo cáo demo đã chạy được xuất vào cố định `data/runtime/demo-
 
 Business events cùng Data seq; safe telemetry gồm tool_called/tool_result/agent_completed, agent_activity, memory_read/skill_used và record/version refs. Không log raw private ToolMessage. Card/decision/applied events giữ immutable IDs để UI/evidence không lookup nhầm current card về sau.
 
-`code_check.data` giữ `{negotiation_id,proposal_id,round,ok,checks:[{code,ok,message_vi}]}` và quyền seller-private. Không tạo check cho lượt không có package; React đọc `ok` từ backend. `referee_review.data` giữ `{negotiation_id,round,action,evidence_refs,unresolved_terms,next_actor,focused_question,source}`; mọi chữ được lọc quyền, next_actor là platform_agent/shop_agent/seller/null. Không bỏ câu hỏi trọng tài khi chuyển sang event DTO.
+`code_check.data` giữ `{negotiation_id,proposal_id,round,ok,checks:[{code,ok,message_vi,sources}]}` và quyền seller-private. Mỗi source có `{kind,title_vi,version?,excerpt_vi?,document_id?,download_url?}`, lấy từ phiên bản Rules/giá vốn/phí/tồn kho thực sự dùng lúc kiểm tra. Tài liệu phí được kiểm checksum và gắn nhãn tham khảo giả lập, không phải đầu vào thay cho công thức code. Link tài liệu dùng endpoint Knowledge có xác thực; event cũ thiếu sources thì không suy đoán nguồn mới. Không tạo check cho lượt không có package; React đọc `ok` từ backend. `referee_review.data` giữ `{negotiation_id,round,action,evidence_refs,unresolved_terms,next_actor,focused_question,source}`; mọi chữ được lọc quyền, next_actor là platform_agent/shop_agent/seller/null. Không bỏ câu hỏi trọng tài khi chuyển sang event DTO.
 
 `state.mode` chỉ là cấu hình của run. Nhãn nguồn thực lấy `agent_completed.data.source/error_code` và receipt/telemetry của đúng role/run/shop/ngày. Thiếu telemetry hiện chưa có dữ liệu, không gắn nhãn live chỉ vì cấu hình live.
 

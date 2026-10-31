@@ -154,8 +154,8 @@ def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
         events=all_events(client,run)
         checks=[e for e in events if e['type']=='code_check' and e['shop_id']=='D' and e['data'].get('negotiation_id')==card['negotiation_id']]
         failed=next(e for e in checks if e['data']['ok'] is False)
-        assert {'code':'VOUCHER_OVER_CAP','ok':False,'message_vi':'Voucher vượt luật shop.'} in failed['data']['checks']
-        assert {'code':'PROFIT_BELOW_MIN','ok':False,'message_vi':'Gói không đạt lãi tối thiểu.'} in failed['data']['checks']
+        assert any(c['code']=='VOUCHER_OVER_CAP' and c['ok'] is False and c['message_vi']=='Voucher vượt luật shop.' for c in failed['data']['checks'])
+        assert any(c['code']=='PROFIT_BELOW_MIN' and c['ok'] is False and c['message_vi']=='Gói không đạt lãi tối thiểu.' for c in failed['data']['checks'])
         assert checks[-1]['data']['ok'] is True and checks[-1]['data']['proposal_id']==card['proposal_id']
         assert isinstance(checks[-1]['data']['round'],int) and isinstance(checks[-1]['data']['checks'],list)
         rendered=render_activity(tmp_path,state,events)
@@ -630,6 +630,8 @@ def test_seller_code_checks_cite_actual_rules_finance_and_reference_document(tmp
         assert doc['document_id']=='fee_calculation_guide_demo'
         response=client.get(doc['download_url'])
         assert response.status_code==200 and response.json()['data']['document_version']==doc['version']
+        assert client.get(doc['download_url'].replace('version=1','version=999')).status_code==404
+        assert client.get(doc['download_url'],headers={'Authorization':'Bearer invalid'}).status_code==401
         passed={check['code']:check for check in checks[-1]['data']['checks']}
         for code in ('VOUCHER_OVER_CAP','PROFIT_BELOW_MIN','BREAKEVEN_TOO_HIGH','STOP_BELOW_BREAKEVEN'):
             assert passed[code]['ok'] is True and passed[code]['sources'],passed.get(code)
@@ -664,7 +666,45 @@ def test_running_content_exposes_only_verified_assets_of_current_job(tmp_path):
         assert draft['status'] in ('queued','running') and a['status']=='done' and a['path'],a
         assert client.get(a['path']).content==buf.getvalue()
         assert b['path'] is None and c['path'] is None
+        with service.store.connect() as conn:
+            asset=service.entity(conn,'assets',run,'asset_id',asset_id)
+            path=service.object_path(asset['object_key']);original=path.read_bytes()
+        path.write_bytes(original+b'corrupt')
+        assert client.get('/api/state').json()['content_draft']['images'][0]['path'] is None
+        path.write_bytes(original)
         with service.store.connect(write=True) as conn:
             conn.execute('DELETE FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?',(run,job_id,asset_id))
         a=client.get('/api/state').json()['content_draft']['images'][0]
         assert a['path'] is None and a['status']!='done'
+
+
+def test_renegotiation_distinguishes_changed_and_unchanged_and_keeps_limit(tmp_path):
+    defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
+    app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,set()))
+    with TestClient(app) as client:
+        run=client.get('/api/state').json()['run_id']
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF.copy(),headers=headers('brief')).status_code==200
+        assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
+        with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
+        worker._operation(op)
+        revised={'content_refresh':True,'ads_daily_budget':45000,'voucher_pct':2,'stop_roas_below':6.5,'stop_after_days':2,'duration_days':3}
+        worker.llm_factory=lambda run,settings,store:NativeTransport(settings,set(),revised)
+        for index in range(2):
+            before=client.get('/api/state').json();card=before['pending_card']
+            request={'card_id':card['card_id'],'expected_card_version':card['version'],'expected_brief_version':card['brief_version'],
+                     'action':'negotiate','note_vi':'Giảm voucher thêm'}
+            queued=client.post('/api/decision',json=request,headers=headers(f'renegotiate-{index}'))
+            assert queued.status_code==202,queued.text
+            with service.store.connect() as c:op=one(c,'SELECT * FROM operations WHERE run_id=? AND operation_id=?',(run,queued.json()['operation_id']))
+            worker._operation(op)
+            state=client.get('/api/state').json()
+            assert state['pending_card'] and state['renegotiation']['status']=='agreed'
+            assert state['renegotiation']['changed'] is (index==0)
+            if index==1:assert 'giữ nguyên' in state['renegotiation']['reason_vi']
+        card=state['pending_card']
+        request.update(card_id=card['card_id'],expected_card_version=card['version'])
+        blocked=client.post('/api/decision',json=request,headers=headers('over-limit'))
+        assert blocked.status_code==409 and blocked.json()['error']['code']=='MAX_RENEGOTIATIONS'
+        assert client.get('/api/state').json()['pending_card']['card_id']==card['card_id']

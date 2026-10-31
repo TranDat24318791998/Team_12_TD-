@@ -44,11 +44,11 @@ Mọi event giữ `{seq,run_id,day,ts,type,actor,shop_id,text_vi,data}`. `ts` hi
 | --- | --- | --- |
 | `platform_turn` | `{negotiation_id,round,action,package}` | Ghi nhận lượt đã xong của sàn, mũi tên sang shop, cập nhật gói. |
 | `shop_turn` | `{negotiation_id,round,action,package,private_note_vi?,redacted}` | Ghi nhận phản hồi của shop, mũi tên về sàn; ghi chú riêng chỉ trong seller projection. |
-| `code_check` | `{negotiation_id,proposal_id,round,ok,checks:[{code,ok,message_vi}]}` | Hiện kết quả kiểm tra đầy đủ gần nhất; không suy pass/fail từ thẻ hoặc event thiếu boolean. |
+| `code_check` | `{negotiation_id,proposal_id,round,ok,checks:[{code,ok,message_vi,sources}]}` | Hiện kết quả và nguồn kiểm tra do backend cung cấp; nguồn có kind/title_vi, version/excerpt_vi và document_id/download_url nếu có. Không suy pass/fail hay nguồn của event cũ. |
 | `card_sent` | `{card}` | Bằng chứng thẻ đã được tạo; UI chờ StateView `awaiting_decision` để hiện đúng thẻ hiện tại. Không tính là seller đã xem/duyệt. |
 | `seller_decision` | `{card_id,action,note_vi,rule_answer}` | Lưu lựa chọn của seller. `negotiate` tách lịch sử cũ và chờ phiên mới. |
 
-`round` là lượt của sàn, tối đa 3, không phải số message hay phần trăm hoàn thành. Shop phản hồi trong cùng round. Người bán yêu cầu thương lượng lại tạo attempt mới, tối đa 2 attempt/ngày/shop theo v1.1; round bắt đầu lại từ 1. Không dùng round=4 hay tái sử dụng negotiation_id để nối lần làm lại.
+`round` là lượt của sàn, tối đa 3, không phải số message hay phần trăm hoàn thành. Shop phản hồi trong cùng round. Bản local cho phép một attempt đầu và tối đa hai lần người bán yêu cầu thương lượng thêm mỗi ngày/shop; mỗi lần có negotiation_id mới và round bắt đầu lại từ 1. Không dùng round=4 hay tái sử dụng negotiation_id để nối lần làm lại. Trong lúc chờ, không hiện kết thúc ngày; đọc `state.renegotiation` để phân biệt offer mới, giữ nguyên điều khoản và lý do không có offer.
 
 `platform_turn`/`shop_turn` xác nhận **đã làm xong**. Nếu chỉ có các event này, React dùng chữ “Đã gửi / Chờ phản hồi”. Backend không được kỳ vọng frontend suy luận chính xác agent đang gọi tool nào từ event đã hoàn tất.
 

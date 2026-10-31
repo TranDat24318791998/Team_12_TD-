@@ -162,11 +162,14 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
             (policy['knowledge_release'],business_date(run['current_day']),business_date(run['current_day'])))
         # The demo guide describes this pinned fee policy; it is reference material, not an input to the calculation.
         guide_ref=None
-        if guide and versions['fee_policy_version']=='demo-fees-v1':
-            path=self.object_path(guide['source_object_key'])
-            if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==guide['checksum']:
-                guide_ref={'kind':'reference_document','title_vi':'Tài liệu tham khảo phí giả lập','version':guide['document_version'],
-                           'document_id':guide['document_id'],'download_url':f"/api/v1/runs/{r}/knowledge/documents/{guide['document_id']}?version={guide['document_version']}"}
+        fees,_=self.fee_config(c,r,version=versions['fee_policy_version'])
+        if guide and versions['fee_policy_version']=='demo-fees-v1' and fees=={'rate_bps':1450,'per_order':3000}:
+            try:
+                path=self.object_path(guide['source_object_key'])
+                if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==guide['checksum']:
+                    guide_ref={'kind':'reference_document','title_vi':'Tài liệu tham khảo phí giả lập','version':guide['document_version'],
+                               'document_id':guide['document_id'],'download_url':f"/api/v1/runs/{r}/knowledge/documents/{guide['document_id']}?version={guide['document_version']}"}
+            except (Fault,OSError):pass
         details=[]
         for item in result['checks']:
             code=item['code'];sources=[]
@@ -177,11 +180,11 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
                                 {'kind':'fee_policy','title_vi':'Chính sách phí áp dụng','version':versions['fee_policy_version']}])
                 if guide_ref:sources.append(guide_ref)
             if code=='STOP_BELOW_BREAKEVEN':
-                sources.append({'kind':'calculation','title_vi':'Điều kiện dừng theo hòa vốn','version':versions['fee_policy_version'],
+                sources.append({'kind':'calculation','title_vi':'Điều kiện dừng theo hòa vốn trong code',
                                 'excerpt_vi':'Ngưỡng dừng không thấp hơn ROAS hòa vốn, làm tròn lên bậc 0,5.'})
             if code=='STOCK_TOO_LOW_FOR_ADS':
                 sources.extend([{'kind':'inventory','title_vi':'Tồn kho','version':versions['inventory_version']},
-                                {'kind':'platform_policy','title_vi':'Điều kiện tồn kho','version':policy['platform_policy_version'],'excerpt_vi':'Cần ít nhất 30 sản phẩm để chạy quảng cáo.'}])
+                                {'kind':'calculation','title_vi':'Điều kiện tồn kho trong code','excerpt_vi':'Cần ít nhất 30 sản phẩm để chạy quảng cáo.'}])
             details.append({**item,'message_vi':passed_text[code] if item['ok'] else violation_message(code),'sources':sources})
         return details
 

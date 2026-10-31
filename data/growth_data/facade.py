@@ -3,7 +3,7 @@
 from .service import Principal
 from .storage import many, one
 from .simulation import aggregate
-from .errors import require
+from .errors import Fault, require
 
 
 class Facade:
@@ -45,8 +45,21 @@ class Facade:
         images=[{k:v for k,v in x.items() if k!='asset_id'} for x in content['cover_options']]
         video={k:v for k,v in content['video_job'].items() if k!='asset_id'}
         if run['config'].get('driver',{}).get('agent_version')=='native' and job['provider']=='assigned_worker' and job['status'] in {'queued','running'}:
-            images=[{'option':slot,'status':job['provider_state'].get(slot,{}).get('status','pending'),'path':None,'source':job['provider_state'].get(slot,{}).get('source')} for slot in 'ABC']
-            video={'status':job['provider_state'].get('video',{}).get('status','pending'),'path':None}
+            def slot_view(slot,kind):
+                entry=job['provider_state'].get(slot,{})
+                view={'status':entry.get('status','pending'),'path':None,'source':entry.get('source')}
+                if entry.get('status')=='done':
+                    try:
+                        if not entry.get('asset_id'):raise Fault('ASSET_SCOPE','Chưa có file cho lượt hiện tại',404)
+                        asset=self.s.checked_job_asset(c,r,job,entry['asset_id'],kind)
+                        if asset['job_id']!=job['job_id']:raise Fault('ASSET_SCOPE','File không thuộc lượt hiện tại',404)
+                        view['path']=f"/api/v1/runs/{r}/assets/{asset['asset_id']}/download"
+                    except (Fault,OSError):view['status']='failed'
+                if kind=='video':
+                    view.update({key:entry[key] for key in ('review_passed','review_notes','duration_seconds') if key in entry})
+                return view
+            images=[{'option':slot,**slot_view(slot,'image')} for slot in 'ABC']
+            video=slot_view('video','video')
         return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":content["title"],"description":content["description"],
                 "images":images,"video":video,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
 
@@ -112,7 +125,7 @@ class Facade:
         if operation and operation['status'] in {'queued','running'} and (operation['kind']=='start_day' or operation['kind'].startswith('renegotiate:')):step="negotiating"
         retry=one(c,"SELECT * FROM operations WHERE run_id=? AND day=? AND kind LIKE 'renegotiate:%' ORDER BY rowid DESC LIMIT 1",(r,run['current_day']))
         renegotiation=None
-        if retry and retry['result']:
+        if retry and retry['result'] and run['config'].get('driver',{}).get('agent_version')=='native':
             source_id=retry['result'].get('source_card_id')
             source=one(c,"SELECT * FROM cards WHERE run_id=? AND card_id=? AND shop_id='D' AND day=?",(r,source_id,run['current_day']))
             if source:
@@ -175,6 +188,9 @@ class Facade:
             c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
         else:
             require(body.get("action") in {"accept","edit","reject","negotiate"},"ACTION_INVALID","Hành động không hợp lệ",422)
+            if body.get('action')=='negotiate':
+                count=c.execute("SELECT COUNT(*) FROM negotiations WHERE run_id=? AND shop_id='D' AND day=?",(r,run['current_day'])).fetchone()[0]
+                require(count<3,'MAX_RENEGOTIATIONS','Đã đủ hai lần thương lượng thêm')
             prop=self.s.entity(c,"proposals",r,"proposal_id",card["proposal_id"])
             decision=self.s.decision(c,p,r,dict(target_type="proposal",target_id=prop["proposal_id"],target_version=prop["version"],action={"accept":"approve","edit":"approve","reject":"reject","negotiate":"request_changes"}[body["action"]],edited_package=body.get("edited_package"),feedback_private=body.get("note_vi",""),feedback_shared=body.get('note_vi','')))
             internal=self.internal(p,r)

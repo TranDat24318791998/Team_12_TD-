@@ -10,6 +10,8 @@ Chạy từ gốc repo. Bản product dùng React + Data + native worker tại `
 
 `start` giữ process đã chạy đúng ownership và từ chối cổng do process khác chiếm; `stop` chỉ gửi signal cho process được manifest xác nhận. Không xóa DB/assets khi stop. PID/log nằm ở ignored `data/runtime/local-stack/`. Đóng terminal không dừng hai process; reboot/logout dừng, sleep làm dịch vụ tạm không truy cập được. Không cần đổi power settings.
 
+Trong một media process, tối đa ba job được xử lý đồng thời; ảnh A/B/C không còn chờ lần lượt. Video vẫn dùng ảnh A của đúng attempt. Trạng thái và file từng slot được lưu riêng; restart không tự gửi lại job provider chưa rõ kết quả.
+
 ## Cấu hình và dữ liệu
 
 - Python3.11 root `.venv`, Python3.12 `experiment/.venv`; dependencies theo hai requirements. Node>=20 chỉ cần build frontend. Máy này có bundled Node tại `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node`.

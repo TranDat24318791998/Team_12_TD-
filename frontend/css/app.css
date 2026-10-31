@@ -366,6 +366,17 @@
 .activity-detail-body .check-sources li { display: block; margin-top: 5px; }
 .activity-detail-body .check-sources a { text-decoration: underline; text-underline-offset: 3px; }
 .activity-detail-body .check-sources p { margin-top: 3px; color: #665a52; }
+.event-check-label { flex-shrink: 0; white-space: nowrap; }
+.event-check > div { min-width: 0; }
+.event-check .check-sources { margin-top: 5px; padding-left: 8px; border-left: 2px solid #657fa7; color: #c5d4e9; overflow-wrap: anywhere; }
+.event-check .check-sources strong { font-weight: 600; }
+.event-check .check-sources ul { list-style: none; padding: 0; margin: 2px 0 0; }
+.event-check .check-sources li + li { margin-top: 3px; }
+.event-check .check-sources a { color: #d2e3ff; text-decoration: underline; text-underline-offset: 3px; }
+.event-check .check-sources p { margin-top: 2px; color: #b8c8df; }
+.demo-page .event-check .check-sources { border-color: #ccab98; color: #57372a; }
+.demo-page .event-check .check-sources a { color: #15558a; }
+.demo-page .event-check .check-sources p { color: #664c40; }
 @media(min-width:1000px) {
   .proof-page #root, .demo-page #root { height: 100dvh; display: flex; flex-direction: column; }
   .proof-page .proof-presentation { flex: 1; min-height: 0; gap: 6px; padding-block: 12px 6px; }

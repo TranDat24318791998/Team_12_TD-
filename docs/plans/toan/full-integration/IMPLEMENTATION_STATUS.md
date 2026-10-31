@@ -62,6 +62,18 @@ Root giữ evidence kiểm máy tại ignored `data/runtime/local-stack/{verific
 
 Lượt FI03 bổ sung `branding-verification.json`, `pre-fi03-restart.json`, `shop-fi03.png` và `shop-fi03-mobile.png` trong cùng thư mục ignored. GET bootstrap của browser kiểm tạo một run mới ở idle, chưa confirm; không có POST/provider job, không đổi phiên đang dùng của người bán. Hai process đã nạp source/config logo mới và đều READY sau restart.
 
+## FI04 — phản hồi seller, nguồn kiểm tra và media song song
+
+Ngày 31/10/2026 15:55, sau các phản hồi trực tiếp của người bán:
+
+- Thương lượng thêm chờ đúng attempt; trả thẻ mới nếu đạt thỏa thuận hoặc hiện lý do chưa có offer điều chỉnh. Ask_human không bị đổi thành agreed. Gói giữ nguyên có nhãn riêng; unknown không mở kết thúc ngày. Kết quả phục hồi từ SQLite sau reload và xử lý cả event/state đến lệch nhịp.
+- Mỗi dòng code check ghi nguồn và phiên bản Rules/giá vốn/phí/tồn kho thực dùng. Tài liệu phí có checksum và link Knowledge xác thực, được ghi rõ là tham khảo giả lập. Event cũ thiếu nguồn không được điền bằng dữ liệu hiện tại. Kiểm độc lập Astra chứng minh nguồn lịch sử không đổi theo Rules mới, verdict false không bị ghi thành true, platform không đọc được checks và session khác không đọc được tài liệu.
+- Ba ảnh A/B/C chạy đồng thời; video chỉ chờ ảnh A của cùng attempt nhập thành công, không chờ B/C. Media xử lý tối đa ba job đồng thời trong một process; shutdown giữ lock tới khi các job đang chạy kết thúc. Retry/idempotency/unknown và giới hạn chi vẫn giữ. Mỗi slot chỉ hiển thị khi asset đúng binding và checksum; UI lấy state ở nhịp polling bình thường.
+
+Verification: root suite **170 passed +15 subtests**,123,07s; Data56, native integration15 và5focused sau chỉnh cuối; media bridge22; experiment29 và shutdown regression1; frontend67,44affected sau chỉnh cuối, build,5headless và isolated Data→React PASS. Astra review từ `cfcccca` tới source cuối: PASS, không có finding chặn.
+
+Hai dịch vụ đã restart và READY. Cùng seller run ở ngày2/content_review, draft succeeded, ba ảnh JPEG và video MP4 đều còn tải được bằng Range206; hai SQLite quick_check=ok. Không còn queued/running work trước restart. Các số paid reservations=0 ở bảng FI03 phía trên là snapshot trước lượt seller tự chạy: lượt live của seller từ15:46:00 tới15:48:39 đã tạo ba ảnh và một video, được kiểm lại file/HTTP, không tạo generation mới để thử. Chưa đo tốc độ hoặc rate limit của provider với lịch chạy song song mới; provider evaluation vẫn chưa thực hiện.
+
 ## Proof đã giao vào UI
 
 Chọn **Báo cáo mô phỏng đã chạy** trên màn Proof. `GET /api/proof/demo` đọc fixed artifact `data/runtime/demo-proof.json`, xác thực seller D và kiểm typed schema/hash/scope. Không khởi chạy comparison hoặc đổi active run. Report/log exports thuộc đúng cặp source ON/OFF, không lấy events của phiên đang mở.
@@ -72,7 +84,7 @@ Artifact D: comparison `group_4349d9bc018e4cdfbdc9`, ON `run_a716ec6e871f46d289f
 
 ## Giới hạn còn chủ động giữ
 
-- **MEDIA_LIVE, PROVIDER_EVAL và replay từ recording provider thật: NOT_RUN.** Model availability read-only200 không thay generation. Test dùng fake/offline providers; imported video từ MinIO chỉ là cache có provenance.
+- **MEDIA_LIVE acceptance độc lập, PROVIDER_EVAL và replay từ recording provider thật: NOT_RUN.** Các test tự động dùng fake/offline providers; imported video từ MinIO chỉ là cache có provenance. FI04 đã kiểm file/HTTP của lượt live do seller tự chạy như ghi ở trên, chưa thay cho các gate này.
 - D/E reports được đo trước một số patch privacy/recovery cuối; các patch đó có focused regressions và full suite ở source cuối. Chưa chạy lại toàn bộ bốn run7ngày sau mọi patch. Không gắn chúng nhãn provider-evaluated/live.
 - Saved artifact giữ yêu cầu gốc đã thực thi, có thể khác preset24đơn/45.000đ của run mới. UI hiển thị yêu cầu gốc trong phần nguồn báo cáo, không viết lại lịch sử. Bộ chọn tùy ý nhiều dataset7ngày với đầy đủ state/NightSummary ở requirements mục9/13 chưa được nghiệm thu; hiện chọn rõ current proof hoặc measured artifact, không dùng SQLite preview blob làm evidence.
 - T01–T24 không được tuyên bố là exhaustive matrix: mọi tổ hợp vote/edit/eviction, concurrent pin/publish và process-kill chưa phủ hết. Chi tiết ở SI final review. Chưa bổ sung spam/multi-user/distributed workflow.

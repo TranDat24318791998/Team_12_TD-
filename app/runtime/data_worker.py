@@ -96,7 +96,8 @@ class DataWorker:
             for neg in orphans:
                 receipt={'expected_version':neg['version'],'status':'failed','final_proposal_id':None,'rounds':neg['platform_rounds'],'reason_vi':'Tác vụ agent bị gián đoạn','referee_action':None}
                 c.execute("UPDATE negotiations SET status='failed',final_proposal_id=NULL,terminal_receipt_json=?,terminal_hash=?,version=version+1,updated_at=? WHERE run_id=? AND negotiation_id=? AND status='running'",(dumps(receipt),fingerprint(receipt),now(),neg['run_id'],neg['negotiation_id']))
-                self.service.event(c,neg['run_id'],neg['day'],'negotiation_finished','orchestrator',neg['shop_id'],{'negotiation_id':neg['negotiation_id'],'kind':neg['kind'],'status':'failed','rounds':neg['platform_rounds'],'source':'unknown'},text='Thương lượng bị gián đoạn')
+                op=self.service.negotiation_operation(c,neg['run_id'],neg)
+                self.service.event(c,neg['run_id'],neg['day'],'negotiation_finished','orchestrator',neg['shop_id'],{'negotiation_id':neg['negotiation_id'],'source_card_id':op['result'].get('source_card_id') if op and op['result'] else None,'kind':neg['kind'],'status':'failed','rounds':neg['platform_rounds'],'reason_vi':receipt['reason_vi'],'referee_action':None,'source':'unknown'},text='Thương lượng bị gián đoạn')
             c.execute("UPDATE operations SET status='failed',error_code='WORKER_RESTART_OUTCOME_UNKNOWN',lease_until=NULL,version=version+1 WHERE status='running' AND claimed_by='native_orchestrator' AND (kind='start_day' OR kind LIKE 'renegotiate:%') AND run_id IN (SELECT run_id FROM runs WHERE json_extract(config_json,'$.driver.agent_version')='native')")
         for run in runs: self.store.recover_reserved_reflections(run)
 

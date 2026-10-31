@@ -9,7 +9,7 @@ export function scopedEvents(state,events=[]){
 
 export function sellerFeedback(state,events=[]){
   const own=scopedEvents(state,events).filter(event=>event.shop_id===state.demo_shop.shop_id);
-  const latest=own.findLast(event=>event.type==='seller_decision');
+  const latest=own.findLast(event=>event.type==='seller_decision' && (!event.data?.target_type || event.data.target_type==='proposal'));
   const feedback=latest?.data?.action==='negotiate'?latest:null;
   let result=state.renegotiation;
   if(feedback && result?.source_card_id!==feedback.data.card_id)result=null;
@@ -24,7 +24,7 @@ export function sellerFeedback(state,events=[]){
   const newCard=state.step==='awaiting_decision' && card && card.card_id!==source &&
     ((feedback && cardEvent?.seq>feedback.seq) || (result?.status==='agreed' && result.negotiation_id && card.negotiation_id===result.negotiation_id));
   if(newCard)return {waiting:false,result,card:true};
-  if(state.step==='day_done' && ['failed','unknown'].includes(result?.status))return {waiting:false,result};
+  if(state.step==='day_done' && result?.status==='failed')return {waiting:false,result};
   return {waiting:true,result};
 }
 
@@ -33,7 +33,7 @@ export function deriveActivity(state,events=[]){
   const own=dayEvents.filter(event=>event.shop_id===state.demo_shop.shop_id);
   const restart=own.findLast(event=>event.type==='seller_decision' && event.data?.action==='negotiate');
   const boundary=restart?.seq ?? 0;
-  const previousIds=new Set(own.filter(event=>negotiationTypes.has(event.type) && event.seq<=boundary).map(event=>event.data?.negotiation_id));
+  const previousIds=new Set(own.filter(event=>event.seq<=boundary).map(event=>event.data?.negotiation_id).filter(Boolean));
   const candidates=own.filter(event=>negotiationTypes.has(event.type) && event.data?.negotiation_id && event.seq>boundary && !previousIds.has(event.data.negotiation_id));
   const snapshot=state.agent_activity;
   const validSnapshot=snapshot && typeof snapshot.negotiation_id==='string' && Number.isInteger(snapshot.updated_seq) && snapshot.updated_seq>boundary && !previousIds.has(snapshot.negotiation_id);
@@ -70,7 +70,7 @@ export function deriveActivity(state,events=[]){
   const question=!negotiating && (state.pending_card || cardEvent?.data?.card)?.kind==='question';
   const decision=own.findLast(event=>event.type==='seller_decision' && event.seq>(lastTurn?.seq ?? boundary));
   const outcome=awaiting?'waiting_seller':decision?.data.action==='reject'?'rejected':decision && ['accept','edit'].includes(decision.data.action)?'approved':lastTurn?.data.action==='withdraw' || lastTurn?.data.action==='reject'?'no_fit':currentTask?.status==='failed'?'failed':currentTask?.status==='stopped'?'stopped':lastTurn?.data.action==='accept'?'agreed':negotiating?'negotiating':'idle';
-  const running=negotiating && currentTask?.status==='running' && ['platform_agent','shop_agent','code','referee'].includes(currentTask.actor) && !['no_fit','stopped'].includes(outcome)?currentTask:null;
+  const running=negotiating && feedback.result?.status!=='unknown' && currentTask?.status==='running' && ['platform_agent','shop_agent','code','referee'].includes(currentTask.actor) && !['no_fit','stopped'].includes(outcome)?currentTask:null;
   const round=Math.max(0,...turns.map(event=>Number.isInteger(event.data.round)?event.data.round:0),Number.isInteger(currentTask?.round)?currentTask.round:0);
   const ids=[...new Set(own.filter(event=>negotiationTypes.has(event.type)).map(event=>event.data?.negotiation_id).filter(Boolean))];
   if(negotiationId && !ids.includes(negotiationId))ids.push(negotiationId);
@@ -90,6 +90,7 @@ export function deriveActivity(state,events=[]){
   if(outcome==='stopped')label='Đã dừng thương lượng';
   if(outcome==='rejected')label='Chủ shop đã từ chối · Không áp dụng gói này';
   if(outcome==='approved')label=question?'Đã ghi nhận câu trả lời về sở thích':state.step==='content_review'?'Chủ shop đã duyệt gói · Đang ở bước nội dung':'Đã ghi nhận quyết định của chủ shop';
+  if(feedback.result?.status==='unknown')label='Chưa xác định được kết quả thương lượng';
   if(state.step==='complete')label='Đã hoàn tất phiên mô phỏng';
   const lastDirection=lastTurn?.type==='shop_turn'?'to-platform':lastTurn?'to-shop':'waiting';
   const stage=awaiting?4:running?.phase==='proposal'?1:running?.phase==='validation'?2:running?.phase==='response' || running?.phase==='referee'?3:semantic?.type==='code_check'?2:semantic?.type==='shop_turn' || semantic?.type==='referee_review'?3:platform?1:0;

@@ -181,6 +181,53 @@ def test_worker_runs_three_image_jobs_at_once(tmp_path):
             release.set()
 
 
+def test_shutdown_keeps_lock_until_all_active_jobs_finish(tmp_path):
+    settings = Settings(data_dir=tmp_path, storage_backend='local', openai_api_key='fake',
+                        video_api_token=TOKEN, playback_secret='test-playback-' + 'y' * 32)
+    release = threading.Event()
+    three_started = threading.Event()
+    started = []
+    guard = threading.Lock()
+
+    def processor(settings, store, storage, row):
+        with guard:
+            started.append(row['id'])
+            if len(started) == 3:
+                three_started.set()
+        release.wait(15)
+        store.update(row['id'], status='failed', stage='failed', error='fake provider')
+
+    app = create_app(settings, processor=processor)
+    try:
+        with TestClient(app) as client:
+            asset = upload(client)
+            ids = []
+            for index in range(4):
+                response = client.post('/v1/image-jobs', headers=headers() | {'Idempotency-Key':f'shutdown-image-{index}'},
+                    json={'job_type':'image', 'product_asset_id':asset, 'style':'clean_white', 'product_kind':'desktop_fan', 'product_name':'Quạt'})
+                assert response.status_code == 202
+                ids.append(response.json()['job_id'])
+            assert three_started.wait(1) and set(started) == set(ids[:3])
+        assert app.state.store.job(ids[3])['status'] == 'queued'
+        with pytest.raises(RuntimeError, match='một worker/API process'):
+            with TestClient(create_app(settings, processor=processor)):
+                pass
+        release.set()
+        deadline = time.monotonic() + 3
+        while app.state.worker_lock is not None and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert app.state.worker_lock is None
+        assert all(app.state.store.job(job_id)['status'] == 'failed' for job_id in ids[:3])
+        with TestClient(create_app(settings, processor=processor)):
+            deadline = time.monotonic() + 2
+            while ids[3] not in started and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert started.count(ids[3]) == 1
+            assert all(started.count(job_id) == 1 for job_id in ids)
+    finally:
+        release.set()
+
+
 def test_watch_page_requires_signature_and_escapes_script(api):
     client, app = api
     job_id, url = completed(api)

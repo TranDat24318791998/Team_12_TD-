@@ -109,3 +109,37 @@ test('renegotiation stays waiting across stale state/event ordering and never us
   const running={...staleState,renegotiation:{source_card_id:'c-1',negotiation_id:'n-new',status:'running'}};
   assert.equal(deriveActivity(running,[feedback]).negotiating,true);
 });
+
+test('events from another run, shop, or day do not resolve or restart this seller feedback',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',action:'negotiate'});
+  const unrelated=[event(9,'seller_decision',{card_id:'c-2',action:'reject'},{run_id:'another'}),event(10,'seller_decision',{card_id:'c-2',action:'reject'},{shop_id:'A'}),event(11,'seller_decision',{card_id:'c-2',action:'reject'},{day:2})];
+  const current={...state,step:'day_done',renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'running'}};
+  assert.equal(deriveActivity(current,[feedback,...unrelated]).negotiating,true);
+  assert.equal(journeyProgress(current,[feedback,...unrelated]).current,1);
+});
+
+test('content approval after a renegotiated offer does not reopen feedback',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',action:'negotiate',target_type:'proposal'});
+  const next=event(8,'card_sent',{card_id:'c-2',negotiation_id:'n-2',card:{card_id:'c-2',negotiation_id:'n-2',kind:'offer'}});
+  const accepted=event(9,'seller_decision',{card_id:'c-2',negotiation_id:'n-2',action:'accept',target_type:'proposal'});
+  const content=event(10,'seller_decision',{card_id:null,negotiation_id:null,action:'accept',target_type:'content'});
+  const after={...state,step:'day_done',renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'agreed',changed:true}};
+  assert.equal(deriveActivity(after,[feedback,next,accepted,content]).negotiating,false);
+  assert.equal(journeyProgress(after,[feedback,next,accepted,content]).current,4);
+});
+
+test('a delayed old-attempt turn cannot become the feedback result when its ID is known from the decision',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',negotiation_id:'n-old',action:'negotiate'});
+  const late=event(7,'shop_turn',{negotiation_id:'n-old',action:'reject',package:null});
+  const current={...state,step:'day_done',renegotiation:{source_card_id:'c-1',negotiation_id:'n-new',status:'running'}};
+  const activity=deriveActivity(current,[feedback,late]);
+  assert.equal(activity.negotiating,true);assert.equal(activity.outcome,'negotiating');assert.equal(activity.shop,undefined);
+});
+
+test('an unknown outcome never presents an old running task as active',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',action:'negotiate'});
+  const task=event(7,'agent_activity',{negotiation_id:'n-2',task_id:'t',status:'running',round:1,phase:'response'});
+  const value={...state,step:'day_done',renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'unknown'}};
+  const activity=deriveActivity(value,[feedback,task]);
+  assert.equal(activity.running,null);assert.match(activity.label,/Chưa xác định/);
+});
