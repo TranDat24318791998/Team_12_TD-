@@ -1,6 +1,6 @@
 # Hợp đồng Knowledge cho Agent + Tools
 
-Đây là đặc tả cần implement, chưa phải trạng thái code đã chạy. Toàn sở hữu schema, quyền đọc/ghi, retrieval, học từ evidence và xác nhận luật. Member dữ liệu cấp store/event/market adapter. [Hợp đồng agent/tool](AGENT_TOOL_KNOWLEDGE.md) quy định vòng gọi tool; [hợp đồng demo](DEMO_CONTRACT.md) quy định HTTP và seller approval.
+Đây là đặc tả cần implement, chưa phải trạng thái code đã chạy. Toàn sở hữu schema, quyền đọc/ghi, retrieval, học từ evidence và xác nhận luật. Member dữ liệu cấp store/event/market adapter. [Hợp đồng agent/tool](AGENT_TOOL_KNOWLEDGE.md) quy định vòng gọi tool; [hợp đồng demo](../../DEMO_CONTRACT.md) quy định HTTP và seller approval.
 
 Knowledge ở đây là năm ngăn có cấu trúc, truy vấn theo run/shop/ngành. Tài liệu gốc không yêu cầu embedding hoặc vector database. Dữ liệu sản phẩm đã xác minh và catalog công khai là context nguồn, tách khỏi bài học tự rút ra.
 

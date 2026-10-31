@@ -21,7 +21,7 @@ runtime.day (goal, run/shop/day, approval)
 
 Graph quyết định agent nào được gọi. Model quyết định tool đọc/tính toán trong quyền của vai trò và trả quyết định theo schema. Backend quyết định tác dụng nghiệp vụ và approval. `finish_<role>` là output cuối, không tự apply thay đổi.
 
-Interface và pseudocode runner ở [D02a](../tasks/demo/02a-tool-runtime.md). `app/agents/runner.py` giữ loop/limits, `tools.py` giữ bound tools; prompt ở negotiation/content/memory. `infrastructure/llm.py` giữ transport/provider/budget, không import Session hay gọi gateway.
+Interface và pseudocode runner ở [D02a](tasks/02a-tool-runtime.md). `app/agents/runner.py` giữ loop/limits, `tools.py` giữ bound tools; prompt ở negotiation/content/memory. `infrastructure/llm.py` giữ transport/provider/budget, không import Session hay gọi gateway.
 
 ## 2. Tool catalog gọi được từ model
 

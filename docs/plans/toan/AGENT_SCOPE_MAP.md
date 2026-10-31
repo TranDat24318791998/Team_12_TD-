@@ -1,6 +1,6 @@
 # Phạm vi Agent, Tool và Knowledge của Toàn
 
-Đây là bản đối chiếu phân công gốc với plan đã điều chỉnh. Trạng thái trong bảng là **phạm vi phải triển khai**, không phải xác nhận code đã chạy. Khi code tool runtime, đọc [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md); khi code records, retrieval hoặc learning, đọc [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md). Lịch giao việc ở [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Đây là bản đối chiếu phân công gốc với plan đã điều chỉnh. Trạng thái trong bảng là **phạm vi phải triển khai**, không phải xác nhận code đã chạy. Khi code tool runtime, đọc [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md); khi code records, retrieval hoặc learning, đọc [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md). Lịch giao việc ở [Plan của Toàn](README.md).
 
 ## 1. Nguồn và phần việc đã nhận
 
@@ -12,7 +12,7 @@
 | `resources/w/Growth Agents - Customer Journey & Agents.xlsx` | `Agents & Tools!B4:J5`, `B8:J39` | Bổ sung Referee, thành năm vai trò AI. Có 32 dòng hành động/tool/service đề xuất, không phải 32 function mà model được gọi. |
 | Cùng workbook | `Agents & Tools!B43:J48` | Trọng tài chỉ đọc công khai; trả khuyến nghị, lý do ngắn và evidence; graph thực thi chuyển trạng thái. |
 | Cùng workbook | `Implementation!B23:J25` | Giữ LangGraph; ba agent tương tác, Content/Learning chạy theo giai đoạn; bổ sung intent và approval version. |
-| Task gốc và hợp đồng trong repo | `tasks/TV1-1.4-*` đến `TV1-1.6-*`, `tasks/TV2-2.4-*`, `TV2-2.5-*`, [CONTRACT.md](CONTRACT.md) | Giữ interface dùng chung, số do code tính, private projection, seller approval và memory có evidence. |
+| Task gốc và hợp đồng trong repo | `tasks/TV1-1.4-*` đến `TV1-1.6-*`, `tasks/TV2-2.4-*`, `TV2-2.5-*`, [CONTRACT.md](../../CONTRACT.md) | Giữ interface dùng chung, số do code tính, private projection, seller approval và memory có evidence. |
 
 Theo yêu cầu hiện hành, plan bổ sung **tool calling thật có giới hạn** cho các thao tác đọc và tính toán; đây là quyết định triển khai mới, không phải tính năng đã có trong bản gốc. Tool runtime xác định role, run và shop từ backend. Model chọn tool trong tập được cấp, nhận kết quả rồi đưa ra quyết định. Code vẫn bắt buộc kiểm tra, lọc dữ liệu và thực thi approval.
 

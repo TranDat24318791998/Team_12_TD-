@@ -4,11 +4,11 @@
 
 Một lời gọi `run_negotiation(session, "D", 1, "propose")` offline trả gói **45.000đ/ngày, voucher 3%, stop 6,5**, chốt ở lượt sàn thứ 2. Event log có lượt sàn, lượt shop, kiểm tra code, đánh giá trọng tài và trace tool thật. Khi chạy live, từng role gọi runner D02a để đọc context/knowledge, gọi hàm tính và nhận kết quả trước khi quyết định. Lời gọi này chưa tạo card, chưa kích hoạt gói, chưa trừ ngân sách.
 
-Thứ tự/timebox lấy từ [plan](../../docs/IMPLEMENTATION_PLAN.md). Phụ thuộc D01 và [D02a](02a-tool-runtime.md); D04 cấp typed memory gateway, có thể dùng fake cùng interface lúc ghép. Giữ cả đường native tool calling và fallback. Nếu quá giờ, cắt UI/phần ghép ngoài phạm vi trước; không đánh dấu agent hoàn thành khi mới có structured output một lần hoặc riêng fallback.
+Thứ tự/timebox lấy từ [plan](../README.md). Phụ thuộc D01 và [D02a](02a-tool-runtime.md); D04 cấp typed memory gateway, có thể dùng fake cùng interface lúc ghép. Giữ cả đường native tool calling và fallback. Nếu quá giờ, cắt UI/phần ghép ngoài phạm vi trước; không đánh dấu agent hoàn thành khi mới có structured output một lần hoặc riêng fallback.
 
 ## Đọc và phạm vi sửa
 
-Đọc `AGENTS.md`, [hợp đồng Agent–Tool–Knowledge](../../docs/AGENT_TOOL_KNOWLEDGE.md), [hợp đồng demo](../../docs/DEMO_CONTRACT.md), `docs/SEED_DATA.md` mục 3–5 và `tasks/TV1-1.5-thuong-luong.md`. Hợp đồng demo quyết định phạm vi mới; task cũ chỉ tham khảo cách tính và chữ ký.
+Đọc `AGENTS.md`, [hợp đồng Agent–Tool–Knowledge](../AGENT_TOOL_KNOWLEDGE.md), [hợp đồng demo](../../../DEMO_CONTRACT.md), `docs/SEED_DATA.md` mục 3–5 và `tasks/TV1-1.5-thuong-luong.md`. Hợp đồng demo quyết định phạm vi mới; task cũ chỉ tham khảo cách tính và chữ ký.
 
 Chỉ sửa/tạo:
 
@@ -164,7 +164,7 @@ Chạy `.venv/bin/python -m pytest -q tests/unit/negotiation tests/unit/agents`,
 
 ## Prompt giao coder
 
-> Làm D02 theo file này, docs/AGENT_TOOL_KNOWLEDGE.md và docs/DEMO_CONTRACT.md. Nối runner D02a vào ba role rồi hoàn thành graph D, dùng fake native tool responses để test. Giữ Output, báo thiếu interface bằng tên cụ thể; chưa mở rộng sang seller approval/content. Bàn giao danh sách file, test/result, một transcript D ngắn và phần chưa làm. Không tự push hoặc sửa contract.
+> Làm D02 theo file này, docs/plans/toan/AGENT_TOOL_KNOWLEDGE.md và docs/DEMO_CONTRACT.md. Nối runner D02a vào ba role rồi hoàn thành graph D, dùng fake native tool responses để test. Giữ Output, báo thiếu interface bằng tên cụ thể; chưa mở rộng sang seller approval/content. Bàn giao danh sách file, test/result, một transcript D ngắn và phần chưa làm. Không tự push hoặc sửa contract.
 
 ## Checklist cho reviewer
 

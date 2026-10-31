@@ -1,6 +1,6 @@
 # Hợp đồng runtime và tích hợp cho demo dưới 2 giờ
 
-Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; source hiện chưa triển khai. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
+Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](plans/toan/AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](plans/toan/KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; source hiện chưa triển khai. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
 
 ## 1. Quyết định kiến trúc
 

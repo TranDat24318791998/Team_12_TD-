@@ -1,6 +1,21 @@
-# Kế hoạch Agent, Tools và Knowledge trong dưới 2 giờ
+# Plan của Toàn — Agent, Tools và Knowledge
 
 Cập nhật 31/10/2026 theo phần việc Toàn nhận từ đầu: **agent + điều phối + tool adapters + Knowledge + học ban đêm**. Đây là plan giao coder/reviewer, chưa phải chức năng đã implement. Bản này thay lịch trước đã dành quá nhiều thời gian cho UI/media và chỉ dùng LLM structured output.
+
+Thư mục `docs/plans/toan/` chứa bộ plan/code task riêng của Toàn. Bắt đầu đọc file này, rồi giao từng task trong `tasks/` theo lịch bên dưới.
+
+```text
+docs/plans/toan/
+  README.md                  Phạm vi, lịch và prompt giao coder/reviewer
+  AGENT_TOOL_KNOWLEDGE.md     Đặc tả agent, tool calling và quyền
+  KNOWLEDGE_CONTRACT.md      Năm ngăn memory, retrieval và learning
+  AGENT_SCOPE_MAP.md         Phần việc gốc và đầu nối với team
+  tasks/                     7 task của Toàn: D00, D01, D02a, D02, D04, D03, D06
+```
+
+Tất cả lệnh và đường dẫn source (`app/`, `tests/`, `contracts/`...) tính từ **gốc repo**, không từ thư mục plan. Thư mục này gom tài liệu giao việc; code vẫn nằm theo module trong kiến trúc chung. D01/D03 có phần giao nhau với model/store/API: giữ owner đã ghi trong task và phối hợp trước khi sửa chung.
+
+Chi tiết riêng được cập nhật tại đây. Chỉ thay tài liệu chung khi đổi interface, schema, đường dẫn hoặc quy ước ảnh hưởng member khác; không chép lịch/prompt/task riêng sang file chung.
 
 ## 1. Kết quả cần bàn giao
 
@@ -30,9 +45,9 @@ DB/market/media chưa xong: dùng fake trong tests/headless harness, ghi rõ ngu
 - [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md): tool catalog, quyền, flow và điều kiện agent hoàn thành.
 - [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md): schema năm ngăn, read/write interface, evidence và retrieval.
 - [AGENT_SCOPE_MAP.md](AGENT_SCOPE_MAP.md): phần việc gốc, 15 adapter và toàn bộ 32 dòng workbook.
-- [DEMO_CONTRACT.md](DEMO_CONTRACT.md): HTTP/state/media và phạm vi demo; agent/knowledge theo hai contract trên.
-- [CONTRACT.md](CONTRACT.md), [SEED_DATA.md](SEED_DATA.md), [ARCHITECTURE.md](ARCHITECTURE.md): model giữ nguyên, số seed, vị trí module/hướng import.
-- [MUSE_API.md](MUSE_API.md): video wire contract và response còn phải xác minh.
+- [DEMO_CONTRACT.md](../../DEMO_CONTRACT.md): HTTP/state/media và phạm vi demo; agent/knowledge theo hai contract trên.
+- [CONTRACT.md](../../CONTRACT.md), [SEED_DATA.md](../../SEED_DATA.md), [ARCHITECTURE.md](../../ARCHITECTURE.md): model giữ nguyên, số seed, vị trí module/hướng import.
+- [MUSE_API.md](../../MUSE_API.md): video wire contract và response còn phải xác minh.
 
 Không cần vector DB/embedding để làm knowledge trong bản giao việc gốc. Truy vấn deterministic theo khóa/ngành/scope là implementation đủ cho dữ liệu hiện tại. Static knowledge gồm seed/facts/fees và catalog campaign mẫu có nguồn; learned knowledge gồm năm ngăn trên.
 
@@ -55,25 +70,34 @@ D05/D05a do member media/UI làm song song, không chiếm quỹ code lõi ở b
 
 Checkpoint phút 43: tool request/result/terminal loop chạy test. Phút 86: năm ngăn và next-use test. Trễ thì giảm polish/UI, dashboard, số lần demo media; không bỏ hai checkpoint này rồi gọi là xong phần Toàn.
 
-## 5. Task packets
+## 5. Task của Toàn
 
 | ID | File | Hoàn thành khi |
 |---|---|---|
-| D00 | [00-start.md](../tasks/demo/00-start.md) | Owner dependency, DTO/provider/input và fixtures |
-| D01 | [01-foundation.md](../tasks/demo/01-foundation.md) | Typed models, tiền/privacy, Session, Store seam |
-| D02a | [02a-tool-runtime.md](../tasks/demo/02a-tool-runtime.md) | Native tool loop, allowlist và trace có test |
-| D02 | [02-agents-referee.md](../tasks/demo/02-agents-referee.md) | 3 agent gọi tools trong graph, kiểm cuối đúng |
-| D04 | [04-learning.md](../tasks/demo/04-learning.md) | 5 bins, typed views, evidence, learning/confirmation/next-use |
-| D03 | [03-workflow-api.md](../tasks/demo/03-workflow-api.md) | Card/HITL/day/monitor và đầu nối team |
-| D05a | [05a-media-api.md](../tasks/demo/05a-media-api.md) | Member media: OpenAI Images/Muse adapters, job/cache |
-| D05 | [05-ui-content.md](../tasks/demo/05-ui-content.md) | Member content/UI: Content role dùng runner, review và UI |
-| D06 | [06-review-demo.md](../tasks/demo/06-review-demo.md) | Review riêng core agent/knowledge và tích hợp thật |
+| D00 | [00-start.md](tasks/00-start.md) | Owner dependency, DTO/provider/input và fixtures |
+| D01 | [01-foundation.md](tasks/01-foundation.md) | Typed models, tiền/privacy, Session, Store seam |
+| D02a | [02a-tool-runtime.md](tasks/02a-tool-runtime.md) | Native tool loop, allowlist và trace có test |
+| D02 | [02-agents-referee.md](tasks/02-agents-referee.md) | 3 agent gọi tools trong graph, kiểm cuối đúng |
+| D04 | [04-learning.md](tasks/04-learning.md) | 5 bins, typed views, evidence, learning/confirmation/next-use |
+| D03 | [03-workflow-api.md](tasks/03-workflow-api.md) | Card/HITL/day/monitor và đầu nối team |
+| D06 | [06-review-demo.md](tasks/06-review-demo.md) | Review riêng core agent/knowledge và tích hợp thật |
+
+### Đầu nối với member khác
+
+Các task dưới đây để phối hợp tích hợp, không nằm trong bộ task riêng của Toàn:
+
+| Owner | Task | Toàn cần nhận |
+|---|---|---|
+| Media | [D05a — Media API](../../../tasks/demo/05a-media-api.md) | OpenAI Images/Muse adapters, jobs/cache |
+| Content/UI | [D05 — Nội dung và giao diện](../../../tasks/demo/05-ui-content.md) | ContentService dùng runner/context, seller review và UI |
+
+Hợp đồng runtime/HTTP/media dùng chung ở [docs/DEMO_CONTRACT.md](../../DEMO_CONTRACT.md); các member đọc những phần liên quan đến đầu nối của mình.
 
 ## 6. Prompt giao coder/reviewer
 
 ```text
-Làm task Dxx tại tasks/demo/<file>.md trên main repo Team_12_TD-.
-Đọc AGENTS.md, docs/IMPLEMENTATION_PLAN.md, contract được task trỏ tới, rồi task.
+Làm task Dxx tại docs/plans/toan/tasks/<file>.md trên main repo Team_12_TD-.
+Đọc AGENTS.md, docs/plans/toan/README.md, contract được task trỏ tới, rồi task.
 Ưu tiên phần Toàn: Agent + Tools + Knowledge. Làm Output/acceptance đầy đủ;
 UI/provider/DB teammate chưa có thì dùng fake đúng interface ở tests, ghi rõ giới hạn.
 Không thay tool calling bằng nhét toàn bộ memory vào prompt; không chỉ ghi memory mà bỏ test đọc lại.
@@ -84,7 +108,7 @@ trace input→tool_call→tool_result→decision và record/evidence được đ
 ```
 
 ```text
-Review task Dxx so với các contract được task trỏ tới và docs/AGENT_SCOPE_MAP.md.
+Review task Dxx so với các contract được task trỏ tới và docs/plans/toan/AGENT_SCOPE_MAP.md.
 Đọc diff/caller, chạy test trọng tâm. Chặn nếu thiếu native tool loop/role ACL,
 knowledge bin/write/read-back, evidence, privacy, tiền, approval/version hoặc test fail.
 Kiểm tool response thực sự đi vào model và record đã học tác động lần gọi sau.

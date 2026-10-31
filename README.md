@@ -48,8 +48,8 @@ git check-ignore .env
 
 ## Tài liệu và phân công
 
-- [Plan Agent + Tools + Knowledge dưới 2 giờ](docs/IMPLEMENTATION_PLAN.md): phần Toàn nhận, lịch coder/reviewer, native tool loop và knowledge đủ năm ngăn.
-- [Hợp đồng agent/tool](docs/AGENT_TOOL_KNOWLEDGE.md), [Knowledge](docs/KNOWLEDGE_CONTRACT.md), [mapping 15 adapter/32 mục Excel](docs/AGENT_SCOPE_MAP.md); [hợp đồng runtime/demo](docs/DEMO_CONTRACT.md).
+- [Plan riêng của Toàn — Agent + Tools + Knowledge](docs/plans/toan/README.md): toàn bộ đặc tả, task code và hướng dẫn review trong `docs/plans/toan/`.
+- [Hợp đồng runtime/demo dùng chung](docs/DEMO_CONTRACT.md): đầu nối giữa agent, dữ liệu, API và media.
 
 - [AGENTS.md](AGENTS.md): quy ước, công nghệ và các nguyên tắc bắt buộc.
 - [Kiến trúc codebase](docs/ARCHITECTURE.md): cây thư mục, trách nhiệm module và hướng phụ thuộc.

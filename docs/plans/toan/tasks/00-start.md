@@ -1,6 +1,6 @@
 # D00 — Khóa input và kiểm tra nền tảng
 
-Timebox 8 phút. Đọc `AGENTS.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/DEMO_CONTRACT.md`. Thực hiện trên main, giữ nguyên thay đổi của người khác.
+Timebox 8 phút. Đọc `AGENTS.md`, `docs/plans/toan/README.md`, `docs/DEMO_CONTRACT.md`. Thực hiện trên main, giữ nguyên thay đổi của người khác.
 
 ## Output
 
@@ -10,7 +10,7 @@ Timebox 8 phút. Đọc `AGENTS.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/DEMO_C
 
 1. `git status --short --branch`, ghi BASE_SHA; nếu có code đang được người khác sửa, không reset/checkout đè.
 2. `.venv/bin/python -m pytest -q`. Baseline dự kiến 14 test; ghi kết quả thực, không copy số cũ.
-3. Đọc [Agent/Tools](../../docs/AGENT_TOOL_KNOWLEDGE.md), [Knowledge](../../docs/KNOWLEDGE_CONTRACT.md) và [mapping phần việc](../../docs/AGENT_SCOPE_MAP.md). Chốt owner DB/market/media/API và trạng thái adapter thật/fake trong handoff.json. Không giao Toàn viết lại toàn bộ UI/provider. Đọc `app/core/settings.py`, requirements đã pin. Dùng Python3.11 và dependencies hiện có; không nâng toàn bộ môi trường.
+3. Đọc [Agent/Tools](../AGENT_TOOL_KNOWLEDGE.md), [Knowledge](../KNOWLEDGE_CONTRACT.md) và [mapping phần việc](../AGENT_SCOPE_MAP.md). Chốt owner DB/market/media/API và trạng thái adapter thật/fake trong handoff.json. Không giao Toàn viết lại toàn bộ UI/provider. Đọc `app/core/settings.py`, requirements đã pin. Dùng Python3.11 và dependencies hiện có; không nâng toàn bộ môi trường.
 4. Khóa providers: OpenAI cho LLM/text/learning và ảnh; Muse Gateway cho video. Đọc `docs/MUSE_API.md`. Không sử dụng luồng useapi.net cũ.
 5. Kiểm tra tên biến được cấu hình, không in giá trị: OPENAI_API_KEY, LLM_MODEL, LLM_MODEL_REFLECT, OPENAI_IMAGE_MODEL, MUSE_API_BASE_URL, MUSE_API_KEY, MUSE_VIDEO_MODEL, MEDIA_MODE. OpenAI key/model trống thì ghi `chưa cấu hình`, không đoán tên model. Muse token đã lưu local; không copy sang ví dụ hoặc fixtures.
 6. Chọn một ảnh đầu vào D thực sự tồn tại ở `assets/products/`. Hiện baseline chỉ có `.gitkeep`. Nếu chưa có ảnh, dùng ảnh user cung cấp; hoặc sau khi OpenAI được cấu hình tạo một ảnh quạt synthetic và gắn nhãn generated. Không tạo file jpg giả từ HTML/SVG để lừa adapter.

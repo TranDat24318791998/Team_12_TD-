@@ -1,6 +1,6 @@
 # D06 — Review Agent/Tools/Knowledge và bàn giao tích hợp
 
-Timebox10phút +6phút buffer theo plan. Review độc lập sau patch/SHA coder; đọc [Agent/Tools](../../docs/AGENT_TOOL_KNOWLEDGE.md), [Knowledge](../../docs/KNOWLEDGE_CONTRACT.md), [scope map](../../docs/AGENT_SCOPE_MAP.md) và caller thực. Báo riêng CORE PASS/FIX REQUIRED và INTEGRATION LIVE PASS/PENDING.
+Timebox10phút +6phút buffer theo plan. Review độc lập sau patch/SHA coder; đọc [Agent/Tools](../AGENT_TOOL_KNOWLEDGE.md), [Knowledge](../KNOWLEDGE_CONTRACT.md), [scope map](../AGENT_SCOPE_MAP.md) và caller thực. Báo riêng CORE PASS/FIX REQUIRED và INTEGRATION LIVE PASS/PENDING.
 
 ## Output
 
@@ -38,7 +38,7 @@ API member sẵn sàng thì TestClient đi cùng flow HTTP qua10routes và kiể
 ## Smoke thật khi có cấu hình
 
 1. OpenAI: tối thiểu một invocation phát tool call, backend thực thi, model nhận ToolMessage và trả terminal. Lưu trace đã lọc với source live/modelconfigured; không yêu cầu wording giống fixture.
-2. Content/media member: một ảnh OpenAI và một video Muse theo [MUSE_API](../../docs/MUSE_API.md); capture response đã loại secret thành fixture, map status thật, tải/mở được file. Không log Authorization. Muse schema response `{}` vẫn cần response thực trước khi chốt parser.
+2. Content/media member: một ảnh OpenAI và một video Muse theo [MUSE_API](../../../MUSE_API.md); capture response đã loại secret thành fixture, map status thật, tải/mở được file. Không log Authorization. Muse schema response `{}` vẫn cần response thực trước khi chốt parser.
 3. Key/model hoặc adapter thiếu → ghi pending, không gọi API placeholder và không giả thành công. Thời gian render ngoài3phút thao tác demo.
 
 ## Script trình diễn phần Toàn

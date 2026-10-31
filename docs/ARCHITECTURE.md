@@ -4,11 +4,11 @@
 
 ## Bổ sung được chốt cho phần Agent + Tools + Knowledge
 
-Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](KNOWLEDGE_CONTRACT.md); chưa phải source đã có. Thêm `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
+Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](plans/toan/KNOWLEDGE_CONTRACT.md); chưa phải source đã có. Thêm `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
 
 Hướng phụ thuộc: `agents.runner` dùng domain + transport LLM được inject; `agents.tools` dùng domain và callable gateway/market được inject. Không import runtime/API/main hoặc tạo client. Feature callers lắp role tools trong các closure; `runtime.manager` cấp dependencies. LangGraph quyết định role; runner điều hành tool calls bên trong role; workflow giữ approval và mọi mutation.
 
-Store in-memory atomic trong demo và DB teammate adapter dùng cùng contract; không bỏ schema/ACL/evidence vì chưa có DB. SQLite/persistent checkpoint trong thiết kế đầy đủ chưa nằm trên critical path dưới2giờ. Chi tiết ownership mới ở [AGENT_SCOPE_MAP](AGENT_SCOPE_MAP.md).
+Store in-memory atomic trong demo và DB teammate adapter dùng cùng contract; không bỏ schema/ACL/evidence vì chưa có DB. SQLite/persistent checkpoint trong thiết kế đầy đủ chưa nằm trên critical path dưới2giờ. Chi tiết ownership mới ở [AGENT_SCOPE_MAP](plans/toan/AGENT_SCOPE_MAP.md).
 
 ## Cấu trúc chính
 

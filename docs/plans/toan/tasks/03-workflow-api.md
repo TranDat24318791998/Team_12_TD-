@@ -1,6 +1,6 @@
 # D03 — Điều phối ngày, seller approval và đầu nối API
 
-Timebox 18 phút cho runtime và ghép nối, API owner làm route song song. Cần D01/D02a/D02/D04; nếu content/memory chưa xong, dùng fake đúng interface. Đọc [DEMO_CONTRACT](../../docs/DEMO_CONTRACT.md), mục 3, 5 và 6. Toàn sở hữu runtime; member API sở hữu route/wiring, cùng một integrator duyệt Session. Tách patch theo hai owner trong Output, không ghi cùng file đồng thời.
+Timebox 18 phút cho runtime và ghép nối, API owner làm route song song. Cần D01/D02a/D02/D04; nếu content/memory chưa xong, dùng fake đúng interface. Đọc [DEMO_CONTRACT](../../../DEMO_CONTRACT.md), mục 3, 5 và 6. Toàn sở hữu runtime; member API sở hữu route/wiring, cùng một integrator duyệt Session. Tách patch theo hai owner trong Output, không ghi cùng file đồng thời.
 
 ## Output
 

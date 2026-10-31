@@ -4,7 +4,7 @@
 
 Model gọi tool bằng native function calling; backend kiểm quyền và input, chạy hàm, trả `ToolMessage`, rồi model dùng kết quả để quyết định. Không thay bằng một prompt đã nhét sẵn toàn bộ knowledge hoặc event mô phỏng rằng model đã gọi tool.
 
-Đọc `AGENTS.md`, [hợp đồng Agent–Tool–Knowledge](../../docs/AGENT_TOOL_KNOWLEDGE.md), [hợp đồng demo](../../docs/DEMO_CONTRACT.md). D01 cung cấp model/finance/store; D04 cung cấp gateway thật. Trong lúc gateway chưa xong dùng fake đúng interface trong test; task chưa đạt nghiệm thu tích hợp cho tới khi nối gateway thật. Timebox và thứ tự lấy từ [plan](../../docs/IMPLEMENTATION_PLAN.md).
+Đọc `AGENTS.md`, [hợp đồng Agent–Tool–Knowledge](../AGENT_TOOL_KNOWLEDGE.md), [hợp đồng demo](../../../DEMO_CONTRACT.md). D01 cung cấp model/finance/store; D04 cung cấp gateway thật. Trong lúc gateway chưa xong dùng fake đúng interface trong test; task chưa đạt nghiệm thu tích hợp cho tới khi nối gateway thật. Timebox và thứ tự lấy từ [plan](../README.md).
 
 ## Output được sửa
 

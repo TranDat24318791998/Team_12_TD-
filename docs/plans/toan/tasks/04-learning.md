@@ -1,6 +1,6 @@
 # D04 — Knowledge đủ năm ngăn và Learning Agent gọi tool
 
-Timebox **20 phút**, sau D01 và D02a; có thể làm song song feature agents D02 khi interface đã khóa. Đây là phần Toàn nhận từ đầu, không được cắt xuống thành summary học. Đọc [Knowledge contract](../../docs/KNOWLEDGE_CONTRACT.md), [agent/tool contract](../../docs/AGENT_TOOL_KNOWLEDGE.md), rồi [demo contract](../../docs/DEMO_CONTRACT.md).
+Timebox **20 phút**, sau D01 và D02a; có thể làm song song feature agents D02 khi interface đã khóa. Đây là phần Toàn nhận từ đầu, không được cắt xuống thành summary học. Đọc [Knowledge contract](../KNOWLEDGE_CONTRACT.md), [agent/tool contract](../AGENT_TOOL_KNOWLEDGE.md), rồi [demo contract](../../../DEMO_CONTRACT.md).
 
 ## Output và đầu vào
 

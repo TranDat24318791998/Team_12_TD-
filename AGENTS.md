@@ -4,7 +4,7 @@ Hướng dẫn cho Codex khi làm việc trong repo này. Đọc hết file này
 
 ## Phạm vi triển khai hiện hành
 
-Khi làm `tasks/demo/*`, đọc `docs/IMPLEMENTATION_PLAN.md` trước: Toàn sở hữu Agent + Tools + Knowledge. `docs/AGENT_TOOL_KNOWLEDGE.md` chốt tool calling/ACL; `docs/KNOWLEDGE_CONTRACT.md` chốt năm ngăn memory và read/write; `docs/DEMO_CONTRACT.md` chốt runtime/HTTP/media. Các quyết định cụ thể ở đó thay phạm vi demo cũ, task TV1–TV4 giữ làm tham chiếu/phân công gốc. Đây vẫn là đặc tả chưa implement.
+Khi làm phần **Agent + Tools + Knowledge của Toàn**, đọc `docs/plans/toan/README.md` và task tương ứng trong `docs/plans/toan/tasks/`. Hợp đồng runtime/HTTP/media dùng chung ở `docs/DEMO_CONTRACT.md`; task UI/media ở `tasks/demo/`, phân công gốc TV1–TV4 ở `tasks/`. Mỗi member theo phạm vi của mình; thay đổi interface dùng chung phải cập nhật các đầu nối liên quan.
 
 Provider hiện hành: OpenAI cho LLM/ảnh, Muse Gateway theo `docs/MUSE_API.md` cho video. Không dùng nhánh useapi.net cũ. UI/media/DB thuộc lane member tương ứng; không bỏ tool calling/knowledge để làm thay toàn bộ lane đó.
 
