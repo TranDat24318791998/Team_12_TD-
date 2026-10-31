@@ -1,0 +1,27 @@
+{
+  "A": {
+    "accepts_ads": true,
+    "content_style_pref": null,
+    "hidden_voucher_comfort_pct": 5
+  },
+  "B": {
+    "accepts_ads": false,
+    "content_style_pref": null,
+    "hidden_voucher_comfort_pct": null
+  },
+  "C": {
+    "accepts_ads": true,
+    "content_style_pref": null,
+    "hidden_voucher_comfort_pct": null
+  },
+  "D": {
+    "accepts_ads": true,
+    "content_style_pref": "nền sáng",
+    "hidden_voucher_comfort_pct": null
+  },
+  "E": {
+    "accepts_ads": true,
+    "content_style_pref": null,
+    "hidden_voucher_comfort_pct": null
+  }
+}

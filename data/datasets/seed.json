@@ -1,0 +1,237 @@
+{
+  "calendar": [
+    {
+      "date": "2026-11-11",
+      "name": "11.11"
+    }
+  ],
+  "fees": {
+    "fixed_pct": 8,
+    "per_order": 3000,
+    "tax_pct": 1.5,
+    "transaction_pct": 5
+  },
+  "scenario_version": "demo-v1",
+  "shops": {
+    "A": {
+      "persona": {
+        "accepts_ads": true,
+        "content_style_pref": null,
+        "hidden_voucher_comfort_pct": 5
+      },
+      "private": {
+        "owner_name": "anh Minh",
+        "rules": {
+          "ads_daily_max": 100000,
+          "allow_ads": true,
+          "content_style_notes": [],
+          "max_breakeven_roas": 6.5,
+          "min_profit_per_unit": 30000,
+          "require_stop_condition": true,
+          "voucher_max_pct": 10
+        },
+        "unit_cost": 110000
+      },
+      "product_id": "SP001",
+      "public": {
+        "active_voucher_pct": 0,
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "base_impressions": 3000,
+        "category": "quat_mini",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "images": [],
+        "listing_quality": 0.45,
+        "name": "Quạt Xinh Official",
+        "price": 189000,
+        "rating": 4.6,
+        "search_rank_page": 3,
+        "shop_id": "A",
+        "stock": 400,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "video": null
+      }
+    },
+    "B": {
+      "persona": {
+        "accepts_ads": false,
+        "content_style_pref": null,
+        "hidden_voucher_comfort_pct": null
+      },
+      "private": {
+        "owner_name": "chị Hoa",
+        "rules": {
+          "ads_daily_max": 0,
+          "allow_ads": false,
+          "content_style_notes": [],
+          "max_breakeven_roas": 6.5,
+          "min_profit_per_unit": 12000,
+          "require_stop_condition": true,
+          "voucher_max_pct": 5
+        },
+        "unit_cost": 112000
+      },
+      "product_id": "SP002",
+      "public": {
+        "active_voucher_pct": 0,
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "base_impressions": 2000,
+        "category": "quat_mini",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "images": [],
+        "listing_quality": 0.35,
+        "name": "Gió Mát Store",
+        "price": 129000,
+        "rating": 4.6,
+        "search_rank_page": 4,
+        "shop_id": "B",
+        "stock": 250,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "video": null
+      }
+    },
+    "C": {
+      "persona": {
+        "accepts_ads": true,
+        "content_style_pref": null,
+        "hidden_voucher_comfort_pct": null
+      },
+      "private": {
+        "owner_name": "anh Tuấn",
+        "rules": {
+          "ads_daily_max": 80000,
+          "allow_ads": true,
+          "content_style_notes": [],
+          "max_breakeven_roas": 6.5,
+          "min_profit_per_unit": 25000,
+          "require_stop_condition": true,
+          "voucher_max_pct": 10
+        },
+        "unit_cost": 95000
+      },
+      "product_id": "SP003",
+      "public": {
+        "active_voucher_pct": 0,
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "base_impressions": 1500,
+        "category": "quat_mini",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "images": [],
+        "listing_quality": 0.4,
+        "name": "Tiện Ích 24h",
+        "price": 159000,
+        "rating": 4.6,
+        "search_rank_page": 3,
+        "shop_id": "C",
+        "stock": 15,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "video": null
+      }
+    },
+    "D": {
+      "persona": {
+        "accepts_ads": true,
+        "content_style_pref": "nền sáng",
+        "hidden_voucher_comfort_pct": null
+      },
+      "private": {
+        "owner_name": "chị Lan",
+        "rules": {
+          "ads_daily_max": 45000,
+          "allow_ads": true,
+          "content_style_notes": [],
+          "max_breakeven_roas": 6.5,
+          "min_profit_per_unit": 18000,
+          "require_stop_condition": true,
+          "voucher_max_pct": 8
+        },
+        "unit_cost": 115000
+      },
+      "product_id": "SP004",
+      "public": {
+        "active_voucher_pct": 0,
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "base_impressions": 2500,
+        "category": "quat_mini",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "images": [],
+        "listing_quality": 0.55,
+        "name": "Nhà Bé Lan",
+        "price": 175000,
+        "rating": 4.6,
+        "search_rank_page": 3,
+        "shop_id": "D",
+        "stock": 300,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "video": null
+      }
+    },
+    "E": {
+      "persona": {
+        "accepts_ads": true,
+        "content_style_pref": null,
+        "hidden_voucher_comfort_pct": null
+      },
+      "private": {
+        "owner_name": "anh Phúc",
+        "rules": {
+          "ads_daily_max": 50000,
+          "allow_ads": true,
+          "content_style_notes": [],
+          "max_breakeven_roas": 6.5,
+          "min_profit_per_unit": 15000,
+          "require_stop_condition": true,
+          "voucher_max_pct": 5
+        },
+        "unit_cost": 60000
+      },
+      "product_id": "SP005",
+      "public": {
+        "active_voucher_pct": 0,
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "base_impressions": 2200,
+        "category": "quat_mini",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "images": [],
+        "listing_quality": 0.5,
+        "name": "Mát Lạnh Shop",
+        "price": 99000,
+        "rating": 4.6,
+        "search_rank_page": 2,
+        "shop_id": "E",
+        "stock": 350,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "video": null
+      }
+    }
+  },
+  "start_date": "2026-11-01",
+  "trend": {
+    "growth_7d_pct": 240,
+    "keyword": "quạt mini cầm tay"
+  }
+}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiểm tra frontend Growth Agents</title>
+<style>body{font:14px/1.7 system-ui;margin:24px;background:#f5f5f5;color:#222}button{padding:12px 20px;background:#ee4d2d;color:#fff;border:0;border-radius:4px;cursor:pointer}button:disabled{opacity:.5}#layout{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}iframe{border:1px solid #ddd;background:white;max-width:100%}pre{white-space:pre-wrap;max-width:650px}.pass{color:#26704e}.fail{color:#a52820}</style>
+</head>
+<body>
+<h1>Kiểm tra frontend Growth Agents</h1>
+<p>Mở trang này qua HTTP. Bộ kiểm tra dùng dữ liệu xem trước và đặt lại phiên mẫu trong tab hiện tại.</p>
+<button id="run">Chạy kiểm tra giao diện</button>
+<div id="layout"><pre id="log" role="log" aria-live="polite"></pre><iframe id="app" title="Giao diện demo đang kiểm tra" width="390" height="850"></iframe></div>
+<script>
+const frame=document.querySelector('#app'),log=document.querySelector('#log'),run=document.querySelector('#run');
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const doc=()=>frame.contentDocument;
+const find=selector=>doc()?.querySelector(selector);
+const win=()=>frame.contentWindow;
+function enter(selector,value){const el=find(selector);const proto=el.tagName==='TEXTAREA'?win().HTMLTextAreaElement.prototype:win().HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new (win().Event)('input',{bubbles:true}));}
+let count=0;
+function check(condition,message){if(!condition)throw new Error(message);count++;log.textContent+='✓ '+message+'\n';}
+async function until(condition,description,timeout=18000){const start=Date.now();while(Date.now()-start<timeout){try{const result=condition();if(result)return result;}catch{}await pause(80);}throw new Error('Hết thời gian: '+description);}
+async function onPage(name){await until(()=>win().location.pathname.endsWith('/'+name) && doc().body.dataset.page===name && find('.context-bar'),'Mở '+name);}
+function fit(){check(doc().documentElement.scrollWidth<=win().innerWidth+1,'Không cuộn ngang ở '+win().innerWidth+'px: '+win().location.pathname.split('/').at(-1));}
+run.onclick=async()=>{
+  run.disabled=true;count=0;log.className='';log.textContent='Đang chạy…\n';
+  try{
+    if(location.protocol==='file:')throw new Error('Chạy python3 -m http.server 8000 tại repo, rồi mở http://localhost:8000/tests/frontend-smoke.html');
+    sessionStorage.removeItem('growth-agents.react-preview.v3');sessionStorage.removeItem('growth-agents.source');
+    frame.src='../frontend/index.html?preview=1';await onPage('index.html');await until(()=>find('[data-start]'),'Trang shop tải xong');
+    check(doc().body.textContent.includes('175.000đ'),'Hiển thị đúng giá sản phẩm');
+    check(doc().querySelectorAll('[data-thumb]').length===4,'Có 4 ảnh sản phẩm');fit();
+    find('[data-qty="1"]').click();await pause(100);check(find('#quantity').value==='2','Tăng số lượng hoạt động');
+    find('[data-color="Hồng"]').click();await pause(100);check(find('[data-color="Hồng"]').getAttribute('aria-pressed')==='true','Chọn màu hoạt động');
+    find('[data-reset]').click();await until(()=>find('#reset-dialog')?.open,'Mở xác nhận reset');check(find('#reset-dialog').open,'Đặt lại có hộp xác nhận');find('[data-cancel]').click();await until(()=>!find('#reset-dialog')?.open,'Đóng xác nhận reset');
+    find('[data-start]').click();await onPage('demo.html');await until(()=>find('[data-decision="accept"]'),'Thẻ đề xuất xuất hiện');fit();
+    check(!!find('[aria-labelledby="agent-activity-title"]'),'Có sơ đồ tương tác hai agent');
+    check(find('.activity-round').textContent.includes('Vòng 2'),'Vòng hiện tại lấy từ sự kiện, không tự tăng đủ ba vòng');
+    check(find('.package-comparison').textContent.includes('45.000đ'),'Bảng so sánh có điều khoản đã điều chỉnh');
+    check(find('.referee-guardian').textContent.includes('Tiếp tục trao đổi'),'Trọng tài có đánh giá riêng');
+    check(find('[data-night]').disabled,'Chưa duyệt thì không kết thúc ngày');
+    find('[data-filter="negotiation"]').click();await pause(100);check(find('[data-filter="negotiation"]').getAttribute('aria-pressed')==='true','Bộ lọc hậu trường hoạt động');
+    find('[data-negotiate]').click();enter('#seller-message','Giảm voucher còn 2% giúp chị.');await pause(100);
+    find('#composer').requestSubmit();await until(()=>find('.offer-card')?.textContent.includes('Voucher giảm 2%'),'Thẻ thương lượng mới');
+    check(find('.activity-attempt').textContent.includes('2'),'Thương lượng lại có attempt riêng');
+    check(find('.activity-round').textContent.includes('Vòng 1'),'Attempt mới bắt đầu lại từ vòng 1');
+    check(find('.package-comparison').textContent.includes('Gói trước góp ý'),'So sánh với gói trước góp ý');
+    check(!find('#composer [type=submit]').disabled,'Ô gửi được bật lại sau thương lượng');
+    find('[data-decision="accept"]').click();await until(()=>find('[data-retry]'),'Thẻ nội dung xuất hiện');
+    await until(()=>find('[data-apply]') && !find('[data-apply]').disabled,'Ảnh tạo xong');fit();
+    enter('#content-feedback','Ảnh nền sáng hơn.');await pause(100);find('[data-retry]').click();await until(()=>find('.content-card .pill.red')?.textContent.includes('2 / 3'),'Phiên bản nội dung 2');
+    await until(()=>find('[data-apply]') && !find('[data-apply]').disabled,'Ảnh phiên bản 2');
+    find('[name=cover-option][value=B]').click();await pause(100);find('[data-apply]').click();await onPage('updated.html');await until(()=>find('[data-toggle-original]') && find('.badge-new'),'Trang sau áp dụng');fit();
+    const newTitle=find('.product-title').textContent;find('[data-toggle-original]').click();await pause(100);check(find('.product-title').textContent!==newTitle,'Xem bản cũ hoạt động');find('[data-toggle-original]').click();await pause(100);
+    find('[data-night]').click();await onPage('night.html');await until(()=>find('.memory-card'),'Tổng kết ban đêm');fit();
+    check(doc().querySelectorAll('.memory-card').length===4,'Màn đêm có 4 phần bộ nhớ');
+    frame.src='../frontend/index.html?preview=1';await onPage('index.html');await until(()=>find('[data-start]'),'Trang shop ngày 2');find('[data-start]').click();await onPage('demo.html');await until(()=>find('[data-question="true"]'),'Câu hỏi sở thích ngày 2');
+    check(!find('[data-decision="accept"]'),'Thẻ câu hỏi không lặp lại gói đang chạy');find('[data-question="true"]').click();await until(()=>find('[data-night]') && !find('[data-night]').disabled,'Kết thúc sau xác nhận luật');
+    frame.src='../frontend/proof.html?preview=1';await onPage('proof.html');await until(()=>find('.proof-card'),'Màn bằng chứng');fit();
+    check(doc().querySelectorAll('.proof-card').length===4,'Hiển thị đủ 4 chỉ số đối chứng');
+    check(doc().body.textContent.includes('Số liệu minh họa giao diện'),'Bằng chứng mẫu được ghi nhãn rõ');
+    frame.style.maxWidth='none';frame.width='1360';await pause(150);fit();
+    find('[data-restart]').click();await until(()=>find('#reset-dialog')?.open,'Mở xác nhận chạy lại');find('#reset-dialog [name=memory]').click();await pause(100);find('[data-confirm]').click();await onPage('index.html');await until(()=>find('[data-start]'),'Reset hoàn tất');
+    check(find('.panel-stats').textContent.includes('Đang tắt'),'Reset áp dụng lựa chọn tắt bộ nhớ');
+    find('[data-start]').click();await onPage('demo.html');await until(()=>find('[data-decision="reject"]'),'Thẻ để thử từ chối');find('[data-decision="reject"]').click();await until(()=>find('[data-night]') && !find('[data-night]').disabled,'Từ chối hoàn tất');
+    check(!find('.content-card'),'Từ chối không tạo nội dung mới');
+    fit();
+    log.className='pass';log.textContent+='\nHOÀN TẤT: '+count+' kiểm tra giao diện đạt.\n';
+  }catch(error){log.className='fail';log.textContent+='\nLỖI: '+error.message+'\n';}
+  finally{run.disabled=false;}
+};
+</script>
+</body>
+</html>
