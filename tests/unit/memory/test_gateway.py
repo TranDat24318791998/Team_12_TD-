@@ -195,6 +195,11 @@ def test_stop_threshold_cannot_be_reported_as_actual_roas():
     ('Gói đã áp dụng 2 ngày và dừng sau 2 ngày.',False),
     ('Gói đã áp dụng 3 ngày và dừng sau 2 ngày.',True),
     ('Gói đã áp dụng 3 ngày và dừng sau 3 ngày.',False),
+    ('Gói đã áp dụng 2 ngày dừng sau 2 ngày.',False),
+    ('Gói đã áp dụng 3 ngày dừng sau 2 ngày.',True),
+    ('Dừng sau 2 ngày gói đã áp dụng 3 ngày.',True),
+    ('Ngưỡng dừng 6,5 ROAS 6,5.',False),
+    ('Ngưỡng dừng 6,5 ROAS 4,0.',True),
 ])
 def test_lesson_numeric_fields_are_checked_in_their_own_clause(text,expected):
     from app.domain.models.packages import Package

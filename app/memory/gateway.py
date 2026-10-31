@@ -281,15 +281,23 @@ class MemoryGateway:
                     continue
                 value = clause[position]
                 if word == 'roas':
-                    nearby = clause[max(0,index-2):max(index,position)]
-                    threshold = any(label in {'ngưỡng','dừng'} for label in nearby)
+                    preceding = clause[max(0,index-3):index]
+                    # A completed earlier number ends the preceding qualifier's scope.
+                    for offset in range(len(preceding)-1, -1, -1):
+                        if re.fullmatch(r'\d+(?:\.\d+)?', preceding[offset]):
+                            preceding = preceding[offset+1:]
+                            break
+                    between = clause[index+1:position] if position > index else []
+                    threshold = any(label in {'ngưỡng','dừng'} for label in preceding + between)
                     valid = {number(p.stop_roas_below) for p in packages} if threshold else {number(o.roas) for o in outcomes}
                 elif word == 'voucher':
                     valid = {number(p.voucher_pct) for p in packages}
                 elif word == 'đơn':
                     valid = {number(o.orders) for o in outcomes}
                 else:
-                    is_stop_interval = ('dừng' in clause or ('liên' in clause and 'tiếp' in clause)) and not ('hạn' in clause or 'kéo' in clause)
+                    prior_labels = [i for i in range(index) if clause[i] in {'ngày','đơn','voucher','roas'}]
+                    local = clause[(prior_labels[-1]+1 if prior_labels else 0):index]
+                    is_stop_interval = ('dừng' in local or ('liên' in local and 'tiếp' in local)) and not ('hạn' in local or 'kéo' in local)
                     valid = {number(p.stop_after_days if is_stop_interval else p.duration_days) for p in packages}
                 if value not in valid:
                     return False
