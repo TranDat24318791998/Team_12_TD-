@@ -3,6 +3,7 @@
 import re
 import unicodedata
 from hashlib import sha256
+from decimal import Decimal, InvalidOperation
 from threading import RLock
 from app.domain.models.learning import (Calibration, ContentMemoryView, KnowledgeCommit,
     LearningEvidence, MemoryCommit, PlatformMemoryView, Preference, PublicEvidence,
@@ -196,52 +197,75 @@ class MemoryGateway:
         return snapshot.model_copy(deep=True)
 
     def _lesson_grounded(self, op, snapshot):
-        """Accept conservative recommendations grounded in scoped public evidence."""
+        """Accept conservative facts from applied packages and settled public outcomes."""
         state = self.session.states[self.session.settings.demo_shop]
         evidence = [event for event in snapshot.events if event.negotiation_id in op.evidence]
         if not evidence:
             return False
+
+        def tokens(value):
+            value = unicodedata.normalize('NFC', value).casefold()
+            result = []
+            for word in re.findall(r'\d+(?:[.,]\d+)?[^\W\d_]*|[^\W\d_]+', value):
+                if re.fullmatch(r'\d+(?:[.,]\d+)?', word):
+                    try:
+                        word = format(Decimal(word.replace(',', '.')).normalize(), 'f')
+                    except InvalidOperation:
+                        pass
+                result.append(word)
+            return result
+
+        def pair(label, value):
+            if value is None:
+                return
+            number = tokens(str(value))[0]
+            pairs.add((label, number)); pairs.add((number, label))
+
         parts = [state.public.title, state.public.description, *state.public.attributes]
         pairs = set()
         for fact in parts:
-            words = re.findall(r'\w+', unicodedata.normalize('NFC', fact).casefold())
+            words = tokens(fact)
             pairs.update(zip(words, words[1:]))
+        applied = [event for event in evidence if event.type == 'package_applied' and event.package]
+        actual = [event for event in evidence if event.type == 'market_result' and event.outcome]
+        text = unicodedata.normalize('NFC', op.text_vi).casefold()
+        words = tokens(text)
+        if re.search(r'\b(?:đã thực hiện|đã áp dụng|đã chạy|đã kích hoạt)\b', text) and not applied:
+            return False
         for event in evidence:
             if event.feedback_vi and ('sáng' in event.feedback_vi.casefold() or 'tối' in event.feedback_vi.casefold()):
                 parts.append('ảnh nền sáng')
-            if event.package:
-                package = event.package
-                parts.append(package.model_dump_json())
-                for label, value in [('voucher',package.voucher_pct), ('ngân',package.ads_daily_budget),
-                                     ('sách',package.ads_daily_budget), ('ngày',package.duration_days),
-                                     ('ngày',package.stop_after_days), ('roas',package.stop_roas_below),
-                                     ('dừng',package.stop_roas_below)]:
-                    if value is not None:
-                        pairs.add((label, str(value))); pairs.add((str(value), label))
-            if event.outcome:
-                outcome=event.outcome
-                parts.append(outcome.model_dump_json())
-                for label,value in [('đơn',outcome.orders),('thu',outcome.revenue),
-                                    ('chi',outcome.ads_spend),('roas',outcome.roas)]:
-                    if value is not None:
-                        pairs.add((label,str(value))); pairs.add((str(value),label))
-        context = unicodedata.normalize('NFC', ' '.join(parts)).casefold()
-        text = unicodedata.normalize('NFC', op.text_vi).casefold()
+        for event in applied:
+            package = event.package
+            parts.append(package.model_dump_json())
+            for label, value in [('voucher',package.voucher_pct), ('ngân',package.ads_daily_budget),
+                                 ('sách',package.ads_daily_budget), ('ngày',package.duration_days),
+                                 ('ngày',package.stop_after_days), ('dừng',package.stop_roas_below),
+                                 ('ngưỡng',package.stop_roas_below)]:
+                pair(label, value)
+            if 'ngưỡng' in words or 'dừng' in words:
+                pair('roas', package.stop_roas_below)
+        for event in actual:
+            outcome=event.outcome
+            parts.append(outcome.model_dump_json())
+            for label,value in [('đơn',outcome.orders),('thu',outcome.revenue),
+                                ('chi',outcome.ads_spend),('roas',outcome.roas)]:
+                pair(label, value)
         # No causal uplift is established by these simulated observations.
         if re.search(r'\b(?:đem lại|mang lại|khiến|làm tăng|giúp tăng|gây ra)\b.*\b(?:đơn|doanh thu|lãi|roas)\b', text):
             return False
-        numbers = set(re.findall(r'\d+(?:[.,]\d+)?', text))
-        if not numbers <= set(re.findall(r'\d+(?:[.,]\d+)?', context)):
+        context_words = [word for part in parts for word in tokens(part)]
+        number_pattern = r'\d+(?:\.\d+)?'
+        numbers = {word for word in words if re.fullmatch(number_pattern, word)}
+        if not numbers <= {word for word in context_words if re.fullmatch(number_pattern, word)}:
             return False
         # This whitelist favors false negatives over inventing new product or outcome facts.
         neutral = set(('ưu tiên nội dung dễ đọc khi người bán có góp ý cần nên xem xét điều chỉnh '
-                       'dựa trên kết quả dữ liệu học từ phản hồi trước sau phù hợp mục tiêu đề xuất '
+                       'dựa trên kết quả dữ liệu học từ phản hồi trước sau phù hợp đúng mục tiêu đề xuất '
                        'gói chiến lược cửa hàng shop sàn hình ảnh rõ ràng mức độ và với cho của các '
-                       'một là được theo có vì để vào lần tiếp theo dựa đã thực hiện dùng kinh nghiệm '
-                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi').split())
-        allowed = set(re.findall(r'\w+', context)) | neutral
-        words = re.findall(r'\w+', text)
-        if not set(words) <= allowed:
+                       'một là được theo có vì để vào lần tiếp theo dựa đã thực hiện áp dụng chạy kích hoạt dùng kinh nghiệm '
+                       'đơn voucher ngân sách quảng cáo chiến dịch hiệu quả thử thay đổi ngưỡng dừng roas').split())
+        if not set(words) <= set(context_words) | neutral:
             return False
         glue = {'và','với','của','cho','là','được','có','theo','trong','một','các','từ','khi'}
         words = [word for word in words if word not in glue]

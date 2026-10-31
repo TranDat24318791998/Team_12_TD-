@@ -177,3 +177,23 @@ def test_native_platform_bad_brief_falls_back_to_confirmed_brief():
     result=decide_platform(session,'D',[],None,initial_propose=True)
     assert result.package.content_refresh and result.package.duration_days==3
     assert session.last_agent_source=='offline'
+
+
+def test_private_amount_list_never_reaches_platform(monkeypatch):
+    import app.negotiation.graph as graph
+    from app.domain.models.negotiation import ShopTurn
+    from app.domain.validators import clamp_to_rules
+    session=make_session(); state=session.states['D']; observed=[]
+    original=graph.decide_platform
+    def platform(*args,**kwargs):
+        observed.extend(turn.message_vi for turn in args[2])
+        return original(*args,**kwargs)
+    def shop(sess,shop_id,proposal,*args,**kwargs):
+        safe=clamp_to_rules(proposal,state.public,state.private,session.world.fees)
+        return ShopTurn(action='counter',package=safe,message_vi='Chi phí và mức sàn lần lượt là 115.000, 18.000 đồng.',private_note_vi='')
+    monkeypatch.setattr(graph,'decide_platform',platform)
+    monkeypatch.setattr(graph,'decide_shop',shop)
+    result=graph.run_negotiation(session,'D',1,'propose')
+    assert result.status=='agreed' and all('115.000' not in item and '18.000' not in item for item in observed)
+    public=''.join(e.model_dump_json() for e in session.log.since(session.run_id,0))
+    assert '115.000' not in public and '18.000' not in public

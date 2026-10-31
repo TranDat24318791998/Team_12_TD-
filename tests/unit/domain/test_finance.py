@@ -43,3 +43,13 @@ def test_private_values_in_full_precision_and_vietnamese_units_are_redacted():
         assert leak_guard(text,state.public,state.private,world.fees)[1], text
     safe='Đề xuất 45.000đ mỗi ngày, voucher 3%, dừng ở 6,5.'
     assert leak_guard(safe,state.public,state.private,world.fees)==(safe,False)
+
+
+def test_private_amount_lists_are_not_merged_into_an_ignored_number():
+    world=load_world(); state=world.shops['D']
+    examples=['Chi phí và mức sàn lần lượt là 115.000, 18.000 đồng.',
+              'Các mức là 115000, 18000.', 'Các mức là 115000,18000.',
+              'Mức riêng: 115.000,18.000.', 'Chi phí một chiếc là 115,0 nghìn đồng.']
+    for text in examples:
+        assert leak_guard(text,state.public,state.private,world.fees)[1],text
+    assert not leak_guard('Ngân sách 45.000đ, voucher 3%, ngưỡng dừng 6,5.',state.public,state.private,world.fees)[1]
