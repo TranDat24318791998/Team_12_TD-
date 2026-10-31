@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Marketing Lab</title>
+<style>
+body{font:16px system-ui;background:#f3f5f8;color:#182b45;margin:0}main{max-width:1080px;margin:36px auto;padding:24px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.card{background:white;border:1px solid #dce3eb;padding:24px;border-radius:16px}label{display:block;margin:16px 0 6px}input,textarea,select,button{box-sizing:border-box;font:inherit;width:100%;padding:11px;border:1px solid #c8d1df;border-radius:8px}textarea{min-height:90px}button{background:#173c68;color:white;margin-top:22px;cursor:pointer}button:disabled{opacity:.5}video{width:100%;max-height:620px;background:#102037;border-radius:12px}small{color:#536579}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef2f6;padding:12px}h1{font-size:30px}.inline{display:flex;align-items:center;gap:8px}.inline input{width:auto}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
+<main><h1>Video Marketing Lab</h1><p>GPT viết prompt và script. Muse tạo video người thật hoặc hoạt hình 3D chibi từ ảnh quảng cáo một mẫu quạt. Video lưu trong MinIO.</p><p><a href="/docs" target="_blank">Mở tài liệu API</a></p>
+<section class="card"><h2>1. Tạo ảnh quảng cáo JPG</h2><p>Dùng token ở ô bên dưới. Upload logo và sản phẩm, chọn phong cách; ảnh tạo xong có thể dùng ngay cho video.</p>
+<form id="imageForm"><label for="logoFile">Logo nhà bán hàng</label><input id="logoFile" type="file" accept="image/*" required>
+<label for="productFile">Ảnh sản phẩm</label><input id="productFile" type="file" accept="image/*" required>
+<label for="imageStyle">Phong cách ảnh</label><select id="imageStyle"><option value="clean_white">Nền trắng thương mại điện tử</option><option value="pastel_lifestyle">Lifestyle pastel</option><option value="premium_studio">Studio cao cấp</option><option value="summer_fresh">Mùa hè tươi mát</option></select>
+<label for="styleFile">Ảnh style tham chiếu (tùy chọn)</label><input id="styleFile" type="file" accept="image/*">
+<button id="imageSubmit">Tạo ảnh bằng OpenAI</button><p id="imageStatus" role="status"></p></form>
+<img id="imagePreview" alt="Ảnh quảng cáo được tạo" style="display:none;width:100%;max-width:550px;border-radius:12px">
+<p id="imageLinks"></p><button id="useImage" type="button" hidden>Dùng ảnh này tạo video</button><details><summary>Kết quả API ảnh</summary><pre id="imageInfo"></pre></details></section>
+<h2>2. Tạo video từ ảnh quảng cáo</h2><div class="grid"><form class="card" id="form">
+<small>Trang kiểm thử local. Giao diện Sites chính dùng server proxy để giữ token ở backend.</small>
+<label for="token">Video API token (từ .env, không phải OpenAI key)</label><input id="token" type="password" required autocomplete="off">
+<label for="asset">Ảnh tham chiếu quạt (tùy chọn với Muse)</label><input id="asset" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime">
+<label for="product">Tên sản phẩm</label><input id="product" value="Quạt để bàn" maxlength="90" required>
+<label for="description">Mô tả đúng một mẫu quạt</label><textarea id="description" maxlength="900">Một chiếc quạt để bàn màu trắng, lồng tròn, ba cánh, chân đế tròn. Chỉ một chiếc và một mẫu xuyên suốt video.</textarea>
+<label for="presenter">Nhân vật giới thiệu</label><input id="presenter" value="Một phụ nữ Việt Nam trưởng thành, trang phục giản dị, cử chỉ tự nhiên." maxlength="300">
+<label for="setting">Bối cảnh</label><input id="setting" value="Góc làm việc ở nhà với bàn gỗ, ánh sáng ban ngày, không có quạt khác." maxlength="300">
+<label for="facts">Thông số đã xác minh (mỗi dòng một thông số)</label><textarea id="facts" placeholder="Chỉ điền thông số có thật"></textarea>
+<label for="script">Lời thuyết minh (trống để OpenAI viết)</label><textarea id="script" maxlength="1200"></textarea>
+<label for="mode">Cách tạo video</label><select id="mode"><option value="muse">GPT + Muse: người giới thiệu và quạt chuyển động</option><option value="motion_graphics">Ảnh và chuyển động camera (chế độ cũ)</option><option value="source_video">Dùng video gốc (chế độ cũ)</option><option value="local_i2v">Model image-to-video local (cần cài riêng)</option></select>
+<label for="outputType">Loại video</label><select id="outputType"><option value="realistic_human">Người thật</option><option value="chibi_3d">Hoạt hình 3D chibi</option></select><label for="duration">Thời lượng yêu cầu</label><select id="duration"><option value="5">5 giây</option><option value="10">10 giây</option><option value="15">15 giây</option></select>
+<label for="voice">Giọng đọc</label><select id="voice"><option value="muse">Giữ giọng nói Muse theo script GPT</option><option value="openai">Thay bằng OpenAI tiếng Việt (không bảo đảm khẩu hình)</option><option value="none">Không thuyết minh</option></select>
+<label class="inline"><input id="generate" type="checkbox"> Tạo thêm một keyframe bằng OpenAI (phát sinh phí ảnh)</label>
+<label class="inline"><input id="auto" type="checkbox" checked disabled> GPT viết script và prompt cho Muse</label>
+<button id="submit">Tạo video</button><p id="status" role="status">Chưa tạo job.</p>
+</form><section class="card"><video id="video" controls playsinline preload="metadata"></video><p id="link"></p><h3>Kịch bản GPT</h3><p id="scriptPreview">Chưa có kịch bản.</p><button id="history" type="button">Tải các video đã tạo</button><div id="jobs"></div><details><summary>Chi tiết API và prompt</summary><pre id="info">Kết quả và trạng thái sẽ hiện ở đây.</pre></details><small>Mỗi video dành cho một sản phẩm. Kiểm tra khung hình chỉ hỗ trợ đánh giá; người bán vẫn cần duyệt thiết kế và thông số trước khi sử dụng.</small></section></div></main>
+<script>
+const $=id=>document.getElementById(id);
+let generatedImageAsset=null;let useGeneratedImage=false;
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function api(path,options={}){
+ options.headers={...options.headers,Authorization:'Bearer '+$('token').value,'X-Owner-ID':'local-demo'};
+ const response=await fetch(path,options);const data=await response.json();
+ if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;
+}
+$('asset').onchange=()=>{useGeneratedImage=false;if($('asset').files[0]?.type.startsWith('video/'))$('mode').value='source_video';};
+function showJob(job){
+ $('info').textContent=JSON.stringify(job,null,2);$('scriptPreview').textContent=job.result?.script||job.result?.creative?.narration||'Đang viết kịch bản...';
+ $('link').replaceChildren();
+ if(job.video_url){$('video').src=job.video_url;const a=document.createElement('a');a.href=job.watch_url||job.video_url;a.textContent='Mở trang video / link public có thời hạn';a.target='_blank';a.rel='noreferrer';$('link').append(a);}
+}
+$('mode').onchange=()=>{const muse=$('mode').value==='muse';$('asset').required=!muse;$('generate').disabled=muse;if(muse)$('generate').checked=false;$('auto').disabled=muse;$('auto').checked=true;$('voice').value=muse?'muse':'openai';};
+$('mode').onchange();
+$('history').onclick=async()=>{try{const data=await api('/v1/jobs');$('jobs').replaceChildren();for(const job of data.jobs){const b=document.createElement('button');b.type='button';b.textContent=job.status+' · '+(job.result?.provider||job.result?.mode||'video')+' · '+job.job_id.slice(0,8);b.onclick=async()=>{const fresh=await api('/v1/jobs/'+job.job_id);showJob(fresh);$('status').textContent=fresh.stage;};$('jobs').append(b);}}catch(error){$('status').textContent=error.message;}};
+$('form').onsubmit=async event=>{
+ event.preventDefault();$('submit').disabled=true;$('link').replaceChildren();$('video').removeAttribute('src');
+ try{
+  $('status').textContent='Đang tải file...';
+  let asset=useGeneratedImage?{asset_id:generatedImageAsset}:null;if($('asset').files[0]){const upload=new FormData();upload.append('file',$('asset').files[0]);asset=await api('/v1/assets',{method:'POST',body:upload});}
+  let job=await api('/v1/jobs',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({input_asset_id:asset?.asset_id||null,product_name:$('product').value,product_description:$('description').value,presenter:$('presenter').value,setting:$('setting').value,verified_facts:$('facts').value.split('\n').filter(Boolean),script:$('script').value,output_type:$('outputType').value,mode:$('mode').value,voice:$('voice').value,music:'none',duration:Number($('duration').value),generate_image:$('generate').checked,generate_script:$('auto').checked})});
+  while(!['done','failed'].includes(job.status)){
+   $('status').textContent=job.status+' · '+job.stage;$('info').textContent=JSON.stringify(job,null,2);
+   await pause(2500);job=await api('/v1/jobs/'+job.job_id);
+  }
+  showJob(job);$('status').textContent=job.error||(job.result?.visual_review_passed===false?'Đã tạo video; cần kiểm tra hình ảnh trước khi dùng.':'Đã lưu video và tạo link phát.');
+ }catch(error){$('status').textContent=error.message;}finally{$('submit').disabled=false;}
+};
+$('imageForm').onsubmit=async event=>{
+ event.preventDefault();$('imageSubmit').disabled=true;
+ try{
+ const form=new FormData();form.append('logo',$('logoFile').files[0]);form.append('product',$('productFile').files[0]);form.append('style',$('imageStyle').value);if($('styleFile').files[0])form.append('style_reference',$('styleFile').files[0]);
+ $('imageStatus').textContent='OpenAI đang tạo ảnh...';
+ let job=await api('/v1/images?wait=false',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:form});
+ while(!['done','failed'].includes(job.status)){ $('imageStatus').textContent=job.stage; await pause(2000);job=await api('/v1/jobs/'+job.job_id);}
+ $('imageInfo').textContent=JSON.stringify(job,null,2);if(job.status==='failed')throw Error(job.error);
+ generatedImageAsset=job.asset_id;$('imagePreview').src=job.image_url;$('imagePreview').style.display='block';$('useImage').hidden=false;
+ $('imageLinks').replaceChildren();const a=document.createElement('a');a.href=job.image_url;a.textContent='Mở ảnh JPG public';a.target='_blank';$('imageLinks').append(a,document.createTextNode(' · '+job.result.minio_uri));
+ $('imageStatus').textContent='Đã tạo JPG và lưu MinIO.';
+ }catch(e){$('imageStatus').textContent=e.message;}finally{$('imageSubmit').disabled=false;}
+};
+$('useImage').onclick=()=>{useGeneratedImage=true;$('asset').value='';$('status').textContent='Đã chọn ảnh quảng cáo vừa tạo; chọn loại video và thời lượng rồi bấm Tạo video.';$('outputType').focus();};
+</script></html>

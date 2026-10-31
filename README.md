@@ -85,4 +85,8 @@ Agent data đọc [yêu cầu về data](docs/FRONTEND_DATA_REQUIREMENTS.md): gr
 
 ## Link demo
 
+## Thử nghiệm video marketing
+
+`experiment/` là dịch vụ FastAPI độc lập cho OpenAI script/ảnh/giọng, render local, lưu MinIO và phát video qua Cloudflare Tunnel. Xem [hướng dẫn experiment](experiment/README.md). Từ gốc repo, chạy `cd experiment` trước các lệnh trong hướng dẫn; dùng môi trường `.venv` riêng của experiment.
+
 ## Video demo
