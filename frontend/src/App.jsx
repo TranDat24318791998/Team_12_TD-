@@ -6,7 +6,7 @@ import {NightPage} from './pages/Night.jsx';
 import {ProofPage} from './pages/Proof.jsx';
 import {pageURL} from './format.js';
 import {useRun} from './useRun.js';
-import {sellerFeedback} from './activity.js';
+import {waitingForNegotiation} from './activity.js';
 
 export function App({client,page=globalThis.location?.pathname.split('/').pop() || 'index.html'}){
   const demo=page==='demo.html',proof=page==='proof.html';
@@ -18,7 +18,7 @@ export function App({client,page=globalThis.location?.pathname.split('/').pop() 
   useEffect(()=>{if(proof)document.title='Học qua bộ nhớ · Growth Agents';},[proof]);
   useEffect(()=>{if(run.state?.demo_shop)document.title=run.state.demo_shop.name+' · ShopPilot AI';},[run.state?.demo_shop?.name]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),5500);return()=>clearTimeout(timer);},[notice]);
-  async function endDay(){if(run.state?.step==='day_done' && !sellerFeedback(run.state,run.events).waiting && await run.act('/api/night',{expected_day:run.state.day}))navigate('night.html');}
+  async function endDay(){if(run.state?.step==='day_done' && !waitingForNegotiation(run.state,run.events) && await run.act('/api/night',{expected_day:run.state.day}))navigate('night.html');}
   async function jumpToDay7(){
     if(await run.act('/api/demo/jump-day7'))navigate('proof.html?day=7');
   }

@@ -2,12 +2,12 @@ import {SIMULATION_DAYS} from '../config.js';
 import {useEffect,useRef,useState} from 'react';
 import {Icon} from './Icon.jsx';
 import {asset,pageURL,modeLabel} from '../format.js';
-import {journeyProgress,sellerFeedback} from '../activity.js';
+import {journeyProgress,sellerFeedback,waitingForNegotiation} from '../activity.js';
 
 export function Logo({preview}){return <a className="brand" href={pageURL('index.html',preview)} aria-label="ShopPilot AI, trang shop"><img className="brand-logo" src={asset('shoppilot-ai.png')} alt="ShopPilot AI"/></a>;}
 export function Shell({preview,state,events=[],compact=false,comparison=false,pending,onEndDay,onJumpToDay7,onNotice,cart=0,children}){
   const shop=state?.demo_shop;
-  const waiting=pending==='/api/decision' || state && sellerFeedback(state,events).waiting;
+  const waiting=pending==='/api/decision' || state && (waitingForNegotiation(state,events) || sellerFeedback(state,events).restored);
   const [query,setQuery]=useState('');
   useEffect(()=>{if(shop)setQuery(shop.title);},[shop?.title]);
   return <>

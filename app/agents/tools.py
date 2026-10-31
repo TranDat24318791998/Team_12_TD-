@@ -132,8 +132,11 @@ def bind_role_tools(session, role, shop_id, *, turns=(), proposal=None, brief=No
         return CampaignCatalogResult(items=sorted(items, key=lambda item: item.campaign_id)[:5])
 
     def referee_context(_):
+        accepted=turns[-1] if turns and turns[-1].action=='accept' and turns[-1].package else None
         return RefereeContext(brief=scoped_brief.model_copy(deep=True), turns=list(turns),
-                              public_check_codes=list(public_check_codes))
+                              public_check_codes=list(public_check_codes),
+                              forecast=forecast(PackageArgs(package=accepted.package)) if accepted else None,
+                              forecast_turn_id=accepted.turn_id if accepted else None)
 
     def content_context(_):
         card = session.pending_card

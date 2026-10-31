@@ -31,7 +31,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
   function card(db,voucher=3) {
     const question = db.state.memory_enabled && db.styleCandidate && db.state.day>1 && !db.styleConfirmed && db.state.day>(db.styleDeclinedUntil || 0);
     const onlyQuestion = question && db.state.active_package && db.state.active_package.end_day >= db.state.day;
-    return {card_id:`D-${db.state.day}-${db.negotiations}`,negotiation_id:onlyQuestion?null:`D-${db.state.day}-attempt${db.negotiations}`,shop_id:'D',day:db.state.day,kind:onlyQuestion?'question':'offer',
+    return {card_id:`D-${db.state.day}-${db.negotiations}`,version:1,brief_version:db.state.brief?.version,negotiation_id:onlyQuestion?null:`D-${db.state.day}-attempt${db.negotiations}`,shop_id:'D',day:db.state.day,kind:onlyQuestion?'question':'offer',can_negotiate:!onlyQuestion && db.negotiations<MAX_NEGOTIATION_ATTEMPTS,renegotiations_left:Math.max(0,MAX_NEGOTIATION_ATTEMPTS-db.negotiations),
       package:onlyQuestion?null:packageFor(voucher),forecast:onlyQuestion?null:{low:18,point:24,high:30,factor_used:1,stock_warning:false},
       profit_after_fees_per_unit:onlyQuestion?null:(voucher===3?27136:28632),breakeven_roas_display:onlyQuestion?null:6.5,
       reasons_vi:['Sản phẩm thuộc nhóm từ khóa đang được quan tâm.','Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.','Gói được kiểm tra theo giới hạn chủ shop.'],warnings_vi:[],notices_vi:[],
@@ -49,7 +49,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       while(db.queue.length && db.queue[0].at<=elapsed) {
         const item=db.queue.shift();
         if(item.finish){db.state.step='day_done';}
-        else if(item.card){ db.state.pending_card=card(db,item.voucher || 3); db.state.step='awaiting_decision'; event(db,'card_sent','system','Đã gửi thẻ đề xuất để chị Lan quyết định.',{card_id:db.state.pending_card.card_id,negotiation_id:db.state.pending_card.negotiation_id,card:db.state.pending_card}); }
+        else if(item.card || item.restore){ db.state.pending_card=item.restore?{...item.restore,card_id:item.restored_card_id,version:1,can_negotiate:db.negotiations<MAX_NEGOTIATION_ATTEMPTS,renegotiations_left:Math.max(0,MAX_NEGOTIATION_ATTEMPTS-db.negotiations)}:card(db,item.voucher || 3); db.state.step='awaiting_decision'; event(db,'card_sent','system','Đã gửi thẻ đề xuất để chị Lan quyết định.',{card_id:db.state.pending_card.card_id,negotiation_id:db.state.pending_card.negotiation_id,card:db.state.pending_card}); }
         else {
           const data={...(item.data || {})};
           if(item.type==='referee_review')data.evidence_refs=db.events.filter(ev=>['platform_turn','shop_turn'].includes(ev.type) && ev.data.negotiation_id===data.negotiation_id).slice(-2).map(ev=>ev.seq);
@@ -130,6 +130,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       result={day:s.day,step:s.step};
     } else if(url.pathname==='/api/decision' && method==='POST') {
       if(s.step!=='awaiting_decision' || !s.pending_card || body.card_id!==s.pending_card.card_id) fail('Thẻ này không còn chờ quyết định.');
+      if(body.expected_card_version!=null && body.expected_card_version!==s.pending_card.version || body.expected_brief_version!=null && body.expected_brief_version!==s.pending_card.brief_version) fail('Thẻ hoặc yêu cầu đã thay đổi.');
       if(!['accept','reject','negotiate'].includes(body.action)) fail('Quyết định không hợp lệ.');
       const selected=clone(s.pending_card);
       event(db,'seller_decision','seller',body.note_vi || ({accept:'Chị Lan đã đồng ý.',reject:'Chị Lan đã từ chối.',negotiate:'Chị Lan muốn thương lượng thêm.'}[body.action]),{card_id:body.card_id,action:body.action,note_vi:body.note_vi || '',rule_answer:body.rule_answer??null});
@@ -137,17 +138,18 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       if(selected.rule_question && body.rule_answer===false) db.styleDeclinedUntil=s.day+14;
       if(body.action==='negotiate') {
         if(selected.kind==='question') fail('Thẻ này chỉ dùng xác nhận sở thích.');
-        if(db.negotiations>=MAX_NEGOTIATION_ATTEMPTS) fail('Đã đủ 2 phiên thương lượng trong ngày. Chị có thể đồng ý hoặc từ chối gói hiện tại.');
+        if(db.negotiations>=MAX_NEGOTIATION_ATTEMPTS) fail('Đã đủ hai lần thương lượng thêm trong ngày. Chị có thể đồng ý hoặc từ chối gói hiện tại.');
         db.negotiations++;s.step='negotiating';s.pending_card=null;db.started=now();
         const negotiation_id=`D-${s.day}-attempt${db.negotiations}`;
         s.renegotiation={source_card_id:selected.card_id,negotiation_id,status:'running',reason_vi:null,referee_action:null};
         const supported=(body.note_vi || '').trim().toLocaleLowerCase('vi').replace(/[.!?…]+$/u,'').trim()==='giảm voucher còn 2%';
-        const terminal=supported?{source_card_id:selected.card_id,negotiation_id,status:'agreed',changed:true,reason_vi:null,referee_action:'continue'}:{source_card_id:selected.card_id,negotiation_id,status:'failed',reason_vi:'Bản xem trước chỉ minh họa yêu cầu giảm voucher còn 2%; không xử lý góp ý tự do.',referee_action:null};
+        const restored_card_id=`D-${s.day}-${db.negotiations}-restored`;
+        const terminal=supported?{source_card_id:selected.card_id,negotiation_id,status:'agreed',changed:true,reason_vi:null,referee_action:'continue'}:{source_card_id:selected.card_id,negotiation_id,status:'failed',reason_vi:'Bản xem trước chỉ minh họa yêu cầu giảm voucher còn 2%; không xử lý góp ý tự do.',referee_action:null,restoration_status:'restored',restored_card_id,restoration_reason_vi:''};
         db.queue=[
           {at:300,type:'agent_activity',actor:'shop_agent',text:'Agent shop đang xem góp ý mới của chị.',data:{negotiation_id,task_id:negotiation_id+'-shop-1',round:1,phase:'response',status:'running',label_vi:'Agent shop đang xem góp ý của chị'}},
           ...(!supported?[
             {at:700,type:'negotiation_finished',actor:'system',text:'Bản xem trước không xử lý góp ý này.',data:terminal},
-            {at:700,finish:true}
+            {at:700,restore:{...selected,rule_question:body.rule_answer==null?selected.rule_question:null},restored_card_id}
           ]:[
           {at:700,type:'shop_turn',actor:'shop_agent',text:'Đã nhận góp ý của chị. Đề nghị giảm voucher còn 2%.',data:{negotiation_id,round:1,action:'counter',package:packageFor(2),private_note_vi:'Chỉ thay đổi trong phạm vi người bán cho phép.',redacted:true}},
           {at:1100,type:'code_check',actor:'code',text:'Gói điều chỉnh vẫn nằm trong các giới hạn của chủ shop.',data:{negotiation_id,ok:true,checks:[previewCheck(true,'Voucher 2% không làm tăng chi quảng cáo.')]}},

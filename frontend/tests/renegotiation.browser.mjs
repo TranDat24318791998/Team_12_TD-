@@ -52,7 +52,7 @@ try{
   state={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'running'}};
   await page.waitForTimeout(2000);
   assert.equal(await page.locator('[data-night]').count(),0);
-  state={...state,renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'failed',referee_action:'ask_human',reason_vi:'Cần người bán xem lại yêu cầu.'}};
+  state={...state,renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'failed',restoration_status:'blocked',restoration_reason_vi:'Gói trước không còn hợp lệ.',referee_action:'ask_human',reason_vi:'Cần người bán xem lại yêu cầu.'}};
   operation='succeeded';
   await page.locator('#chat-content').getByText('Cần người bán xem lại yêu cầu.').waitFor({timeout:6000});
   assert.equal(await page.locator('#chat-content [data-night]').count(),1);

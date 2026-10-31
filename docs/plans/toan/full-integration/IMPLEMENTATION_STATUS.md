@@ -91,3 +91,11 @@ Artifact D: comparison `group_4349d9bc018e4cdfbdc9`, ON `run_a716ec6e871f46d289f
 - Reference catalog hiện có3Platform/2Content records. Trước khi mở rộng catalog cần chọn version mới nhất và cap5 như Knowledge review; demo hiện tại dùng bộ nhỏ này.
 
 Lệnh vận hành và giới hạn local/reboot/sleep ở [LOCAL_RUN](../../../LOCAL_RUN.md); contracts chung ở [DEMO_CONTRACT](../../../DEMO_CONTRACT.md).
+
+## FI06 — day1, trả lại offer và Terra xhigh
+
+Bản sửa đã ghép vào main ngày31/10/2026: trọng tài được cung cấp forecast của đúng gói vừa accept và phải làm rõ stop/refocus mâu thuẫn trong giới hạn3request; thiếu lời giải thích không được tự thành agreed. Deal thêm không thành công thì kiểm lại offer trước, cấp thẻ mới và tăng proposal version, giữ nguồn negotiation/decision; seller vẫn phải duyệt. Phiên cũ có POST /api/negotiation/restore tường minh, không mutation từ GET/reload. Close day và settle cùng chặn offer chưa xử lý.
+
+Cấu hình ứng dụng được chuẩn bị gpt-6.1-terra/xhigh, timeout120giây, Responses toolcalling và cache binding theo model/effort; key vẫn ở env ignored. Không restart hai dịch vụ nên phiên hiện hành chưa nạp source/model mới. Không chạy generation để thử.
+
+Verification: aggregate197passed+15subtests;1test media lỗi hạ tầng thiếu experiment/.venv trong worktree, đã chạy lại ở repo chính1passed. Data57pass;29focused và9regressions sau guard cuối pass; UI86pass,4headless vàrealData→React recovery pass;24LLM/settings/replay pass với fakeHTTP SDK. AstraPASS gồm recheck độc lập day-closure, snapshot, quyền, Responses/tool/budget. Model lookup có xác thực200 không thay cho generation thực.

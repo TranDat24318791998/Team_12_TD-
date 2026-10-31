@@ -20,6 +20,8 @@ class Settings(BaseModel):
     openai_api_key: str = Field(default="", repr=False)
     llm_model: str = ""
     llm_model_reflect: str = ""
+    llm_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None = None
+    llm_timeout_seconds: float = Field(default=8, gt=0, allow_inf_nan=False)
     openai_image_model: str = ""
     llm_mode: Literal["auto", "live", "replay", "offline"] = "auto"
     useapi_token: str = Field(default="", repr=False)

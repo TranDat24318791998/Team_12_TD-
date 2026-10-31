@@ -1287,6 +1287,15 @@
       "roles": ["seller"],
       "public": false,
       "scope": ["seller_session", "comparison", "shop_D"]
+    },
+    {
+      "id": "API-079",
+      "method": "POST",
+      "path": "/api/negotiation/restore",
+      "handler": "restore_offer",
+      "roles": ["seller"],
+      "public": false,
+      "scope": ["seller_session", "shop_D", "operation", "source_card"]
     }
   ]
 }

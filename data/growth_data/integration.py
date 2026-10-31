@@ -9,7 +9,7 @@ from urllib.parse import urlsplit,parse_qs
 
 from . import models as M
 from .errors import Fault, require
-from .finance import redact, financials
+from .finance import redact, financials, violation_message
 from .simulation import business_date, aggregate
 from .storage import dumps, fingerprint, insert, many, now, one, timestamps, uid
 
@@ -35,6 +35,96 @@ class IntegrationMixin:
         insert(c, "operations", run_id=r, operation_id=oid, day=run["current_day"], kind=f"renegotiate:{card_id}", status="queued", result_json={"source_card_id": card_id, "owner_note_vi": note}, error_code=None, lease_until=None, claimed_by=None, **timestamps())
         c.execute("UPDATE runs SET phase='negotiating',version=version+1 WHERE run_id=?", (r,))
         return oid
+
+    def restore_negotiation_offer(self, c, r, op, *, known_failure=False):
+        """Return the seller's prior offer only after a known, failed adjustment attempt."""
+        result=op['result'] or {}
+        if not result.get('source_card_id') or result.get('restoration_status'):
+            return result
+        run=self.entity(c,'runs',r,'run_id',r);shop=run['demo_shop_id']
+        receipt=one(c,"SELECT response_json FROM idempotency_records WHERE principal_id='native_orchestrator' AND run_scope=? AND path='native/negotiation' AND key=?",(r,op['operation_id']+':'+shop))
+        nid=receipt['response'].get('negotiation_id') if receipt and receipt['response'] else None
+        failed=one(c,"SELECT * FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id=? AND day=? AND status='failed'",(r,nid,shop,op['day']))
+        if not failed and not (known_failure and not receipt):return result
+        source=one(c,"SELECT * FROM cards WHERE run_id=? AND card_id=? AND shop_id=? AND day=? AND kind='offer' AND status='resolved'",(r,result['source_card_id'],shop,op['day']))
+        prop=one(c,'SELECT * FROM proposals WHERE run_id=? AND proposal_id=?',(r,source['proposal_id'])) if source else None
+        original=one(c,"SELECT * FROM negotiations WHERE run_id=? AND negotiation_id=? AND status IN ('agreed','warning_only') AND final_proposal_id=?",(r,prop['negotiation_id'],prop['proposal_id'])) if prop else None
+        decision=one(c,"SELECT * FROM decisions WHERE run_id=? AND target_type='proposal' AND target_id=? ORDER BY rowid DESC LIMIT 1",(r,prop['proposal_id'])) if prop else None
+        requested=one(c,"SELECT seq FROM events WHERE run_id=? AND type='seller_decision' AND json_extract(payload_json,'$.decision_id')=? AND json_extract(payload_json,'$.card_id')=? AND json_extract(payload_json,'$.action')='negotiate'",(r,decision['decision_id'],source['card_id'])) if decision and source else None
+        reasons=[]
+        if not (source and prop and original and decision and requested and decision['action']=='request_changes' and prop['status']=='rejected'):
+            reasons.append('Không còn đề xuất gốc đang chờ người bán lựa chọn.')
+        elif (run['current_day']!=op['day'] or run['phase'] in {'settling','learning','day_closed','complete'}
+              or one(c,"SELECT card_id FROM cards WHERE run_id=? AND shop_id=? AND status='pending'",(r,shop))
+              or one(c,"SELECT campaign_id FROM campaigns WHERE run_id=? AND shop_id=? AND status='active'",(r,shop))
+              or one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND operation_id!=? AND status IN ('queued','running')",(r,op['day'],op['operation_id']))):
+            reasons.append('Trạng thái hiện tại chưa cho phép gửi lại đề xuất gốc.')
+        else:
+            checked,versions=self.evaluation(c,r,shop,prop['package'])
+            reasons.extend(violation_message(code) for code in checked['violations'])
+            brief=run['brief'];pkg=prop['package']
+            if not brief or not brief.get('confirmed'):reasons.append('Mục tiêu chưa được xác nhận.')
+            else:
+                if pkg['content_refresh']!=brief['content_refresh']:reasons.append(violation_message('BRIEF_CONTENT_MISMATCH'))
+                if pkg['duration_days']!=brief['duration_days']:reasons.append(violation_message('BRIEF_DURATION_MISMATCH'))
+                if pkg['ads_daily_budget'] and not brief['allow_ads']:reasons.append(violation_message('BRIEF_ADS_DISABLED'))
+                if brief['ads_daily_cap'] is not None and pkg['ads_daily_budget']>brief['ads_daily_cap']:reasons.append(violation_message('PUBLIC_ADS_CAP'))
+            if self.public(c,r,shop)['stock']<30:reasons.append('Tồn kho chưa đủ để gửi lại đề xuất.')
+        restored=None
+        if not reasons:
+            c.execute("UPDATE proposals SET status='awaiting_seller',version=version+1,based_on_rules_version=?,updated_at=? WHERE run_id=? AND proposal_id=?",(versions['rules_version'],now(),r,prop['proposal_id']))
+            version=c.execute('SELECT COALESCE(MAX(evaluation_version),0)+1 FROM proposal_private_evaluations WHERE run_id=? AND proposal_id=?',(r,prop['proposal_id'])).fetchone()[0]
+            insert(c,'proposal_private_evaluations',run_id=r,proposal_id=prop['proposal_id'],evaluation_version=version,**versions,passed=True,violations_json=[],unit_contribution_vnd=checked['unit_contribution_vnd'],break_even_roas=checked['break_even_roas'],evaluated_at=now())
+            self.snapshot_forecast(c,r,shop,prop,op['day'])
+            prop=self.entity(c,'proposals',r,'proposal_id',prop['proposal_id'])
+            self.event(c,r,op['day'],'code_check','orchestrator',shop,{'negotiation_id':prop['negotiation_id'],'proposal_id':prop['proposal_id'],'round':prop['round'],'ok':True,'checks':self.check_details(c,r,shop,checked,versions)},visibility='shop_private',text='Đã kiểm tra lại đề xuất gốc')
+            restored=self.make_card(c,r,shop,op['day'],prop)
+            c.execute("UPDATE runs SET phase='awaiting_seller',version=version+1 WHERE run_id=?",(r,))
+        info={'restoration_status':'blocked' if reasons else 'restored',
+              'restored_card_id':restored['card_id'] if restored else None,
+              'restoration_reason_vi':' '.join(dict.fromkeys(reasons)) if reasons else 'Chưa có gói điều chỉnh; mời xem lại đề xuất gốc.'}
+        self.event(c,r,op['day'],'offer_restored' if restored else 'offer_restore_blocked','orchestrator',shop,
+                   {'operation_id':op['operation_id'],'source_card_id':result['source_card_id'],'negotiation_id':nid,
+                    'original_negotiation_id':prop['negotiation_id'] if prop else None,'proposal_id':prop['proposal_id'] if prop else None,**info},
+                   visibility='shop_private',text=info['restoration_reason_vi'])
+        return {**result,**info}
+
+    def restore_failed_offer(self, c, p, r, body):
+        run=self.scope(c,p,r,'D',{'seller'});b=M.OfferRestore.model_validate(body)
+        require(run['config'].get('driver',{}).get('agent_version')=='native','RESTORE_UNAVAILABLE','Chỉ hỗ trợ đề xuất native')
+        require(run['current_day']==b.expected_day and run['brief_version']==b.expected_brief_version,'STALE_CARD','Ngày hoặc mục tiêu đã thay đổi')
+        op=self.entity(c,'operations',r,'operation_id',b.operation_id)
+        latest=one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND kind LIKE 'renegotiate:%' ORDER BY rowid DESC LIMIT 1",(r,b.expected_day))
+        require(latest and latest['operation_id']==op['operation_id'] and op['version']==b.expected_operation_version,'STALE_OPERATION','Tác vụ thương lượng đã thay đổi')
+        require(op['day']==b.expected_day and op['status'] in {'succeeded','failed'} and 'UNKNOWN' not in (op['error_code'] or '')
+                and op['result'] and op['result'].get('source_card_id')==b.source_card_id,'RESTORE_UNAVAILABLE','Tác vụ chưa có kết quả xác định')
+        require(not op['result'].get('restoration_status'),'RESTORE_ALREADY_PROCESSED','Đề xuất gốc đã được xử lý')
+        require(not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND status IN ('queued','running')",(r,b.expected_day)), 'BUSY','Đang chờ tác vụ hoàn tất')
+        source=self.entity(c,'cards',r,'card_id',b.source_card_id)
+        require(source['shop_id']=='D' and source['day']==b.expected_day and source['version']==b.expected_source_card_version and source['status']=='resolved','STALE_CARD','Thẻ đề xuất gốc đã thay đổi')
+        receipt=one(c,"SELECT response_json FROM idempotency_records WHERE principal_id='native_orchestrator' AND run_scope=? AND path='native/negotiation' AND key=?",(r,op['operation_id']+':D'))
+        neg=one(c,"SELECT status FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id='D' AND day=?",(r,receipt['response'].get('negotiation_id'),b.expected_day)) if receipt and receipt['response'] else None
+        require((neg and neg['status']=='failed') or (not receipt and op['error_code']=='NATIVE_OPERATION_FAILED'),'RESTORE_UNAVAILABLE','Thương lượng chưa thất bại với kết quả xác định')
+        restored=self.restore_negotiation_offer(c,r,op,known_failure=not receipt)
+        require(restored.get('restoration_status'),'RESTORE_UNAVAILABLE','Không còn đề xuất gốc để gửi lại')
+        c.execute('UPDATE operations SET result_json=?,version=version+1,updated_at=? WHERE run_id=? AND operation_id=?',(dumps(restored),now(),r,op['operation_id']))
+        return {key:restored[key] for key in ('restoration_status','restored_card_id','restoration_reason_vi')}
+
+    def pending_offer_restoration(self, c, r, day, shop):
+        run=self.entity(c,'runs',r,'run_id',r)
+        if run['config'].get('driver',{}).get('agent_version')!='native':return False
+        op=one(c,"SELECT * FROM operations WHERE run_id=? AND day=? AND kind LIKE 'renegotiate:%' ORDER BY rowid DESC LIMIT 1",(r,day))
+        if not op or op['status'] not in {'succeeded','failed'} or 'UNKNOWN' in (op['error_code'] or ''):return False
+        result=op['result'] or {}
+        if result.get('restoration_status') or not result.get('source_card_id'):return False
+        source=one(c,"SELECT * FROM cards WHERE run_id=? AND card_id=? AND shop_id=? AND day=? AND kind='offer' AND status='resolved'",(r,result['source_card_id'],shop,day))
+        if not source:return False
+        decision=one(c,"SELECT action FROM decisions WHERE run_id=? AND target_type='proposal' AND target_id=? ORDER BY rowid DESC LIMIT 1",(r,source['proposal_id']))
+        if not decision or decision['action']!='request_changes':return False
+        receipt=one(c,"SELECT response_json FROM idempotency_records WHERE principal_id='native_orchestrator' AND run_scope=? AND path='native/negotiation' AND key=?",(r,op['operation_id']+':'+shop))
+        if not receipt:return op['status']=='failed' and op['error_code']=='NATIVE_OPERATION_FAILED'
+        return bool(one(c,"SELECT negotiation_id FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id=? AND day=? AND status='failed'",(r,receipt['response'].get('negotiation_id'),shop,day)))
+
     def fee_config(self, c, r, version=None, day=None):
         version = version or one(c, "SELECT fee_policy_version FROM run_policies WHERE run_id=?", (r,))["fee_policy_version"]
         day=day if day is not None else self.entity(c,"runs",r,"run_id",r)["current_day"]
@@ -118,6 +208,8 @@ class IntegrationMixin:
                 "FORBIDDEN", "Operation chưa được giao cho caller", 403)
         require(op["version"] == b.expected_version and op["status"] == "running")
         require(op["lease_until"] and op["lease_until"]>=now(),"LEASE_EXPIRED","Lease operation đã hết hạn")
+        if op['kind'].startswith('renegotiate:') and (b.status=='succeeded' or (b.status=='failed' and b.error_code=='NATIVE_OPERATION_FAILED')):
+            op['result']=self.restore_negotiation_offer(c,r,op,known_failure=b.status=='failed')
         if b.status == "succeeded":
             require(not one(c, "SELECT negotiation_id FROM negotiations WHERE run_id=? AND day=? AND status='running'", (r, op["day"])),
                     "NEGOTIATION_PENDING", "Còn thương lượng chưa hoàn tất")

@@ -590,6 +590,7 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         native=run['config'].get('driver',{}).get('agent_version')=='native'
         require(not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND (kind='start_day' OR kind LIKE 'renegotiate:%') AND status!='succeeded' AND (status!='failed' OR ?=0)",(r,b.day,native)),"OPERATION_PENDING","Tác vụ agent chưa hoàn tất")
         require(not one(c,"SELECT negotiation_id FROM negotiations WHERE run_id=? AND day=? AND status='running'",(r,b.day)),"NEGOTIATION_PENDING","Thương lượng chưa hoàn tất")
+        require(not self.pending_offer_restoration(c,r,b.day,s),'OFFER_REVIEW_REQUIRED','Cần xem lại hoặc xử lý đề xuất gốc trước khi kết thúc ngày')
         require(not one(c,"SELECT j.job_id FROM content_jobs j, json_each(j.provider_state_json) slot WHERE j.run_id=? AND j.shop_id=? AND json_extract(slot.value,'$.status') IN ('reserved','running','unknown','outcome_unknown')",(r,s)),"PROVIDER_OUTCOME_UNKNOWN","Còn kết quả media chưa rõ")
         require(not one(c,"SELECT * FROM cards WHERE run_id=? AND shop_id=? AND status='pending'",(r,s)),"PENDING_CARD","Cần người bán xử lý thẻ")
         require(not one(c,"SELECT proposal_id FROM proposals WHERE run_id=? AND shop_id=? AND status='accepted'",(r,s)),"PENDING_APPLY","Gói đã duyệt còn chờ nội dung/kích hoạt")
@@ -695,6 +696,7 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
             native=run['config'].get('driver',{}).get('agent_version')=='native'
             require(not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND (kind='start_day' OR kind LIKE 'renegotiate:%') AND status!='succeeded' AND (status!='failed' OR ?=0)",(r,b.expected_day,native)),"OPERATION_PENDING","Tác vụ agent chưa hoàn tất")
             require(not one(c,"SELECT negotiation_id FROM negotiations WHERE run_id=? AND day=? AND status='running'",(r,b.expected_day)),"NEGOTIATION_PENDING","Thương lượng chưa hoàn tất")
+            require(not self.pending_offer_restoration(c,r,b.expected_day,run['demo_shop_id']),'OFFER_REVIEW_REQUIRED','Cần xem lại hoặc xử lý đề xuất gốc trước khi kết thúc ngày')
             require(not one(c,"SELECT j.job_id FROM content_jobs j, json_each(j.provider_state_json) slot WHERE j.run_id=? AND json_extract(slot.value,'$.status') IN ('reserved','running','unknown','outcome_unknown')",(r,)),"PROVIDER_OUTCOME_UNKNOWN","Còn kết quả media chưa rõ")
             require(not one(c,"SELECT * FROM cards WHERE run_id=? AND status='pending'",(r,)),"PENDING_CARD","Cần xử lý thẻ trước khi kết thúc ngày")
             require(not one(c,"SELECT proposal_id FROM proposals WHERE run_id=? AND status='accepted'",(r,)),"PENDING_APPLY","Gói đã duyệt còn chờ áp dụng")

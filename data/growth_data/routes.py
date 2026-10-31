@@ -64,6 +64,15 @@ def register_integration_routes(app, service, facade, identity, respond):
         result=service.command(p,r,request.url.path,request.headers.get("Idempotency-Key"),{"target_content_id":cid,**b},lambda c:service.restore_content(c,p,r,cid,b))
         return respond(request,p,result,legacy=True)
 
+    @app.post('/api/negotiation/restore')
+    def restore_offer(request:Request,body:M.OfferRestore):
+        p=identity(request)
+        require(p.role=='seller' and p.session_id,'FORBIDDEN','Cần phiên người bán',403)
+        with service.store.connect() as c:r=facade.current(c,p)['run_id']
+        b=body.model_dump()
+        result=command(request,p,r,b,lambda c:service.restore_failed_offer(c,p,r,b))
+        return respond(request,p,result,legacy=True)
+
     @app.post("/api/v1/comparisons")
     def create_comparison(request:Request,background:BackgroundTasks,body:M.ComparisonCreate):
         p=identity(request);b=body.model_dump()

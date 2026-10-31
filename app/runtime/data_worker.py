@@ -233,7 +233,10 @@ class DataWorker:
                     if neg['status']=='running':
                         s.finalize_negotiation(c,principal,r,active_neg,{'expected_version':neg['version'],'status':'failed','final_proposal_id':None,'rounds':neg['platform_rounds'],'reason_vi':'Tác vụ agent chưa hoàn tất','referee_action':None})
                 if current['status']=='running' and current['claimed_by']==principal.principal_id:
-                    c.execute("UPDATE operations SET status='failed',error_code='NATIVE_OPERATION_FAILED',lease_until=NULL,version=version+1,updated_at=? WHERE run_id=? AND operation_id=?",(now(),r,op['operation_id']))
+                    if current['lease_until'] and current['lease_until']>=now():
+                        s.operation_result(c,principal,r,op['operation_id'],{'expected_version':current['version'],'status':'failed','error_code':'NATIVE_OPERATION_FAILED'})
+                    else:
+                        c.execute("UPDATE operations SET status='failed',error_code='LEASE_EXPIRED_RESULT_UNKNOWN',lease_until=NULL,version=version+1,updated_at=? WHERE run_id=? AND operation_id=?",(now(),r,op['operation_id']))
 
     async def _content(self, job):
         from app.content.service import ContentService

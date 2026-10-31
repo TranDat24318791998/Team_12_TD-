@@ -29,6 +29,14 @@ class LLMClient:
 
     def invoke_tools(self, messages, *, tools, tool_choice, parallel_tool_calls, run_name, model=None, call_id=None, replay_context=None):
         self.last_source = None
+        selected_model = model or self.settings.llm_model
+        if replay_context is not None:
+            replay_context = dict(replay_context)
+            if selected_model:
+                replay_context['model_id'] = selected_model
+            if self.settings.llm_reasoning_effort is not None:
+                replay_context['model_parameters'] = {**replay_context.get('model_parameters', {}),
+                                                      'reasoning_effort': self.settings.llm_reasoning_effort}
         mode = self.settings.resolved_mode()
         if mode == 'replay':
             if self.replay_cache is None or replay_context is None:
@@ -41,12 +49,18 @@ class LLMClient:
                 raise LLMUnavailable('REPLAY_MISS') from exc
             self.last_source = 'replay'
             return response
-        if mode != 'live' or not self.available or not (model or self.settings.llm_model):
+        if mode != 'live' or not self.available or not selected_model:
             raise LLMUnavailable('model_not_configured')
         try:
-            client = self.model_factory(model=model or self.settings.llm_model,
-                                        api_key=self.settings.openai_api_key,
-                                        timeout=8, max_retries=0)
+            options = {'model':selected_model,'api_key':self.settings.openai_api_key,
+                       'timeout':self.settings.llm_timeout_seconds,'max_retries':0}
+            if selected_model == 'gpt-6.1-terra':
+                options['use_responses_api'] = True
+                if self.settings.llm_reasoning_effort is not None:
+                    options['reasoning'] = {'effort':self.settings.llm_reasoning_effort}
+            elif self.settings.llm_reasoning_effort is not None:
+                options['reasoning_effort'] = self.settings.llm_reasoning_effort
+            client = self.model_factory(**options)
             bound = client.bind_tools(tools, strict=True, tool_choice=tool_choice,
                                       parallel_tool_calls=parallel_tool_calls)
         except (ValueError, TypeError) as exc:

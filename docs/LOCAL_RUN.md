@@ -22,6 +22,17 @@ Trong một media process, tối đa ba job được xử lý đồng thời; �
 - Logo ShopPilot AI ở `frontend/img/shoppilot-ai.png` giữ nguyên ảnh người dùng gửi. Trỏ DEMO_LOGO_IMAGE_PATH tới file này để các job media mới dùng cùng logo với giao diện; không cần tạo lại file hoặc đổi tên shop.
 - Secrets chỉ nằm trong env ignored/quyền0600. Không source/cat env trong log, đưa token vào browser hoặc truyền secret trên argv.
 
+Profile LLM được yêu cầu cho ứng dụng:
+
+```dotenv
+LLM_MODEL=gpt-6.1-terra
+LLM_MODEL_REFLECT=gpt-6.1-terra
+LLM_REASONING_EFFORT=xhigh
+LLM_TIMEOUT_SECONDS=120
+```
+
+Transport dùng Responses API cho tool calling của Terra; model và effort được gắn vào replay binding. Config chỉ được nạp lúc tạo app/worker; phiên đang chạy không tự đổi model khi sửa file.
+
 Server dùng mode hiện tại trong cấu hình/environment. **Các thao tác demo ở live có thể gọi provider**; health/readiness/start không được tạo job mới để thử. Kiểm không trả phí dùng mode offline và fake providers/temp homes. Không thay mode của process đang chạy bằng cách chỉ sửa env; stop/start để nạp lại, giữ DB.
 
 ```sh

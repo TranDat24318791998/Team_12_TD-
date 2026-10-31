@@ -64,3 +64,14 @@ def test_invalid_configuration_is_rejected():
         Settings(_env_file=None, llm_mode="invalid")
     with pytest.raises(ValidationError):
         Settings(_env_file=None, max_live_calls_per_session=-1)
+
+
+def test_llm_reasoning_and_timeout_are_validated_and_env_configurable(tmp_path):
+    env=tmp_path/'settings.env'
+    env.write_text('LLM_MODEL=gpt-6.1-terra\nLLM_REASONING_EFFORT=xhigh\nLLM_TIMEOUT_SECONDS=120\n',encoding='utf-8')
+    value=Settings(_env_file=env)
+    assert value.llm_reasoning_effort=='xhigh' and value.llm_timeout_seconds==120
+    assert Settings(_env_file=None).llm_reasoning_effort is None
+    assert Settings(_env_file=None).llm_timeout_seconds==8
+    with pytest.raises(ValidationError): Settings(_env_file=None,llm_reasoning_effort='bogus')
+    with pytest.raises(ValidationError): Settings(_env_file=None,llm_timeout_seconds=0)

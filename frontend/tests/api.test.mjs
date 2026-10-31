@@ -123,8 +123,37 @@ test('preview cannot claim an arbitrary request was accepted as a voucher change
   let clock=0;const client=createClient({preview:true,storage:storage(),now:()=>clock});
   let state=await client.request('/api/state');await client.request('/api/brief/confirm',{method:'POST',body:state.brief_preset});
   await client.request('/api/day/start',{method:'POST'});clock+=6000;state=await client.request('/api/state');
-  const source=state.pending_card.card_id;await client.request('/api/decision',{method:'POST',body:{card_id:source,action:'negotiate',note_vi:'giảm thêm dc khong'}});
+  const source=state.pending_card.card_id,original=state.pending_card.package;await client.request('/api/decision',{method:'POST',body:{card_id:source,action:'negotiate',note_vi:'giảm thêm dc khong'}});
   state=await client.request('/api/state');assert.equal(state.step,'negotiating');assert.equal(state.renegotiation.source_card_id,source);
   clock+=3000;state=await client.request('/api/state');
-  assert.equal(state.pending_card,null);assert.equal(state.renegotiation.status,'failed');assert.match(state.renegotiation.reason_vi,/xem trước/i);
+  assert.equal(state.step,'awaiting_decision');assert.deepEqual(state.pending_card.package,original);assert.equal(state.renegotiation.restoration_status,'restored');assert.equal(state.renegotiation.status,'failed');assert.match(state.renegotiation.reason_vi,/xem trước/i);
+});
+
+test('preview restores the original offer after an unsupported feedback and preserves the attempt cap across reload',async()=>{
+  let clock=0;const session=storage();let client=createClient({preview:true,storage:session,now:()=>clock});
+  let state=await client.request('/api/state');await client.request('/api/brief/confirm',{method:'POST',body:state.brief_preset});
+  await client.request('/api/day/start',{method:'POST'});clock+=6000;state=await client.request('/api/state');
+  const original=state.pending_card;
+  await client.request('/api/decision',{method:'POST',body:{card_id:original.card_id,expected_card_version:original.version,action:'negotiate',note_vi:'giảm thêm dc khong'}});
+  clock+=3000;state=await client.request('/api/state');
+  assert.equal(state.step,'awaiting_decision');assert.deepEqual(state.pending_card.package,original.package);assert.notEqual(state.pending_card.card_id,original.card_id);
+  assert.equal(state.renegotiation.restored_card_id,state.pending_card.card_id);assert.equal(state.pending_card.can_negotiate,true);
+  await assert.rejects(client.request('/api/decision',{method:'POST',body:{card_id:original.card_id,action:'accept'}}),/không còn chờ/);
+  await assert.rejects(client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,expected_card_version:state.pending_card.version+1,action:'accept'}}),/đã thay đổi/);
+  client=createClient({preview:true,storage:session,now:()=>clock});state=await client.request('/api/state');
+  await client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,expected_card_version:state.pending_card.version,action:'negotiate',note_vi:'giảm thêm dc khong'}});
+  clock+=3000;state=await client.request('/api/state');assert.equal(state.step,'awaiting_decision');assert.equal(state.pending_card.can_negotiate,false);
+  await assert.rejects(client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,action:'negotiate',note_vi:'thử tiếp'}}),/đủ.*thương lượng/i);
+  await client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,expected_card_version:state.pending_card.version,action:'accept'}});
+  state=await client.request('/api/state');assert.equal(state.step,'content_review');
+});
+
+test('preview can reject a restored offer without applying the package',async()=>{
+  let clock=0;const client=createClient({preview:true,storage:storage(),now:()=>clock});
+  let state=await client.request('/api/state');await client.request('/api/brief/confirm',{method:'POST',body:state.brief_preset});
+  await client.request('/api/day/start',{method:'POST'});clock+=6000;state=await client.request('/api/state');
+  await client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,action:'negotiate',note_vi:'giảm thêm'}});
+  clock+=3000;state=await client.request('/api/state');
+  await client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,expected_card_version:state.pending_card.version,action:'reject'}});
+  state=await client.request('/api/state');assert.equal(state.step,'day_done');assert.equal(state.active_package,null);assert.equal(state.content_draft,null);
 });

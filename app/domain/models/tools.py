@@ -4,6 +4,7 @@ from app.domain.models.shops import StrictModel, ShopPublic, ShopPrivate
 from app.domain.models.intent import IntentBrief
 from app.domain.models.packages import Package
 from app.domain.models.negotiation import PublicTurn, Violation
+from app.domain.models.metrics import Forecast
 from typing import Literal
 from hashlib import sha256
 from pydantic import Field, model_validator
@@ -83,6 +84,8 @@ class RefereeContext(StrictModel):
     brief: IntentBrief
     turns: list[PublicTurn]
     public_check_codes: list[str]
+    forecast: Forecast | None = None
+    forecast_turn_id: str | None = None
 
 
 class ContentContext(StrictModel):

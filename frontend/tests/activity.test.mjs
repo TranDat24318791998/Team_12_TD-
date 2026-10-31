@@ -143,3 +143,37 @@ test('an unknown outcome never presents an old running task as active',()=>{
   const activity=deriveActivity(value,[feedback,task]);
   assert.equal(activity.running,null);assert.match(activity.label,/Chưa xác định/);
 });
+
+test('initial stop is not converted into an agreement or completed seller steps',()=>{
+  const current={...state,step:'day_done',negotiation:{negotiation_id:'n-1',status:'failed',reason_vi:'Cần xem lại.',referee_action:'stop'}};
+  const events=[acceptance,event(6,'referee_review',{action:'stop'})];
+  const activity=deriveActivity(current,events);
+  assert.equal(activity.outcome,'stopped');assert.match(activity.label,/Trọng tài đã dừng/);
+  assert.deepEqual([...journeyProgress(current,events).skipped],[2,3,4]);
+});
+
+test('initial status uses only current attempt and keeps unknown from showing an active task',()=>{
+  const task=event(7,'agent_activity',{negotiation_id:'n-1',task_id:'t',status:'running',round:1,phase:'response'});
+  const other=event(8,'referee_review',{negotiation_id:'old',action:'stop'},{text_vi:'Lý do cũ'});
+  const unknown={...state,step:'day_done',negotiation:{negotiation_id:'n-1',status:'unknown',reason_vi:'Chưa rõ.',referee_action:null}};
+  const activity=deriveActivity(unknown,[task,other]);
+  assert.equal(activity.running,null);assert.match(activity.label,/Chưa xác định/);assert.equal(journeyProgress(unknown,[task,other]).current,1);
+  const running={...unknown,negotiation:{negotiation_id:'n-1',status:'running'}};
+  assert.equal(journeyProgress(running,[event(1,'negotiation_finished',{negotiation_id:'old',status:'failed'})]).current,1);
+});
+
+test('technical initial failure is not mislabeled as a previous referee stop',()=>{
+  const prior=event(1,'referee_review',{negotiation_id:'n-1',action:'stop'},{text_vi:'Trọng tài từng yêu cầu dừng.'});
+  const current={...state,step:'day_done',negotiation:{negotiation_id:'n-1',status:'failed',reason_vi:'Tác vụ bị gián đoạn.',referee_action:null}};
+  const activity=deriveActivity(current,[prior]);
+  assert.equal(activity.outcome,'failed');assert.match(activity.label,/Chưa có gói để chị duyệt/);assert.ok(!activity.label.includes('Trọng tài đã dừng'));
+  const ask={...current,negotiation:{...current.negotiation,referee_action:'ask_human'}};
+  assert.match(deriveActivity(ask,[prior]).label,/yêu cầu làm rõ/);
+});
+
+test('a blocked restoration skips seller approval, content and apply',()=>{
+  const feedback=event(6,'seller_decision',{card_id:'c-1',action:'negotiate',target_type:'proposal'});
+  const attempt=[feedback,event(7,'platform_turn',{negotiation_id:'n-2',action:'accept'}),event(8,'referee_review',{negotiation_id:'n-2',action:'stop'})];
+  const value={...state,step:'day_done',renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'failed',restoration_status:'blocked',restoration_reason_vi:'Gói trước không còn hợp lệ.'}};
+  assert.deepEqual([...journeyProgress(value,attempt).skipped],[2,3,4]);
+});

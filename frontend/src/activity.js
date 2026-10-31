@@ -15,17 +15,41 @@ export function sellerFeedback(state,events=[]){
   if(feedback && result?.source_card_id!==feedback.data.card_id)result=null;
   if(!feedback && latest){
     const decidedCard=own.findLast(event=>event.type==='card_sent' && (event.data?.card_id || event.data?.card?.card_id)===latest.data?.card_id);
-    if(decidedCard?.data?.negotiation_id && decidedCard.data.negotiation_id===result?.negotiation_id)result=null;
+    if(latest.data?.card_id && latest.data.card_id===result?.restored_card_id || decidedCard?.data?.negotiation_id && decidedCard.data.negotiation_id===result?.negotiation_id)result=null;
   }
   const source=feedback?.data?.card_id || result?.source_card_id;
   if(!source || ['idle','night_done','complete','content_review'].includes(state.step))return {waiting:false};
   const card=state.pending_card;
   const cardEvent=own.findLast(event=>event.type==='card_sent' && (event.data?.card_id || event.data?.card?.card_id)===card?.card_id);
-  const newCard=state.step==='awaiting_decision' && card && card.card_id!==source &&
-    ((feedback && cardEvent?.seq>feedback.seq) || (result?.status==='agreed' && result.negotiation_id && card.negotiation_id===result.negotiation_id));
+  const restored=state.step==='awaiting_decision' && result?.status==='failed' && result.restoration_status==='restored' && card?.card_id && card.card_id===result.restored_card_id;
+  if(restored)return {waiting:false,result,card:true,restored:true};
+  const newCard=state.step==='awaiting_decision' && card && card.card_id!==source && card.negotiation_id &&
+    (result?result.status==='agreed' && card.negotiation_id===result.negotiation_id:
+      feedback && cardEvent?.seq>feedback.seq && cardEvent.data?.negotiation_id===card.negotiation_id && card.negotiation_id!==feedback.data.negotiation_id);
   if(newCard)return {waiting:false,result,card:true};
-  if(state.step==='day_done' && result?.status==='failed')return {waiting:false,result};
+  if(state.step==='day_done' && result?.status==='failed' && result.restoration_status==='blocked')return {waiting:false,result};
   return {waiting:true,result};
+}
+
+export function initialNegotiation(state,events=[]){
+  if(state.step!=='day_done' || state.pending_card || state.renegotiation)return null;
+  const own=scopedEvents(state,events).filter(event=>event.shop_id===state.demo_shop.shop_id);
+  if(own.some(event=>event.type==='seller_decision' && event.data?.target_type!=='rule_question'))return null;
+  let result=state.negotiation;
+  if(!result){
+    const latest=own.findLast(event=>negotiationTypes.has(event.type) || event.type==='negotiation_finished');
+    if(latest?.type!=='negotiation_finished' || !latest.data?.negotiation_id)return null;
+    result=latest.data;
+  }
+  if(!['queued','running','agreed','failed','unknown'].includes(result.status))return null;
+  const review=own.findLast(event=>event.type==='referee_review' && event.data?.negotiation_id===result.negotiation_id && ['stop','ask_human'].includes(event.data?.action));
+  const referee_action=Object.hasOwn(result,'referee_action')?result.referee_action:review?.data?.action;
+  const reason_vi=result.reason_vi || (referee_action && review?.data?.action===referee_action?review.text_vi:null);
+  return {result:{...result,referee_action,reason_vi},waiting:result.status!=='failed'};
+}
+
+export function waitingForNegotiation(state,events=[]){
+  return sellerFeedback(state,events).waiting || !!initialNegotiation(state,events)?.waiting;
 }
 
 export function deriveActivity(state,events=[]){
@@ -65,12 +89,13 @@ export function deriveActivity(state,events=[]){
   const cardEvent=own.findLast(event=>event.type==='card_sent');
   // A decision event may arrive one poll before its StateView. Do not revive the old card.
   const feedback=sellerFeedback(state,events);
+  const initialResult=initialNegotiation(state,events);
   const awaiting=state.step==='awaiting_decision' && !feedback.waiting;
-  const negotiating=state.step==='negotiating' || feedback.waiting;
+  const negotiating=state.step==='negotiating' || feedback.waiting || !!initialResult?.waiting;
   const question=!negotiating && (state.pending_card || cardEvent?.data?.card)?.kind==='question';
   const decision=own.findLast(event=>event.type==='seller_decision' && event.seq>(lastTurn?.seq ?? boundary));
-  const outcome=awaiting?'waiting_seller':decision?.data.action==='reject'?'rejected':decision && ['accept','edit'].includes(decision.data.action)?'approved':lastTurn?.data.action==='withdraw' || lastTurn?.data.action==='reject'?'no_fit':currentTask?.status==='failed'?'failed':currentTask?.status==='stopped'?'stopped':lastTurn?.data.action==='accept'?'agreed':negotiating?'negotiating':'idle';
-  const running=negotiating && feedback.result?.status!=='unknown' && currentTask?.status==='running' && ['platform_agent','shop_agent','code','referee'].includes(currentTask.actor) && !['no_fit','stopped'].includes(outcome)?currentTask:null;
+  const outcome=awaiting?'waiting_seller':initialResult?.result.status==='failed'?(initialResult.result.referee_action==='stop'?'stopped':'failed'):decision?.data.action==='reject'?'rejected':decision && ['accept','edit'].includes(decision.data.action)?'approved':lastTurn?.data.action==='withdraw' || lastTurn?.data.action==='reject'?'no_fit':currentTask?.status==='failed'?'failed':currentTask?.status==='stopped'?'stopped':lastTurn?.data.action==='accept'?'agreed':negotiating?'negotiating':'idle';
+  const running=negotiating && feedback.result?.status!=='unknown' && initialResult?.result.status!=='unknown' && currentTask?.status==='running' && ['platform_agent','shop_agent','code','referee'].includes(currentTask.actor) && !['no_fit','stopped'].includes(outcome)?currentTask:null;
   const round=Math.max(0,...turns.map(event=>Number.isInteger(event.data.round)?event.data.round:0),Number.isInteger(currentTask?.round)?currentTask.round:0);
   const ids=[...new Set(own.filter(event=>negotiationTypes.has(event.type)).map(event=>event.data?.negotiation_id).filter(Boolean))];
   if(negotiationId && !ids.includes(negotiationId))ids.push(negotiationId);
@@ -90,6 +115,10 @@ export function deriveActivity(state,events=[]){
   if(outcome==='stopped')label='Đã dừng thương lượng';
   if(outcome==='rejected')label='Chủ shop đã từ chối · Không áp dụng gói này';
   if(outcome==='approved')label=question?'Đã ghi nhận câu trả lời về sở thích':state.step==='content_review'?'Chủ shop đã duyệt gói · Đang ở bước nội dung':'Đã ghi nhận quyết định của chủ shop';
+  if(initialResult?.result.status==='failed')label=initialResult.result.referee_action==='stop'?'Trọng tài đã dừng thương lượng · Chưa có gói để chị duyệt':initialResult.result.referee_action==='ask_human'?'Trọng tài yêu cầu làm rõ · Chưa có gói để chị duyệt':'Chưa có gói để chị duyệt';
+  if(initialResult?.result.status==='agreed')label='Đang chờ thẻ đề xuất để chị duyệt';
+  if(initialResult?.result.status==='unknown')label='Chưa xác định được kết quả thương lượng';
+  if(feedback.waiting && feedback.result?.status==='failed')label=feedback.result.restoration_allowed?'Chờ chị kiểm tra lại gói trước':'Chưa thể kiểm tra lại gói trước';
   if(feedback.result?.status==='unknown')label='Chưa xác định được kết quả thương lượng';
   if(state.step==='complete')label='Đã hoàn tất phiên mô phỏng';
   const lastDirection=lastTurn?.type==='shop_turn'?'to-platform':lastTurn?'to-shop':'waiting';
@@ -99,13 +128,16 @@ export function deriveActivity(state,events=[]){
 
 export function journeyProgress(state,events=[],pending){
   const dayEvents=scopedEvents(state,events);
-  const current=pending==='/api/night'?5:sellerFeedback(state,events).waiting?1:({idle:0,negotiating:1,awaiting_decision:2,content_review:3,day_done:4,night_done:6,complete:6}[state.step] ?? 0);
+  const initial=initialNegotiation(state,events);
+  const current=pending==='/api/night'?5:waitingForNegotiation(state,events)?1:({idle:0,negotiating:1,awaiting_decision:2,content_review:3,day_done:4,night_done:6,complete:6}[state.step] ?? 0);
   const lastCard=state.pending_card || dayEvents.findLast(event=>event.type==='card_sent')?.data?.card;
   const decision=dayEvents.findLast(event=>event.type==='seller_decision');
   const noFit=deriveActivity(state,events).outcome==='no_fit';
   const declined=decision?.data?.action==='reject';
   const question=lastCard?.kind==='question';
   const skipped=new Set();
+  if(initial?.result.status==='failed'){skipped.add(2);skipped.add(3);skipped.add(4);}
+  if(sellerFeedback(state,events).result?.restoration_status==='blocked'){skipped.add(2);skipped.add(3);skipped.add(4);}
   if(question && !dayEvents.some(event=>turnTypes.has(event.type))){skipped.add(0);skipped.add(1);}
   if((declined || noFit || question) && current>=4){skipped.add(3);skipped.add(4);}
   if(lastCard?.package?.content_refresh===false && current>=3)skipped.add(3);

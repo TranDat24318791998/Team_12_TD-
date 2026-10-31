@@ -560,7 +560,7 @@ def test_pending_renegotiation_and_failed_night_are_truthful(tmp_path):
             assert c.execute("SELECT COUNT(*) FROM operations WHERE run_id=? AND kind='night'",(run,)).fetchone()[0]==1
 
 
-def test_seller_renegotiation_exposes_ask_human_reason(tmp_path):
+def test_seller_renegotiation_exposes_ask_human_reason_and_restores_original_offer(tmp_path):
     defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
     app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
     settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
@@ -593,11 +593,13 @@ def test_seller_renegotiation_exposes_ask_human_reason(tmp_path):
         worker.llm_factory=lambda run,settings,store:AskHumanTransport(settings,set())
         worker._operation(op)
         state=client.get('/api/state').json()
-        assert not state['pending_card']
+        assert state['pending_card'] and state['pending_card']['card_id']!=card['card_id']
+        assert state['pending_card']['proposal_id']==card['proposal_id']
         outcome=state.get('renegotiation') or {}
         assert outcome.get('source_card_id')==card['card_id'] and outcome.get('status')=='failed',state
         assert outcome['referee_action']=='ask_human'
         assert outcome['reason_vi']=='Dự báo chưa bảo đảm mục tiêu; cần người bán xem xét.'
+        assert outcome['restoration_status']=='restored' and outcome['restored_card_id']==state['pending_card']['card_id']
         events=all_events(client,run)
         finished=next(e for e in reversed(events) if e['type']=='negotiation_finished' and e['data']['negotiation_id']==outcome['negotiation_id'])
         assert finished['data']['source_card_id']==card['card_id']

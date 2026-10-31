@@ -89,7 +89,7 @@ def _can_finish(role, output, successful, tools):
     return False
 
 
-def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_name, replay_context=None):
+def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_name, replay_context=None, validate_output=None):
     if role not in ROLE_TOOLS:
         raise ValueError('unknown role')
     tools = {name: tool for name, tool in tools.items() if name in ROLE_TOOLS[role]}
@@ -186,6 +186,16 @@ def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_
             output = validated[0][1]
             if not _can_finish(role, output, successful, tools):
                 return offline('prerequisite_failed')
+            error = validate_output(output) if validate_output else None
+            if error:
+                log('tool_result', {'role': role, 'tool_name': terminal, 'tool_call_id': ids[0],
+                                    'requested_by': 'model', 'source': model_source, 'status': 'failed',
+                                    'error_code': 'TERMINAL_OUTPUT_INVALID', 'invocation_id': run_name})
+                if step == 2:
+                    return offline('terminal_output_invalid')
+                conversation.append(ToolMessage(content=json.dumps({'error': error}, ensure_ascii=False),
+                                                name=terminal, tool_call_id=ids[0]))
+                continue
             if hasattr(llm,'confirm_replay'): llm.confirm_replay(call_id)
             log('agent_completed', {'role': role, 'source': model_source, 'error_code': None, 'invocation_id': run_name})
             return AgentRun(output, model_source, list(trace_ids), None)

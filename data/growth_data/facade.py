@@ -28,7 +28,9 @@ class Facade:
         question=self.s.entity(c,"rule_questions",r,"question_id",card["question_id"]) if card["question_id"] else None
         ev=self.s.evaluation(c,r,card["shop_id"],prop["package"])[0] if prop else {}
         run=self.s.entity(c,'runs',r,'run_id',r)
+        remaining=max(0,3-c.execute('SELECT COUNT(*) FROM negotiations WHERE run_id=? AND shop_id=? AND day=?',(r,card['shop_id'],card['day'])).fetchone()[0]) if prop else 0
         return {"card_id":card["card_id"],"version":card['version'],"brief_version":run['brief_version'],"negotiation_id":prop['negotiation_id'] if prop else None,"proposal_id":prop['proposal_id'] if prop else None,"proposal_version":prop['version'] if prop else None,"shop_id":card["shop_id"],"day":card["day"],"kind":card["kind"],
+                "can_negotiate":bool(prop and remaining),"renegotiations_left":remaining,
                 "package":prop["package"] if prop else None,"forecast":self.forecast_view(c,r,prop["forecast_id"]) if prop else None,
                 "profit_after_fees_per_unit":ev.get("unit_contribution_vnd"),
                 "breakeven_roas_display":ev.get("stop_threshold") if prop and prop["package"]["ads_daily_budget"] else None,
@@ -123,6 +125,21 @@ class Facade:
         if run['config'].get('driver',{}).get('agent_version')=='native':
             busy=busy or bool(one(c,"SELECT job_id FROM content_jobs WHERE run_id=? AND status IN ('queued','running') LIMIT 1",(r,)))
         if operation and operation['status'] in {'queued','running'} and (operation['kind']=='start_day' or operation['kind'].startswith('renegotiate:')):step="negotiating"
+        negotiation=None
+        attempt=one(c,"SELECT * FROM operations WHERE run_id=? AND day=? AND (kind='start_day' OR kind LIKE 'renegotiate:%') ORDER BY rowid DESC LIMIT 1",(r,run['current_day']))
+        if attempt and run['config'].get('driver',{}).get('agent_version')=='native':
+            receipt=one(c,"SELECT response_json FROM idempotency_records WHERE principal_id='native_orchestrator' AND run_scope=? AND path='native/negotiation' AND key=?",(r,attempt['operation_id']+':D'))
+            nid=receipt['response'].get('negotiation_id') if receipt and receipt['response'] else None
+            neg=one(c,"SELECT * FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id='D' AND day=?",(r,nid,run['current_day'])) if nid else None
+            terminal=neg['terminal_receipt'] if neg and neg['terminal_receipt'] else {}
+            status=attempt['status'] if attempt['status'] in {'queued','running'} else (neg['status'] if neg and neg['status'] in {'agreed','failed'} else 'unknown')
+            if not neg and attempt['status']=='failed' and attempt['error_code']=='NATIVE_OPERATION_FAILED':status='failed'
+            if attempt['status']=='failed' and 'UNKNOWN' in (attempt['error_code'] or ''):status='unknown'
+            reason=self.s.safe_text(c,r,terminal.get('reason_vi') or '')
+            if status=='failed' and not reason:reason='Agent chưa đưa ra được gói phù hợp.'
+            if status=='unknown':reason='Tác vụ thương lượng chưa hoàn tất hoặc chưa rõ kết quả.'
+            negotiation={'negotiation_id':nid,'status':status,'reason_vi':reason,'referee_action':terminal.get('referee_action')}
+            if not receipt and attempt['status']=='succeeded':negotiation=None
         retry=one(c,"SELECT * FROM operations WHERE run_id=? AND day=? AND kind LIKE 'renegotiate:%' ORDER BY rowid DESC LIMIT 1",(r,run['current_day']))
         renegotiation=None
         if retry and retry['result'] and run['config'].get('driver',{}).get('agent_version')=='native':
@@ -134,6 +151,8 @@ class Facade:
                 neg=one(c,"SELECT * FROM negotiations WHERE run_id=? AND negotiation_id=? AND shop_id='D' AND day=?",(r,nid,run['current_day'])) if nid else None
                 terminal=neg['terminal_receipt'] if neg and neg['terminal_receipt'] else {}
                 status=retry['status'] if retry['status'] in {'queued','running'} else (neg['status'] if neg and neg['status'] in {'agreed','failed'} else 'unknown')
+                if not neg and retry['status']=='failed' and retry['error_code']=='NATIVE_OPERATION_FAILED':status='failed'
+                if retry['status']=='failed' and 'UNKNOWN' in (retry['error_code'] or ''):status='unknown'
                 reason=self.s.safe_text(c,r,terminal.get('reason_vi') or '')
                 if status=='failed' and not reason:reason='Agent chưa đưa ra được gói điều chỉnh.'
                 if status=='unknown':reason='Tác vụ thương lượng chưa hoàn tất hoặc chưa rõ kết quả.'
@@ -144,7 +163,15 @@ class Facade:
                     changed=previous['package']!=final['package']
                     if not changed:reason='Các agent giữ nguyên gói trước, chưa đưa ra điều chỉnh theo góp ý.'
                 renegotiation={'source_card_id':source_id,'negotiation_id':nid,'status':status,'reason_vi':reason,
-                               'referee_action':terminal.get('referee_action'),'changed':changed}
+                               'referee_action':terminal.get('referee_action'),'changed':changed,
+                               'restoration_status':retry['result'].get('restoration_status'),
+                               'restored_card_id':retry['result'].get('restored_card_id'),
+                               'restoration_reason_vi':retry['result'].get('restoration_reason_vi','')}
+                allowed=bool(self.s.pending_offer_restoration(c,r,run['current_day'],'D') and not card
+                             and not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND day=? AND status IN ('queued','running')",(r,run['current_day'])))
+                renegotiation.update(operation_id=retry['operation_id'],operation_version=retry['version'],source_card_version=source['version'],restoration_allowed=allowed)
+                if status=='failed' and not allowed and not renegotiation['restoration_status']:
+                    renegotiation['restoration_reason_vi']='Đề xuất gốc không còn chờ lựa chọn hoặc có tác vụ chưa hoàn tất.'
         current=self.s.product(c,r,"D")
         trace=one(c,"SELECT result_json FROM operations WHERE run_id=? AND json_extract(result_json,'$.trace_shop_id')='D' AND json_extract(result_json,'$.trace_url') IS NOT NULL ORDER BY rowid DESC LIMIT 1",(r,))
         rules,rules_version=self.s.rules(c,r,'D')
@@ -159,6 +186,7 @@ class Facade:
         return {"run_id":r,"day":run["current_day"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"step":step,"brief":run['brief'],"brief_preset":preset,"brief_editable":preset is None,"rules_version":rules_version,"confirmed_style_notes":rules['content_style_notes'],
                 "simulation_days":run["simulation_days"],"execution_profile":run["execution_profile"],"data_source":run["config"].get("source","simulation"),"busy":busy,
                 "active_operation":self.s.operation_view(operation,p.role) if operation else None,
+                "negotiation":negotiation,
                 "renegotiation":renegotiation,
                 "learning_status":handoff["status"] if handoff else None,"learning_error":handoff["error_code"] if handoff else None,"learning_version":handoff['version'] if handoff else None,"learning_day":handoff['day'] if handoff else None,"learning_retry_allowed":self.s.learning_retry_allowed(c,run,handoff),
                 "content_refs":{"active_content_id":current["active_content_id"],"original_content_id":seed_content["content_id"],"product_version":current["version"]},

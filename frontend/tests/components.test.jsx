@@ -179,9 +179,9 @@ test('seller sees the exact current negotiation outcome, not an earlier refusal 
   const mk=(seq,type,data,text_vi='')=>({seq,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type,ts:'12:00',text_vi,data});
   const feedback=mk(4,'seller_decision',{card_id:'c-2',action:'negotiate',note_vi:'giảm thêm dc khong'});
   const old=mk(3,'negotiation_finished',{source_card_id:'c-1',negotiation_id:'n-1',status:'failed',reason_vi:'Lý do của phiên cũ'});
-  const value={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-2',negotiation_id:'n-2',status:'failed',referee_action:'ask_human',reason_vi:'Chưa rõ khả năng giảm thêm, cần người bán xem lại.'}};
+  const value={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-2',negotiation_id:'n-2',status:'failed',restoration_status:'blocked',restoration_reason_vi:'Gói trước không còn hợp lệ.',referee_action:'ask_human',reason_vi:'Chưa rõ khả năng giảm thêm, cần người bán xem lại.'}};
   const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[old,feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
-  assert.match(html,/Chưa có gói điều chỉnh/);assert.match(html,/Chưa rõ khả năng giảm thêm/);assert.match(html,/data-night/);
+  assert.match(html,/Không thể tiếp tục với gói trước/);assert.match(html,/Gói trước không còn hợp lệ/);assert.match(html,/Chưa rõ khả năng giảm thêm/);assert.match(html,/data-night/);
   assert.ok(!html.includes('Đã ghi nhận lựa chọn của chị'));assert.ok(!html.includes('Lý do của phiên cũ'));assert.ok(!html.includes('đã từ chối'));
   const stale={...value,renegotiation:{source_card_id:'c-1',status:'failed',reason_vi:'Lý do của phiên cũ'}};
   const pending=renderToStaticMarkup(<DemoPage run={{state:stale,events:[old,feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
@@ -254,4 +254,98 @@ test('event citations escape source text, reject unsafe links and do not fabrica
   assert.equal((html.match(/Nguồn:/g)||[]).length,1);
   const legacy=renderToStaticMarkup(<EventFeed state={state} events={[{...event,data:{checks:[{ok:true,message_vi:'Không có nguồn'}]}}]} preview={false}/>);
   assert.ok(!legacy.includes('Nguồn:'));
+});
+
+test('an initial terminal stop shows its reason without inventing a seller choice',()=>{
+  const mk=(seq,type,data,text_vi)=>({seq,type,data,text_vi,actor:'referee',run_id:state.run_id,day:1,shop_id:'Z',ts:'12:00'});
+  const events=[mk(1,'platform_turn',{negotiation_id:'n-1',round:1,action:'accept'},'Agent sàn đã chấp nhận'),mk(2,'referee_review',{negotiation_id:'n-1',round:1,action:'stop'},'Cần xem lại điều kiện.'),mk(3,'negotiation_finished',{negotiation_id:'n-1',status:'failed',reason_vi:'Cần xem lại điều kiện.',referee_action:'stop'},'Thương lượng kết thúc')];
+  const value={...state,step:'day_done',pending_card:null,negotiation:{negotiation_id:'n-1',status:'failed',reason_vi:'Cần xem lại điều kiện.',referee_action:'stop'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events,act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.ok(!html.includes('Đã ghi nhận lựa chọn của chị'),'must not invent a seller choice');
+  assert.ok(html.includes('Cần xem lại điều kiện.'));assert.ok(html.includes('Chưa có gói'));assert.ok(html.includes('data-night'));
+  assert.equal((html.match(/class="skipped"/g)||[]).length,3);
+});
+
+test('initial outcome waits for a card or a known result and preserves genuine seller decisions',()=>{
+  const render=(value,events=[])=>renderToStaticMarkup(<DemoPage run={{state:value,events,act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  const base={...state,step:'day_done',pending_card:null};
+  const unknown=render({...base,negotiation:{negotiation_id:'n-1',status:'unknown',reason_vi:'Kết quả chưa rõ.',referee_action:null}});
+  assert.match(unknown,/Chưa xác định được kết quả thương lượng/);assert.match(unknown,/Kết quả chưa rõ/);assert.ok(!unknown.includes('data-night'));assert.ok(!unknown.includes('Đã ghi nhận lựa chọn'));
+  const agreed=render({...base,negotiation:{negotiation_id:'n-1',status:'agreed'}});
+  assert.match(agreed,/Đang chờ thẻ đề xuất/);assert.ok(!agreed.includes('data-night'));assert.ok(!agreed.includes('Đã ghi nhận lựa chọn'));
+  const accepted={seq:3,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',actor:'seller',ts:'12:00',text_vi:'Đã duyệt',data:{target_type:'proposal',card_id:'c-1',action:'accept'}};
+  const decided=render({...base,negotiation:{negotiation_id:'n-1',status:'agreed'}},[accepted]);
+  assert.match(decided,/Đã ghi nhận lựa chọn của chị/);assert.ok(decided.includes('data-night'));
+});
+
+test('initial failure can use its own terminal event when state metadata is absent',()=>{
+  const mk=(seq,type,data,text_vi,extra={})=>({seq,type,data,text_vi,actor:'referee',run_id:state.run_id,day:1,shop_id:'Z',ts:'12:00',...extra});
+  const own=[mk(1,'referee_review',{negotiation_id:'n-1',action:'stop'},'Lý do của phiên này.'),mk(2,'negotiation_finished',{negotiation_id:'n-1',status:'failed'},'Kết thúc')];
+  const other=mk(5,'referee_review',{negotiation_id:'n-1',action:'stop'},'Lý do của shop khác.',{shop_id:'A'});
+  const html=renderToStaticMarkup(<DemoPage run={{state:{...state,step:'day_done'},events:[...own,other],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(html,/Lý do của phiên này/);assert.match(html,/Chưa có gói để chị duyệt/);assert.ok(!html.includes('Lý do của shop khác'));assert.ok(!html.includes('Đã ghi nhận lựa chọn'));
+});
+
+test('day done without any seller decision uses neutral language',()=>{
+  const html=renderToStaticMarkup(<DemoPage run={{state:{...state,step:'day_done'},events:[],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(html,/Ngày đã sẵn sàng tổng kết/);assert.ok(!html.includes('Đã ghi nhận lựa chọn của chị'));
+});
+
+test('a server-restored offer remains reviewable after an unsuccessful renegotiation',()=>{
+  const feedback={seq:5,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type:'seller_decision',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',action:'negotiate',note_vi:'giảm thêm'}};
+  const card={card_id:'c-restored',version:2,brief_version:1,negotiation_id:'n-original',kind:'offer',package:{content_refresh:true,ads_daily_budget:45000,voucher_pct:3,stop_roas_below:6.5,stop_after_days:2,duration_days:3},forecast:{low:18,high:30},reasons_vi:[],warnings_vi:[]};
+  const value={...state,step:'awaiting_decision',pending_card:card,renegotiation:{source_card_id:'c-1',negotiation_id:'n-new',status:'failed',restoration_status:'restored',restored_card_id:'c-restored',reason_vi:'Chưa thể giảm thêm.'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.ok(html.includes('data-decision="accept"'),'the restored original offer must remain actionable');
+  assert.ok(html.includes('data-decision="reject"'));assert.ok(html.includes('Chưa thể giảm thêm.'));assert.ok(html.includes('45.000đ/ngày'));
+  assert.ok(!html.includes('data-night'));assert.ok(!html.includes('Chưa có gói điều chỉnh.'));
+});
+
+test('a restored offer cannot negotiate past the server-declared retry limit',()=>{
+  const card={kind:'offer',can_negotiate:false,package:{content_refresh:false,ads_daily_budget:0,voucher_pct:3,stop_roas_below:null,stop_after_days:null,duration_days:3},forecast:null,reasons_vi:[],warnings_vi:[]};
+  const html=renderToStaticMarkup(<Proposal card={card} pending={false} onDecision={noop} onNegotiate={noop}/>);
+  assert.match(html,/data-decision="accept"/);assert.match(html,/data-decision="reject"/);
+  assert.ok(!html.includes('data-negotiate="true"') || /data-negotiate="true" disabled/.test(html),'retry must be disabled or hidden');
+  assert.match(html,/Đã hết lượt thương lượng/);
+});
+
+test('seller rejection after a restored offer resolves the current choice',()=>{
+  const feedback={seq:5,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type:'seller_decision',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',action:'negotiate'}};
+  const sent={seq:7,run_id:state.run_id,day:1,shop_id:'Z',actor:'system',type:'card_sent',ts:'12:00',text_vi:'Thẻ trước',data:{card_id:'c-restored',negotiation_id:'n-original'}};
+  const rejected={seq:8,run_id:state.run_id,day:1,shop_id:'Z',actor:'seller',type:'seller_decision',ts:'12:00',text_vi:'Từ chối',data:{card_id:'c-restored',action:'reject',target_type:'proposal'}};
+  const value={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-1',negotiation_id:'n-new',status:'failed',restoration_status:'restored',restored_card_id:'c-restored',reason_vi:'Chưa giảm được.'}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[feedback,sent,rejected],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(html,/Đã ghi nhận lựa chọn của chị/);assert.ok(html.includes('data-night'));assert.ok(!html.includes('Chưa có gói điều chỉnh.'));
+});
+
+test('a failed attempt never revives an unmatched or not-yet-restored card',()=>{
+  const feedback={seq:5,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',actor:'seller',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',action:'negotiate'}};
+  const old={card_id:'c-1',version:1,kind:'offer',package:{content_refresh:false,ads_daily_budget:0,voucher_pct:3,stop_roas_below:null,stop_after_days:null,duration_days:3}};
+  const render=(value,events=[feedback])=>renderToStaticMarkup(<DemoPage run={{state:value,events,act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  const pending={...state,step:'day_done',pending_card:null,renegotiation:{source_card_id:'c-1',negotiation_id:'n-2',status:'failed',restoration_status:null}};
+  const first=render(pending);assert.match(first,/Chưa thể kiểm tra lại gói trước/);assert.ok(!first.includes('data-night'));
+  const stale={...pending,step:'awaiting_decision',pending_card:old,renegotiation:{...pending.renegotiation,restoration_status:'restored',restored_card_id:'c-2'}};
+  const second=render(stale);assert.ok(!second.includes('data-decision="accept"'));assert.ok(!second.includes('data-night'));
+  const unrelated={...stale,pending_card:{...old,card_id:'c-3'}};
+  const cardEvent={seq:7,run_id:state.run_id,day:1,shop_id:'Z',type:'card_sent',actor:'system',ts:'12:00',text_vi:'Khác',data:{card_id:'c-3',card:unrelated.pending_card}};
+  const third=render(unrelated,[feedback,cardEvent]);assert.ok(!third.includes('data-decision="accept"'));assert.ok(!third.includes('data-night'));
+});
+
+test('legacy failed feedback offers explicit recovery of the original offer',()=>{
+  const feedback={seq:5,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',actor:'seller',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',action:'negotiate'}};
+  const value={...state,step:'day_done',brief:{version:2},pending_card:null,renegotiation:{source_card_id:'c-1',source_card_version:4,negotiation_id:'n-2',status:'failed',reason_vi:'Chưa có điều chỉnh phù hợp.',operation_id:'op-1',operation_version:3,restoration_allowed:true}};
+  const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[feedback],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.ok(html.includes('Xem lại gói trước'),'legacy outcome must offer recovery');assert.ok(html.includes('Chưa có điều chỉnh phù hợp.'));
+  assert.ok(!html.includes('data-night'));assert.ok(!html.includes('Đang kiểm tra lại gói trước'));
+});
+
+test('an unknown or in-flight attempt never revives an unrelated card even if its event arrives',()=>{
+  const feedback={seq:5,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',actor:'seller',ts:'12:00',text_vi:'Góp ý',data:{card_id:'c-1',negotiation_id:'n-old',action:'negotiate'}};
+  const card={card_id:'c-2',negotiation_id:'n-other',kind:'offer',package:{content_refresh:false,ads_daily_budget:0,voucher_pct:3,stop_roas_below:null,stop_after_days:null,duration_days:3}};
+  const sent={seq:7,run_id:state.run_id,day:1,shop_id:'Z',type:'card_sent',actor:'system',ts:'12:00',text_vi:'Khác',data:{card_id:'c-2',negotiation_id:'n-other',card}};
+  for(const status of ['unknown','running','agreed']){
+    const value={...state,step:'awaiting_decision',pending_card:card,renegotiation:{source_card_id:'c-1',negotiation_id:'n-current',status}};
+    const html=renderToStaticMarkup(<DemoPage run={{state:value,events:[feedback,sent],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+    assert.ok(!html.includes('data-decision="accept"'),status+' must not revive an unrelated card');assert.ok(!html.includes('data-night'));
+  }
 });

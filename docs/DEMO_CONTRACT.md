@@ -15,6 +15,8 @@ Cập nhật 31/10/2026. Đây là hợp đồng dùng chung cho bản local. Ch
 
 Năm role Platform/Shop/Referee/Content/Learning dùng runner native: model tool call → role ACL/schema → callable read/compute → ToolMessage → terminal typed output. Tối đa ba provider requests/invocation và ba Platform rounds. Model không được gọi mutation/approval/provider job trực tiếp.
 
+Trọng tài dùng `continue` để cho phép quy trình kiểm tra và trình gói đã đồng thuận; `stop` nghĩa là còn vướng mắc khiến thương lượng thất bại. Sau lượt accept, `stop` không nêu vướng mắc, `refocus` hoặc `continue` còn điều khoản chưa giải quyết đều được yêu cầu làm rõ trong cùng giới hạn ba request. Nếu chưa làm rõ được thì trả ask_human, không tự chuyển thành đồng ý. Tool `get_referee_context` kèm forecast/forecast_turn_id của đúng lượt accept mới nhất, do adapter thị trường tính; không dùng số dự báo của gói trước. Mục tiêu số đơn là kỳ vọng dự báo, không phải điều kiện phải cam kết đạt mới được gửi offer.
+
 Run dùng chung 64 native call reservations bền vững. Demo shop được ưu tiên LLM theo cấu hình; các shop nền vẫn qua cùng graph/tools với transport offline có nhãn để dành budget cho Content/Learning. Cache/replay đúng binding không trừ slot; unknown không hoàn slot và không resend với key mới. Nguồn live/replay/offline/fixture được ghi theo lời gọi thực, không suy từ requested mode.
 
 Platform/Referee không đọc giá vốn/min-profit/ROAS riêng; Shop output qua leak_guard với cùng snapshot tiền đã dùng cho tools. Forecast tool chỉ preview read-only, không tạo proposal. Data finalize sau Referee và code checks; accepted turn chưa được phép tự thành card. Seller approval vẫn là gate cuối.
@@ -29,11 +31,12 @@ Giữ JSON trực tiếp tại `/api/*`; `/api/v1` dùng envelope. Mọi POST g�
 
 | Endpoint | Body / response quan trọng |
 | --- | --- |
-| GET /api/state | run_id/day/step/mode/memory, simulation_days, brief hoặc null, brief_preset/brief_editable, rules_version, confirmed_style_notes, busy/active_operation, renegotiation, learning_retry_allowed, current card/draft và nguồn thực |
+| GET /api/state | run_id/day/step/mode/memory, simulation_days, brief hoặc null, brief_preset/brief_editable, rules_version, confirmed_style_notes, busy/active_operation, negotiation/renegotiation, learning_retry_allowed, current card/draft và nguồn thực |
 | POST /api/reset | `{memory,seed}`; run mới, profile do backend chọn external/worker/external; không xóa lịch sử run cũ |
 | POST /api/brief/confirm | Gửi nguyên `state.brief_preset` cho demo D → `{brief,step:'idle'}`; ID/version/confirmation do server persist. Sai mục tiêu/ngân sách preset trả422; brief đã xác nhận không được thay thế |
 | POST /api/day/start | `{}`; cần brief đã confirmed; operation async →202 với ID/status khi chưa xong |
 | POST /api/decision | `{card_id,expected_card_version,expected_brief_version,action,note_vi,rule_answer}`; action accept/negotiate/reject |
+| POST /api/negotiation/restore | `{operation_id,expected_operation_version,source_card_id,expected_source_card_version,expected_brief_version,expected_day}`; kiểm và gửi lại offer cho operation thất bại đã lưu trước bản sửa; có Idempotency-Key và X-Request-ID, không gọi model/provider |
 | POST /api/content/retry | `{card_id,expected_brief_version,expected_draft_version,expected_job_id,expected_content_id,feedback_vi,retry_scope:'all'}` → draft mới; không chờ render |
 | POST /api/content/apply | Cùng binding card/brief/draft/job/content, thêm `{cover_option,skip_video,video_review_ack}` → listing sau transaction approval/publish/activate |
 | POST /api/night | `{expected_day}`; settle/learn/advance một lần; pending202 với operation/status, terminal summary/next_day; ngày cuối next_day=null |
@@ -42,7 +45,7 @@ Giữ JSON trực tiếp tại `/api/*`; `/api/v1` dùng envelope. Mọi POST g�
 | GET /api/proof/events?comparison_id=G | `{comparison_id,run_on,run_off,evidence:{on:Event[],off:Event[]},cutoffs:{on,off}}`; kiểm quyền cả hai run, xuất đủ seller events của đúng cặp đang xem |
 | GET /api/proof/demo | Seller D đọc artifact đối chứng offline đã xuất; envelope manifest/report/evidence, kiểm schema/hash, không đổi active run hoặc gọi provider |
 
-Card thêm version/brief_version/negotiation_id/proposal_id/proposal_version. Draft thêm card_id/brief_version/job_id/content_id/job_version/content_version. Draft `version` là attempt1..3, khác content_version và job heartbeat version. Seller action bind draft đã thấy, không tự chuyển sang latest khi conflict.
+Card thêm version/brief_version/negotiation_id/proposal_id/proposal_version và can_negotiate/renegotiations_left. Tối đa hai lần thương lượng thêm; hết lượt vẫn được đồng ý hoặc từ chối thẻ hiện tại. Draft thêm card_id/brief_version/job_id/content_id/job_version/content_version. Draft `version` là attempt1..3, khác content_version và job heartbeat version. Seller action bind draft đã thấy, không tự chuyển sang latest khi conflict.
 
 State chính: idle (brief chưa/đã confirmed) → negotiating → awaiting_decision → content_review → day_done → idle ngày sau hoặc complete. UI dùng brief.confirmed, không cần bước brief_confirmed riêng. Busy/active operation lấy từ Data, được phục hồi sau reload. Close day chặn operation/negotiation/content chưa resolved; summary có mặt chưa đồng nghĩa night đã advance.
 
@@ -50,7 +53,15 @@ Demo native D lưu preset trong config của run: `{intent:'increase_orders',goa
 
 Question Yes dùng accept/true; No reject/false. Chỉ đổi Rules/preference, giữ campaign hiện hành. Offer accept ghi approval; refresh phải chờ Content Apply mới activate. Reject không tạo content/spend. Negotiate tạo attempt mới theo giới hạn Data; gói hợp lệ và được hai agent thống nhất mới tạo thẻ duyệt mới. Referee stop/ask_human hoặc lỗi kết thúc attempt có lý do, không bịa agreed/card.
 
-`state.renegotiation` là null hoặc `{source_card_id,negotiation_id,status,reason_vi,referee_action,changed}` của yêu cầu thương lượng mới nhất trong đúng run/ngày/shop. Status queued/running chờ phản hồi, agreed chờ thẻ mới, failed/unknown hiện lý do thực. `changed=false` nghĩa là các agent giữ nguyên điều khoản, không gọi đó là offer đã điều chỉnh. UI không biến seller action negotiate thành quyết định đã hoàn tất hoặc mở nút kết thúc ngày trước phản hồi. Projection lấy từ operation/command receipt/negotiation đã lưu, phục hồi sau reload; không lấy lý do của attempt cũ. Ask_human chưa có thỏa thuận không được đổi thành đồng ý hoặc tự áp dụng gói.
+`state.negotiation` là null hoặc `{negotiation_id,status,reason_vi,referee_action}` của operation agent mới nhất trong đúng run/ngày/shop; status là queued/running/agreed/failed/unknown. Ngày bắt đầu thành công nhưng không có attempt cho shop không được gắn unknown. Lần đầu không có offer phải hiện lý do thật và đánh dấu bỏ qua bước seller/nội dung/áp dụng; không báo seller đã chọn khi chưa có quyết định.
+
+`state.renegotiation` là null hoặc `{source_card_id,negotiation_id,status,reason_vi,referee_action,changed,restoration_status,restored_card_id,restoration_reason_vi,operation_id,operation_version,source_card_version,restoration_allowed}` của yêu cầu thương lượng mới nhất trong đúng run/ngày/shop. Status queued/running chờ phản hồi, agreed chờ thẻ mới, failed/unknown hiện lý do thực. `changed=false` nghĩa là các agent giữ nguyên điều khoản, không gọi đó là offer đã điều chỉnh. Projection lấy từ operation/command receipt/negotiation đã lưu và phục hồi sau reload.
+
+Khi thương lượng thêm kết thúc thất bại đã xác định, Data kiểm lại gói trước theo Rules, brief, giá vốn, phí và tồn kho hiện tại. Gói còn hợp lệ được gửi lại bằng thẻ mới, proposal tăng version và dự báo được tính lại; giữ ID proposal/negotiation đã thống nhất trước đó cùng lịch sử seller request_changes. `restoration_status='restored'` và restored_card_id chỉ đúng thẻ mới này. Attempt điều chỉnh vẫn là failed. Seller được chọn đồng ý, từ chối hoặc thương lượng tiếp nếu còn lượt; không hiện kết thúc ngày khi thẻ còn chờ. Thẻ cũ bị chặn và replay operation không tạo thêm thẻ.
+
+Gói cũ không còn hợp lệ trả `restoration_status='blocked'` cùng lý do. Operation chưa rõ kết quả hoặc đang chạy không gửi lại offer. Seller đã chủ động từ chối không được tự khôi phục gói. Việc gửi lại offer chưa phải seller approval và chưa kích hoạt campaign/content.
+
+Phiên cũ thiếu metadata restoration hiện nút **Xem lại gói trước** khi restoration_allowed=true. Seller bấm mới gửi POST kiểm lại; GET state/reload không tự đổi dữ liệu. Request sai operation/thẻ/brief/ngày/version bị từ chối; cùng key trả receipt đã lưu.
 
 ## 4. Media và publication
 

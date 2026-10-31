@@ -396,6 +396,15 @@ class NativeDecision(LegacyDecision):
     expected_brief_version: int = Field(ge=1)
 
 
+class OfferRestore(Strict):
+    operation_id: str
+    expected_operation_version: int = Field(ge=1)
+    source_card_id: str
+    expected_source_card_version: int = Field(ge=1)
+    expected_brief_version: int = Field(ge=1)
+    expected_day: int = Field(ge=1, le=7)
+
+
 class LegacyReset(Strict):
     memory: bool = True
     seed: int = 42
