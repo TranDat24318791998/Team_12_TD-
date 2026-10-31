@@ -45,7 +45,7 @@ app/
   domain/               policies.py, finance.py, validators.py, privacy.py, formatting.py
     models/             shops, packages, negotiation, cards, content, learning, metrics, events
   runtime/              session.py, manager.py, day.py
-  agents/               tools.py, runner.py (đặc tả D02a, chưa implement)
+  agents/               tools.py, runner.py và content.py cho role/tool runtime
   negotiation/          agents.py, prompts.py, graph.py
   content/              text.py, images.py, video.py, prompts.py, service.py
   memory/               gateway.py, night.py, prompts.py
@@ -99,7 +99,7 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | tuỳ chọn |
 | `SEED` | mặc định 42 |
 | `DEMO_SHOP` | shop giám khảo điều khiển, mặc định `D` |
-| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, hiện Settings mặc định40; D01 cấu hình demo64 cho tool loop |
+| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, mặc định64 cho demo tool loop |
 | `MAX_VIDEO_JOBS_PER_SESSION` | giới hạn job video Muse mỗi phiên, mặc định 3 |
 | `IMAGE_PROVIDER` | OpenAI cho ảnh theo yêu cầu hiện hành |
 | `MOCK_API` | `1` = API trả dữ liệu mẫu trong `contracts/` (giao diện làm trước khi backend xong) |
@@ -124,4 +124,4 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 3. Phần nào phụ thuộc module chưa có thì viết bản giả nhỏ trong `tests/fakes/` hoặc dùng JSON trong `contracts/`, đúng hình dạng hợp đồng.
 4. Viết test cho từng điều trong **Tiêu chí xong**, chạy `pytest -q`, báo lệnh đã chạy và kết quả.
 5. Commit nhỏ, message bắt đầu bằng mã task: `[1.3] validators: lãi sau phí và hoà vốn`.
-6. Thêm một dòng vào `docs/CODEX_LOG.md`: giờ, mã task, việc đã làm, test đã chạy, chỗ người phải sửa tay (nếu có). File này dùng để viết mục "Codex được dùng thế nào" trong bài nộp.
+6. Với task của Toàn, ghi kết quả vào `docs/plans/toan/CODEX_LOG.md`: giờ, mã task, việc đã làm, test và phần chờ tích hợp. Các member khác dùng nhật ký của workstream mình.

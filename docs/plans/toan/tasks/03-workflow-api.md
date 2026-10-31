@@ -4,7 +4,7 @@ Timebox 18 phút cho runtime và ghép nối, API owner làm route song song. C�
 
 ## Output
 
-**Toàn:** `app/runtime/day.py`, runtime tests và runtime fixtures. **API integrator:** `app/runtime/{manager,session}.py`, `app/api/{schemas,dependencies,router}.py`, `app/api/routes/{sessions,days,content,events,proof}.py`, `app/main.py`, `contracts/{state_awaiting,state_content,decision,content_apply,night}.json`, `tests/fakes/{content,memory}.py`, `tests/integration/runtime/test_day.py`, `tests/integration/api/test_demo_flow.py`, `docs/CODEX_LOG.md`.
+**Toàn:** `app/runtime/day.py`, runtime tests và runtime fixtures. **API integrator:** `app/runtime/{manager,session}.py`, `app/api/{schemas,dependencies,router}.py`, `app/api/routes/{sessions,days,content,events,proof}.py`, `app/main.py`, `contracts/{state_awaiting,state_content,decision,content_apply,night}.json`, `tests/fakes/{content,memory}.py`, `tests/integration/runtime/test_day.py`, `tests/integration/api/test_demo_flow.py`, `docs/plans/toan/CODEX_LOG.md`.
 
 ## Wiring
 

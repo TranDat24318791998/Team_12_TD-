@@ -1,0 +1,24 @@
+[
+  {
+    "campaign_id": "sample-growth",
+    "category": "quat_mini",
+    "title_vi": "Tăng trưởng quạt mini",
+    "description_vi": "Mẫu mô phỏng nội dung và ưu đãi",
+    "valid_from_day": 1,
+    "valid_to_day": 14,
+    "min_stock": 30,
+    "max_voucher_pct": 10,
+    "source_id": "seed:campaigns:sample-growth"
+  },
+  {
+    "campaign_id": "sample-expired",
+    "category": "quat_mini",
+    "title_vi": "Chương trình đã hết",
+    "description_vi": "Mẫu kiểm thời hạn",
+    "valid_from_day": -4,
+    "valid_to_day": 0,
+    "min_stock": 30,
+    "max_voucher_pct": 10,
+    "source_id": "seed:campaigns:sample-expired"
+  }
+]

@@ -19,7 +19,7 @@ def test_empty_example_loads_defaults():
     settings = Settings(_env_file=PROJECT_ROOT / ".env.example")
     assert settings.seed == 42
     assert settings.demo_shop == "D"
-    assert settings.max_live_calls_per_session == 40
+    assert settings.max_live_calls_per_session == 64
     assert settings.max_video_jobs_per_session == 3
     assert settings.resolved_mode() == "offline"
     assert settings.fees.model_dump() == {
@@ -32,7 +32,7 @@ def test_empty_example_loads_defaults():
     [("auto", "", "offline"), ("auto", "fake-key", "live"),
      ("offline", "fake-key", "offline"), ("live", "", "offline"),
      ("live", "fake-key", "live"), ("replay", "fake-key", "replay"),
-     ("replay", "", "offline")],
+     ("replay", "", "replay")],
 )
 def test_resolved_modes(mode, key, expected):
     assert Settings(_env_file=None, llm_mode=mode, openai_api_key=key).resolved_mode() == expected

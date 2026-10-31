@@ -1,0 +1,133 @@
+{
+  "source": "fixture",
+  "dependencies": {
+    "database": "pending",
+    "market": "pending",
+    "api": "pending",
+    "media": "pending",
+    "openai_config": "pending",
+    "product_image": "pending"
+  },
+  "adapters": [
+    {
+      "id": "T01",
+      "name": "get_public_context",
+      "owner": "Toàn + Data",
+      "status": "ready",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T02",
+      "name": "get_shop_private_context",
+      "owner": "Toàn + Data",
+      "status": "ready",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T03",
+      "name": "read_memory",
+      "owner": "Toàn + DB",
+      "status": "ready",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T04",
+      "name": "validate_platform_package",
+      "owner": "Toàn",
+      "status": "ready",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T05",
+      "name": "evaluate_shop_package",
+      "owner": "Toàn",
+      "status": "ready",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T06",
+      "name": "forecast_package",
+      "owner": "Market",
+      "status": "pending",
+      "module": "app.agents.tools.bind_role_tools",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T07",
+      "name": "sanitize_shop_reply",
+      "owner": "Toàn",
+      "status": "ready",
+      "module": "app.domain.privacy.leak_guard",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T08",
+      "name": "read_learning_evidence",
+      "owner": "Toàn + DB",
+      "status": "ready",
+      "module": "app.memory.gateway.MemoryGateway.read_learning_evidence",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T09",
+      "name": "commit_memory_updates",
+      "owner": "Toàn + DB",
+      "status": "ready",
+      "module": "app.memory.gateway.MemoryGateway.commit_memory_updates",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T10",
+      "name": "confirm_preference",
+      "owner": "Toàn",
+      "status": "ready",
+      "module": "app.memory.gateway.MemoryGateway.answer_pref",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T11",
+      "name": "content_start",
+      "owner": "Media",
+      "status": "pending",
+      "module": "app.content.service.ContentService.start",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T12",
+      "name": "content_retry",
+      "owner": "Media",
+      "status": "pending",
+      "module": "app.content.service.ContentService.retry",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T13",
+      "name": "content_apply",
+      "owner": "Media",
+      "status": "pending",
+      "module": "app.content.service.ContentService.apply",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T14",
+      "name": "append_event",
+      "owner": "DB",
+      "status": "ready",
+      "module": "app.infrastructure.eventlog.EventLog.add",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    },
+    {
+      "id": "T15",
+      "name": "read_events",
+      "owner": "DB/API",
+      "status": "ready",
+      "module": "app.infrastructure.eventlog.EventLog.since",
+      "input_output": "See docs/plans/toan/AGENT_SCOPE_MAP.md section 3 and typed contract."
+    }
+  ]
+}

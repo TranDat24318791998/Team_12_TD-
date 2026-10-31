@@ -4,7 +4,7 @@ Dự án cho SEAxOpenAI Hackathon: hai agent đại diện sàn và shop thươn
 
 ## Trạng thái
 
-Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, app factory và `/health` đã có triển khai. Frontend React gồm 5 màn hình, có bundle và bản xem trước 7 ngày; các route nghiệp vụ, agent, thị trường và bộ nhớ đang được các thành viên triển khai.
+Core Agent + Tools + Knowledge đã có code và test headless với fixture market/media; xem [runbook phần Toàn](docs/plans/toan/DEMO_RUNBOOK.md). Frontend React có 5 màn hình và preview 7 ngày. Data service local đã được team triển khai riêng trong `data/`; route, market và media cần ghép với agent trước khi chạy toàn sản phẩm bằng dữ liệu thật.
 
 ## Cấu trúc codebase
 

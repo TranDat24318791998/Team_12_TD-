@@ -1,0 +1,31 @@
+{
+  "source": "fixture",
+  "payload": {
+    "rules": {
+      "allow_ads": true,
+      "ads_daily_max": 45000,
+      "voucher_max_pct": 8,
+      "min_profit_per_unit": 18000,
+      "max_breakeven_roas": 6.5,
+      "require_stop_condition": true,
+      "content_style_notes": []
+    },
+    "rules_version": 1,
+    "rules_evidence_seqs": [],
+    "preferences": [
+      {
+        "pref_id": "fixture-pref",
+        "shop_id": "D",
+        "field": "content_style",
+        "value": "ảnh nền sáng",
+        "status": "candidate",
+        "evidence_seqs": [
+          10
+        ],
+        "asked_day": null,
+        "declined_until": null
+      }
+    ],
+    "knowledge_revision": 0
+  }
+}

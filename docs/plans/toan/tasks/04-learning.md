@@ -4,7 +4,7 @@ Timebox **20 phút**, sau D01 và D02a; có thể làm song song feature agents 
 
 ## Output và đầu vào
 
-Được sửa app/memory/{gateway,night,prompts}.py, tests/unit/memory/test_gateway.py, tests/integration/memory/{test_night,test_knowledge_agent_loop}.py, tests/fakes/knowledge.py, contracts/knowledge/*.json, một dòng docs/CODEX_LOG.md. D01 sở hữu domain/models/learning.py, store và Session metadata; báo thiếu interface theo tên, không tạo DTO bản thứ hai trong memory. D02a sở hữu dispatcher, D03 seller handler, member market sở hữu simulator/forecast. Task này không viết lại các module đó.
+Được sửa app/memory/{gateway,night,prompts}.py, tests/unit/memory/test_gateway.py, tests/integration/memory/{test_night,test_knowledge_agent_loop}.py, tests/fakes/knowledge.py, contracts/knowledge/*.json, một dòng docs/plans/toan/CODEX_LOG.md. D01 sở hữu domain/models/learning.py, store và Session metadata; báo thiếu interface theo tên, không tạo DTO bản thứ hai trong memory. D02a sở hữu dispatcher, D03 seller handler, member market sở hữu simulator/forecast. Task này không viết lại các module đó.
 
 Đầu vào bắt buộc: DTO ở Knowledge contract, MemoryStore.get/put/list/commit_batch, Session rules authoritative và properties knowledge_revision/memory_cursor, EventLog.since, forecast snapshots trước settlement, DayMetrics, runner role learning và tool read_learning_evidence. Thiếu dependency thì inject fake đúng contract trong tests; integration thật vẫn là gate cần nối.
 

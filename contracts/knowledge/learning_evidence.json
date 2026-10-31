@@ -1,0 +1,38 @@
+{
+  "source": "fixture",
+  "payload": {
+    "day": 1,
+    "from_seq": 1,
+    "through_seq": 10,
+    "events": [
+      {
+        "seq": 10,
+        "type": "content_job",
+        "negotiation_id": "fixture-negotiation",
+        "text_vi": "Người bán góp ý.",
+        "package": null,
+        "seller_action": null,
+        "feedback_vi": "Ảnh nền tối quá",
+        "outcome": null
+      }
+    ],
+    "existing_lessons": [
+      {
+        "lesson_id": "fixture-lesson",
+        "scope": "strategy",
+        "text_vi": "Ưu tiên nội dung rõ ràng.",
+        "score": 2,
+        "evidence": [
+          "fixture-negotiation"
+        ],
+        "created_day": 1,
+        "updated_day": 1,
+        "version": 1
+      }
+    ],
+    "valid_negotiation_ids": [
+      "fixture-negotiation"
+    ],
+    "knowledge_revision": 0
+  }
+}

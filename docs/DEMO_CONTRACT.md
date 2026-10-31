@@ -1,6 +1,6 @@
 # Hợp đồng runtime và tích hợp cho demo dưới 2 giờ
 
-Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](plans/toan/AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](plans/toan/KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; source hiện chưa triển khai. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
+Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](plans/toan/AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](plans/toan/KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; core đã có code và test với fixture; market/media thật và route nghiệp vụ còn chờ tích hợp. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
 
 ## 1. Quyết định kiến trúc
 
@@ -135,7 +135,7 @@ P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, du
 
 ## 7. Event tối thiểu
 
-Giữ Event của CONTRACT. Mọi `data` chứa IDs/version liên quan; thêm `source:live|replay|offline` cho model/media để UI phân biệt. Không ghi secrets/raw prompt riêng vào public event.
+Giữ Event của CONTRACT. Mọi `data` chứa IDs/version liên quan; thêm `source:live|replay|offline|fixture` cho model/media để UI phân biệt. Không ghi secrets/raw prompt riêng vào public event.
 
 Các event cần có: `intent_confirmed`, `day_start`, `platform_turn`, `shop_turn`, `code_check`, `referee_review`, `card_sent`, `seller_decision`, `content_job`, `content_applied`, `package_applied`, `market_result`, `memory_read`, `memory_write`, `night_summary`, `rules_confirmed`.
 

@@ -24,12 +24,16 @@ class Settings(BaseModel):
     llm_mode: Literal["auto", "live", "replay", "offline"] = "auto"
     useapi_token: str = Field(default="", repr=False)
     muse_email: str = ""
+    muse_api_base_url: str = "https://muse-api.butterflyro.space"
+    muse_api_key: str = Field(default="", repr=False)
+    muse_video_model: str = "muse-video"
+    media_mode: Literal["live", "replay", "offline"] = "offline"
     langfuse_public_key: str = Field(default="", repr=False)
     langfuse_secret_key: str = Field(default="", repr=False)
     langfuse_host: str = ""
     seed: int = 42
     demo_shop: str = "D"
-    max_live_calls_per_session: int = Field(default=40, ge=0)
+    max_live_calls_per_session: int = Field(default=64, ge=0)
     max_video_jobs_per_session: int = Field(default=3, ge=0)
     image_provider: Literal["openai", "muse"] = "openai"
     mock_api: bool = False
@@ -52,6 +56,8 @@ class Settings(BaseModel):
         return self
 
     def resolved_mode(self) -> Literal["live", "replay", "offline"]:
+        if self.llm_mode == "replay":
+            return "replay"
         if not self.openai_api_key or self.llm_mode == "offline":
             return "offline"
         return "live" if self.llm_mode == "auto" else self.llm_mode
@@ -59,7 +65,7 @@ class Settings(BaseModel):
     def describe(self) -> str:
         data = self.model_dump()
         for field in (
-            "openai_api_key", "useapi_token", "langfuse_public_key", "langfuse_secret_key"
+            "openai_api_key", "useapi_token", "muse_api_key", "langfuse_public_key", "langfuse_secret_key"
         ):
             value = data[field]
             data[field] = (

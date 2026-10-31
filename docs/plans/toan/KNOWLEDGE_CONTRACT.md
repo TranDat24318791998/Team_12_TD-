@@ -1,6 +1,6 @@
 # Hợp đồng Knowledge cho Agent + Tools
 
-Đây là đặc tả cần implement, chưa phải trạng thái code đã chạy. Toàn sở hữu schema, quyền đọc/ghi, retrieval, học từ evidence và xác nhận luật. Member dữ liệu cấp store/event/market adapter. [Hợp đồng agent/tool](AGENT_TOOL_KNOWLEDGE.md) quy định vòng gọi tool; [hợp đồng demo](../../DEMO_CONTRACT.md) quy định HTTP và seller approval.
+Đây là hợp đồng Knowledge; trạng thái code và đầu nối thực tế ở [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Toàn sở hữu schema, quyền đọc/ghi, retrieval, học từ evidence và xác nhận luật. Member dữ liệu cấp store/event/market adapter. [Hợp đồng agent/tool](AGENT_TOOL_KNOWLEDGE.md) quy định vòng gọi tool; [hợp đồng demo](../../DEMO_CONTRACT.md) quy định HTTP và seller approval.
 
 Knowledge ở đây là năm ngăn có cấu trúc, truy vấn theo run/shop/ngành. Tài liệu gốc không yêu cầu embedding hoặc vector database. Dữ liệu sản phẩm đã xác minh và catalog công khai là context nguồn, tách khỏi bài học tự rút ra.
 
@@ -118,6 +118,8 @@ Code tạo history từ package thực áp dụng, candidate từ seller feedbac
 | EDIT | Lesson tồn tại, text qua privacy/grounding, evidence hợp lệ; thay text, score+1, version+1 |
 
 LessonOp.evidence là negotiation ID thật từ event.data.negotiation_id; Preferences giữ event seq integer. Valid IDs được server dựng từ snapshot, không tin list do model đưa. Text có số private hoặc claim thiếu evidence thì reject op. Tối đa30 lessons/scope; vượt thì loại score thấp nhất, updated_day cũ nhất, tie-break lesson_id. Deduplicate ADD cùng normalized text/scope; cùng evidence không tăng điểm hai lần. Captured lesson versions/revision stale thì conflict, không tự retry vô hạn.
+
+Giới hạn bản demo: `LessonOp.text_vi` chỉ nhận đề xuất định tính, bắt đầu bằng “Ưu tiên”, “Nên”, “Cần” hoặc “Xem xét”, không chứa chữ số hoặc số viết bằng chữ, và không khẳng định sự kiện đã xảy ra hay quan hệ nhân quả. Nhắc góp ý phải có feedback tương ứng; nhắc kết quả/đơn/ROAS phải có market outcome. Văn bản không hợp lệ bị reject, không bị tự sửa. Số liệu vẫn được giữ và đọc qua History/Calibration có cấu trúc; giới hạn này không áp dụng cho IDs, metadata hoặc Preferences. Gate từ vựng/evidence là kiểm tra bảo thủ, không phải bộ hiểu ngữ nghĩa tổng quát.
 
 Night commit bốn ngăn/cursor/revision một lần rồi ghi memory_write/ngăn và night_summary. KnowledgeCommit trả accepted_lesson_ops/rejected_ops đã kiểm ở gateway và MemoryCommit của store; NightSummary lấy đúng các kết quả đó, không đoán số rejected từ chênh lệch record IDs. NightSummary là phần trình bày, không thay records. Invalid lesson op được ghi rejected, các records hợp lệ vẫn có thể commit; lỗi kỹ thuật lúc commit phải rollback toàn batch. Memory OFF bỏ writes/reflection, Rules vẫn enforce. Fallback đọc evidence thật và ghi source=offline, không gắn nhãn live.
 

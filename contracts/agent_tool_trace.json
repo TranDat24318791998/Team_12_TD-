@@ -1,0 +1,23 @@
+{
+  "source": "fixture",
+  "payload": {
+    "role": "content",
+    "steps": [
+      {
+        "kind": "tool_call",
+        "name": "get_content_context",
+        "id": "fixture-call"
+      },
+      {
+        "kind": "tool_result",
+        "tool_call_id": "fixture-call",
+        "status": "ok"
+      },
+      {
+        "kind": "tool_call",
+        "name": "finish_content",
+        "id": "fixture-finish"
+      }
+    ]
+  }
+}

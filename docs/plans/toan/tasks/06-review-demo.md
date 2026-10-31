@@ -4,7 +4,7 @@ Timebox10phút +6phút buffer theo plan. Review độc lập sau patch/SHA coder
 
 ## Output
 
-`scripts/run_agent_demo.py`, `tests/integration/agents/test_agent_knowledge_flow.py`, `tests/integration/api/test_demo_flow.py`, `docs/DEMO_RUNBOOK.md`, `docs/CODEX_LOG.md`. Fix source chỉ trong phạm vi task đã làm có lỗi tái hiện. Không thêm workflow riêng trong script, không bịa tool trace.
+`scripts/run_agent_demo.py`, `tests/integration/agents/test_agent_knowledge_flow.py`, `tests/integration/api/test_demo_flow.py`, `docs/plans/toan/DEMO_RUNBOOK.md`, `docs/plans/toan/CODEX_LOG.md`. Fix source chỉ trong phạm vi task đã làm có lỗi tái hiện. Không thêm workflow riêng trong script, không bịa tool trace.
 
 ## Gate review bắt buộc
 

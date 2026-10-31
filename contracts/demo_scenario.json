@@ -1,0 +1,21 @@
+{
+  "source": "fixture",
+  "proof_of_learning": false,
+  "seed": 42,
+  "shop_id": "D",
+  "day_count": 2,
+  "intent": "increase_orders",
+  "private_ads_cap": 45000,
+  "initial_package": {
+    "ads_daily_budget": 70000,
+    "voucher_pct": 10,
+    "stop_roas_below": 4.0
+  },
+  "counter_package": {
+    "ads_daily_budget": 45000,
+    "voucher_pct": 3,
+    "stop_roas_below": 6.5
+  },
+  "feedback_vi": "Ảnh nền tối quá, làm nền sáng",
+  "expected_rule": "ảnh nền sáng"
+}

@@ -1,0 +1,10 @@
+{
+  "source": "fixture",
+  "payload": {
+    "pref_id": "fixture-pref",
+    "card_id": "fixture-card",
+    "rule_answer": true,
+    "expected_card_version": 1,
+    "expected_brief_version": 1
+  }
+}
