@@ -1,0 +1,29 @@
+# Data, native orchestration and API implementation status
+
+31 October 2026. Work in this lane uses the existing Data SQLite as business and event authority; no paid provider call was made in these checks.
+
+- Migrations 003/004 add the eight Knowledge records, negotiation finalization/version and pinned context, run horizon/shop/brief, provider slot state and daily predictions. The upgrade test retains a populated v2 run, its linked campaign, proposal, decision, grants, assets and metrics, with clean integrity and foreign-key checks.
+- The composed application starts a single fenced worker. Native Platform, Shop and Referee use a read-only Data-bound context and scoped tools; turns, Referee references, cards and safe telemetry are recorded in the same event sequence. The configured model budget is reserved for the demo shop; background shops use the same graph with explicitly offline transport. Accepted turns are not presented until the final Referee and validation checks pass.
+- Brief confirmation, version-bound decisions/content actions, asynchronous operations, night handoff, event pagination and scoped proof projection are wired to Data. Close/settle refuses unresolved operations and running negotiations. Missing/corrupt selected assets block the publication transaction; video requires review acknowledgement or an explicit skip. Provider slots and uncertain outcomes survive in Data without automatic resubmission.
+- Knowledge uses the Data run ID, rules, cutoff-bound public projection and SQLite repository. Night publication, durable Knowledge commit, events and Data handoff/advance share a short transaction; seller skip and publication contend on the same lock. Calibration reads only committed prior-day samples and memory-off bypasses learned calibration.
+- Demo D now uses the desktop-fan facts supported by the supplied photograph. A configured original is copied to a unique Data asset, linked to jobs and checked by size and SHA before the content worker reads it; the geometric placeholder is not overwritten. Simulated money, rules, stock and market numbers remain unchanged.
+
+Checks run with `LLM_MODE=offline MEDIA_MODE=offline`:
+
+```text
+PYTHONPATH=data .venv/bin/python -m pytest -q data/tests
+56 passed in 73.28s
+
+PYTHONPATH=data .venv/bin/python -m pytest -q tests/integration/api/test_data_native.py tests/integration/api/test_media_bridge.py tests/integration/agents/test_agent_knowledge_flow.py tests/unit/agents/test_runner.py tests/unit/negotiation/test_negotiation.py tests/unit/infrastructure/test_replay.py
+38 passed in 28.08s
+```
+
+The native lifecycle test uses a fake tool-calling transport, exercises actual ToolMessages, stale identities, retry, missing-asset rollback, apply idempotency, day completion and SQLite reopen. The media HTTP bridge test uses local fake providers. No paid model, image or video generation, live provider quality, or real-record replay was tested. A matching run-private replay manifest can be consumed; a missing or invalid recording falls back offline and is not labeled replay. Content replay binding is not verified. The media lane supplies the explicitly labeled original-photo offline fallback.
+
+## Final-review fixes
+
+- DB review findings 1–2: resolve an edited child's approval via its exact seller-decision event and original resolved card, validating run, shop, product, negotiation and edited package; the worker, seller draft binding and active campaign attribution share this resolution. Content bridge reads, slot reservation and mutation, heartbeat, asset import and completion require an unexpired lease in their transaction. Provider slots remain durable and uncertain reservations are not resubmitted.
+- Agents review startup recovery: the actual lifespan's sweeper may fail an expired operation first; the native worker uses the stored operation/negotiation command receipt to terminalize only its own orphan attempts with unknown source. Terminal native failures can close the day only after negotiation, card, proposal, draft and unknown media gates are clear; no model request is retried.
+- API review findings 1, 3–5: the mandatory brief gate applies in the shared Data start command; reset receipts preserve the full original response without changing a later selected run; queued renegotiation is reported as negotiating; failed night replay returns a terminal response with its existing operation ID; campaign attribution and remaining model calls reflect durable records. The authenticated, fixed-path `/api/proof/demo` route is registered for the SI lane's validated precomputed artifact; current-session proof remains separate.
+- Health tests instantiate offline applications in separate temporary homes rather than accessing the user's running Data store. The focused API/Data suite passed **45 tests in 57.26s**: `tests/integration/api/test_data_native.py`, `test_media_bridge.py`, `test_health.py`, `data/tests/test_workflow.py` and `test_integration_safety.py`. Startup recovery and provider submission regressions use offline or fake clients only. Artifact generation and hosted delivery are being verified separately by their owners.
+- Knowledge/Tools shared P1: the Content bridge projects feedback and confirmed styles using the current Data shop public/private/fee context, `leak_guard` and Data safe-text checks. It retains independently safe clauses and fails closed for unsafe previous listing/media text; raw feedback and confirmed rules remain in private Data audit. A regression captures the actual native `get_content_context` ToolMessage and fake media submission, confirms owner/cost/financial wording is absent while bright styling remains usable, and verifies the untouched audit. The focused native/Content/finance suite passed **41 tests in 44.13s**; the expanded standalone privacy regression passed in 3.47s. No paid calls were made.

@@ -56,6 +56,7 @@ def register_integration_routes(app, service, facade, identity, respond):
     async def undo(request:Request):
         p=identity(request)
         require(p.role=="seller","FORBIDDEN","Cần seller",403)
+        require(request.headers.get('X-Request-ID'),'REQUEST_ID_REQUIRED','Cần X-Request-ID',400)
         try:body=await request.json()
         except (ValueError,UnicodeDecodeError):raise Fault("VALIDATION_ERROR","JSON không hợp lệ",422)
         b=M.LegacyRestore.model_validate(body).model_dump();cid=b.pop("target_content_id")

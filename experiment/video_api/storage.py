@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 import mimetypes
+import tempfile
 
 import urllib3
 from minio import Minio
@@ -11,6 +12,14 @@ class LocalStorage:
     def __init__(self, root):
         self.root = Path(root) / 'objects'
         self.root.mkdir(exist_ok=True)
+
+    def check(self):
+        with tempfile.NamedTemporaryFile(prefix='.readiness-', dir=self.root, mode='w+b') as probe:
+            probe.write(b'local-storage-check')
+            probe.flush()
+            probe.seek(0)
+            if probe.read() != b'local-storage-check':
+                raise OSError('Local storage probe failed')
 
     def put(self, key, path):
         target = self.root / key

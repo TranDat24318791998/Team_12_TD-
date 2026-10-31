@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from video_api.config import Settings
 from video_api.main import create_app
-from video_api.models import VideoRequest
+from video_api.models import ImageRequest, VideoRequest
 from video_api.image_pipeline import process_image_job
+from video_api.storage import LocalStorage
+from video_api.store import Store
 
 def test_image_upload_generation_idempotency_and_public_link(tmp_path):
  s=Settings(data_dir=tmp_path,storage_backend='local',openai_api_key='fake',video_api_token='a'*32,playback_secret='b'*32)
@@ -31,3 +33,27 @@ def test_image_upload_generation_idempotency_and_public_link(tmp_path):
 def test_video_supported_lengths(kind):
  for duration in (5,10,15):assert VideoRequest(product_name='Quạt',output_type=kind,duration=duration).duration==duration
  with pytest.raises(ValidationError):VideoRequest(product_name='Quạt',output_type=kind,duration=8)
+
+@pytest.mark.parametrize('with_logo,kind',[(False,'handheld_fan'),(True,'desktop_fan')])
+def test_product_roles_bright_style_and_checksum(tmp_path,with_logo,kind):
+ import hashlib
+ settings=Settings(data_dir=tmp_path,storage_backend='local')
+ store=Store(tmp_path);storage=LocalStorage(tmp_path);captured={}
+ for index in range(3):
+  path=tmp_path/f'{index}.png';Image.new('RGB',(20,20),'white').save(path)
+  store.add_asset(str(index+1)*32,'owner','image',path)
+ class Provider:
+  def __init__(self,settings):pass
+  def advertisement(self,paths,prompt,out):captured.update(paths=paths,prompt=prompt);Image.new('RGB',(40,40),'green').save(out,'JPEG')
+ request=ImageRequest(logo_asset_id='1'*32 if with_logo else None,product_asset_id='2'*32,style_asset_id='3'*32,
+   style='premium_studio',background_preference='bright',product_kind=kind,product_name='Quạt')
+ row,_=store.create('owner','test-role-123','digest',request.model_dump(),4)
+ process_image_job(settings,store,storage,row,Provider)
+ result=json.loads(store.job(row['id'])['result']);prompt=captured['prompt']
+ assert f"Input image {2 if with_logo else 1} is the sole product" in prompt
+ assert f"Input image {3 if with_logo else 2} is a mood/style" in prompt
+ assert ('handle' in prompt)==(kind=='handheld_fan')
+ assert ('do not invent a logo' in prompt)==(not with_logo)
+ assert 'charcoal' not in prompt and result['style']=='summer_fresh'
+ assert result['product_kind']==kind and result['minio_path'] is None
+ assert result['sha256']==hashlib.sha256((tmp_path/'jobs'/row['id']/'image.jpg').read_bytes()).hexdigest()

@@ -26,9 +26,10 @@ from .simulation import business_date
 from .evidence import compare, proof, replay_export
 
 
-def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_provider=None):
-    service=DataService(home or os.environ.get("GROWTH_DATA_HOME") or Path(__file__).resolve().parents[1]/"runtime",content_mode=content_mode or os.environ.get("GROWTH_CONTENT_MODE","local"),learning_mode=learning_mode or os.environ.get("GROWTH_LEARNING_MODE","skip"),calibration_provider=calibration_provider)
+def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_provider=None, bootstrap_defaults=None, worker_factory=None, product_image_path=None):
+    service=DataService(home or os.environ.get("GROWTH_DATA_HOME") or Path(__file__).resolve().parents[1]/"runtime",content_mode=content_mode or os.environ.get("GROWTH_CONTENT_MODE","local"),learning_mode=learning_mode or os.environ.get("GROWTH_LEARNING_MODE","skip"),calibration_provider=calibration_provider,product_image_path=product_image_path)
     facade=Facade(service)
+    bootstrap_defaults=bootstrap_defaults or {}
     @asynccontextmanager
     async def lifespan(app):
         service.recover()
@@ -37,8 +38,13 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
                 await asyncio.sleep(1)
                 await asyncio.to_thread(service.recover)
         task=asyncio.create_task(sweep())
+        worker=worker_factory(service) if worker_factory else None
+        if worker: await worker.start()
+        app.state.worker=worker
         try:yield
         finally:
+            if worker: await worker.close()
+            app.state.worker=None
             task.cancel()
             with suppress(asyncio.CancelledError):await task
     application=FastAPI(title="Growth Agents Data API",version="2.0.0",lifespan=lifespan)
@@ -103,7 +109,13 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
         return rows[offset:offset+limit],{"next_cursor":next_cursor}
 
     @application.get("/health")
-    def health(): return {"ok":True,"service":"growth-data","storage":"sqlite_local","schema_version":2,"providers_called_by_data_api":False}
+    def health(): return {"ok":True} if bootstrap_defaults else {"ok":True,"service":"growth-data","storage":"sqlite_local","schema_version":4,"providers_called_by_data_api":False}
+
+    def seller_job(job):
+        fields=('job_id','shop_id','product_id','proposal_id','attempt','status','output_content_ids','fallback_used','error_code','version','lease_until','retry_scope')
+        result={key:job[key] for key in fields}
+        result['slots']={key:{k:v for k,v in value.items() if k in {'status','source','error','review_passed','review_notes','duration_seconds'}} for key,value in job['provider_state'].items() if key in {'A','B','C','video'}}
+        return result
 
     async def read(request,tag):
         p=identity(request);params=request.path_params;r=params.get("r");s=params.get("s")
@@ -120,7 +132,8 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
             if tag=="run":data=service.safe_run(run)
             elif tag=="state":
                 sid=request.query_params.get("shop_id","D");service.scope(c,p,r,sid,{"seller","orchestrator"})
-                data={"run":service.safe_run(run),"shop":service.public(c,r,sid),"pending_cards":many(c,"SELECT * FROM cards WHERE run_id=? AND shop_id=? AND status='pending'",(r,sid)),"jobs":many(c,"SELECT * FROM content_jobs WHERE run_id=? AND shop_id=?",(r,sid))}
+                jobs=many(c,"SELECT * FROM content_jobs WHERE run_id=? AND shop_id=? ORDER BY rowid",(r,sid))
+                data={"run":service.safe_run(run),"shop":service.public(c,r,sid),"pending_cards":many(c,"SELECT * FROM cards WHERE run_id=? AND shop_id=? AND status='pending'",(r,sid)),"jobs":[seller_job(job) for job in jobs] if p.role=='seller' and run['config'].get('driver',{}).get('agent_version')=='native' else jobs}
             elif tag=="shops":
                 service.scope(c,p,r,roles={"platform_agent","orchestrator","data_admin"})
                 data=[service.context(c,p,r,sid)["shop"] for sid in "ABCDE" if "*" in p.allowed_shop_ids or sid in p.allowed_shop_ids]
@@ -169,6 +182,7 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
             elif tag=="proposal":data=service.shared_proposal(c,p,r,service.entity(c,"proposals",r,"proposal_id",params["pid"]))
             elif tag=="job":
                 data=service.job_access(c,p,r,params["jid"]);service.scope(c,p,r,data["shop_id"],PRIVATE|{"content_worker"})
+                if p.role=='seller' and run['config'].get('driver',{}).get('agent_version')=='native': data=seller_job(data)
             elif tag=="operation":data=service.entity(c,"operations",r,"operation_id",params["oid"]);service.scope(c,p,r,roles={"seller","orchestrator","data_admin"});data=service.operation_view(data,p.role)
             elif tag=="download":
                 a=service.asset_access(c,p,r,params["aid"]);require(a["upload_status"]=="ready","ASSET_PENDING","File chưa sẵn sàng")
@@ -222,9 +236,10 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
             if tag=="create_run":return service.create_run(c,p,body)
             if tag=="reset":
                 run=service.scope(c,p,r,roles={"seller"});require(M.Version.model_validate(body).expected_version==run["version"])
-                return service.create_run(c,p,{"seed":run["seed"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"simulation_days":run["simulation_days"],"execution_profile":run["execution_profile"],"content_mode":run["content_mode"],"learning_mode":run["learning_mode"],"driver_config":run["config"].get("driver",{}),"data_source":run["config"].get("source","simulation")})
+                return service.create_run(c,p,{"seed":run["seed"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"simulation_days":run["simulation_days"],"demo_shop_id":run['demo_shop_id'],"execution_profile":run["execution_profile"],"content_mode":run["content_mode"],"learning_mode":run["learning_mode"],"driver_config":run["config"].get("driver",{}),"data_source":run["config"].get("source","simulation")})
             if tag in {"start_day","close_day","advance_day"}:return service.operation(c,p,r,tag,body)
             if tag=="negotiation":return service.new_negotiation(c,p,r,s,body)
+            if tag=="finalize_negotiation":return service.finalize_negotiation(c,p,r,params['nid'],body)
             if tag=="checks":
                 service.scope(c,p,r,s,{"platform_agent","shop_agent"});b=M.CheckRequest.model_validate(body);require(service.product(c,r,s)["product_id"]==b.product_id,"NOT_FOUND","Sản phẩm không thuộc shop",404)
                 if p.role=="platform_agent":
@@ -317,6 +332,7 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
     for path,tag,model in writes:application.add_api_route("/api/v1"+path,post_endpoint(tag,model),methods=["POST"])
     application.add_api_route("/api/v1/runs/{r}/shops/{s}/rules",post_endpoint("rules",M.RulesUpdate),methods=["PUT"])
     internals=[("/runs/{r}/shops/{s}/negotiations","negotiation",M.NegotiationCreate),("/runs/{r}/shops/{s}/settle-day","settle",M.Settle),
+               ("/runs/{r}/negotiations/{nid}/finalize","finalize_negotiation",M.NegotiationFinalize),
                ("/runs/{r}/shops/{s}/rule-questions","question",M.RuleQuestionCreate),("/runs/{r}/learning-results","learning_result",M.LearningResult),
                ("/runs/{r}/content-jobs/{jid}/result","content_result",M.ContentResult),("/runs/{r}/replay/export","replay",dict),
                ("/knowledge/documents","knowledge_create",M.KnowledgeCreate),("/knowledge/documents/{did}/revoke","knowledge_revoke",dict)]
@@ -337,41 +353,73 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
         try:body=await request.json() if request.method=="POST" and await request.body() else {}
         except (ValueError,UnicodeDecodeError):raise Fault("VALIDATION_ERROR","JSON không hợp lệ",422)
         require(isinstance(body,dict),"VALIDATION_ERROR","Body phải là JSON object",422)
+        if request.method=='POST' and bootstrap_defaults:
+            require(request.headers.get('X-Request-ID'),'REQUEST_ID_REQUIRED','Cần X-Request-ID',400)
         with service.store.connect() as c:current=one(c,"SELECT r.* FROM active_runs a JOIN runs r ON r.run_id=a.run_id WHERE a.session_id=?",(p.session_id,))
         if tag=="reset" or current is None:
             require(tag in {"state","reset"},"RUN_REQUIRED","Cần khởi tạo phiên",404)
-            require(set(body)<={"memory","seed","simulation_days","execution_profile","content_mode","learning_mode","mode"},"INVALID_FIELDS","Trường reset không hợp lệ",422)
+            allowed={'memory','seed'} if bootstrap_defaults else {"memory","seed","simulation_days","execution_profile","content_mode","learning_mode","mode"}
+            require(set(body)<=allowed,"INVALID_FIELDS","Trường reset không hợp lệ",422)
             key=request.headers.get("Idempotency-Key") or ("bootstrap" if tag=="state" else None)
-            created=service.command(p,p.session_id,"/api/reset",key,body,lambda c:service.create_run(c,p,{"seed":body.get("seed",42),"memory_enabled":body.get("memory",True),**{k:v for k,v in body.items() if k not in {"memory","seed"}}}))
-            with service.store.connect() as c:state=facade.state(c,p)
-            if tag=="reset":return respond(request,p,{"run_id":created["run_id"],"day":1,"mode":state["mode"],"state":state},legacy=True)
+            def create_reset(c):
+                created=service.create_run(c,p,{**bootstrap_defaults,"seed":body.get("seed",42),"memory_enabled":body.get("memory",True),**{k:v for k,v in body.items() if k not in {"memory","seed"}}})
+                state=facade.state(c,p,created['run_id'])
+                return {"run_id":created['run_id'],"day":1,"mode":state['mode'],"state":state}
+            created=service.command(p,p.session_id,"/api/reset",key,body,create_reset)
+            # Receipts written by older versions did not include the response snapshot.
+            if 'state' not in created:
+                with service.store.connect() as c:state=facade.state(c,p,created['run_id'])
+                created={"run_id":created['run_id'],"day":1,"mode":state['mode'],"state":state}
+            if tag=="reset":return respond(request,p,created,legacy=True)
             current={"run_id":created["run_id"]}
         r=current["run_id"]
+        if request.method=='POST' and bootstrap_defaults:
+            if tag=='decision': body=M.NativeDecision.model_validate(body).model_dump()
+            elif tag=='retry': body=M.LegacyContentRetry.model_validate(body).model_dump()
+            elif tag=='apply': body=M.LegacyContentApply.model_validate(body).model_dump()
         if request.method=="GET":
             with service.store.connect() as c:
                 if tag=="state":data=facade.state(c,p)
                 elif tag=="events":
                     try:after=int(request.query_params.get("after",0))
                     except ValueError:raise Fault("QUERY_INVALID","after không hợp lệ",422)
-                    rows,cursor,_=service.events(c,p,r,after,100)
+                    require(after>=0,'QUERY_INVALID','after không hợp lệ',422)
+                    require(not request.query_params.get('run_id') or request.query_params['run_id']==r,'RUN_CHANGED','Phiên đã thay đổi')
+                    rows,cursor,has_more=service.events(c,p,r,after,100)
                     actors={"platform_turn":"platform_agent","opportunity":"platform_agent","shop_turn":"shop_agent","code_check":"code","seller_decision":"seller","content_job":"content_agent","market_result":"market","night_summary":"memory","memory_read":"memory","memory_write":"memory","referee_review":"referee"}
-                    data={"events":[{"seq":e["seq"],"run_id":r,"day":e["day"],"ts":e["simulated_at"][11:16],"type":e["type"],"actor":actors.get(e["type"],"system"),"shop_id":e["shop_id"],"text_vi":e["text_vi"],"data":e["payload"]} for e in rows],"last_seq":cursor}
+                    data={"run_id":r,"events":[{"seq":e["seq"],"run_id":r,"day":e["day"],"ts":e["simulated_at"][11:16],"type":'agent_activity' if e['type']=='agent_telemetry' else e["type"],"actor":({'platform':'platform_agent','shop':'shop_agent','referee':'referee'}.get(e['actor_role'],'system') if e['type']=='agent_telemetry' else actors.get(e["type"],"system")),"shop_id":e["shop_id"],"text_vi":e["text_vi"],"data":e["payload"]} for e in rows],"last_seq":cursor,"has_more":has_more}
                 else:
-                    g=one(c,"SELECT * FROM comparison_groups WHERE session_id=? ORDER BY rowid DESC LIMIT 1",(p.session_id,))
+                    selected=request.query_params.get('comparison_id')
+                    g=one(c,"SELECT * FROM comparison_groups WHERE session_id=? AND group_id=?",(p.session_id,selected)) if selected else one(c,"SELECT * FROM comparison_groups WHERE session_id=? ORDER BY rowid DESC LIMIT 1",(p.session_id,))
+                    if selected: require(g,'NOT_FOUND','Không tìm thấy đối chứng',404)
                     if g and service.comparison_view(c,p,g["group_id"])["status"]=="ready":
-                        data=proof(service,c,p,g["run_on_id"],g["group_id"],request.query_params.get("variant","full_7d"));data["metrics"]=[m for m in data["metrics"] if m["on"] is not None and m["off"] is not None];data["status"]="ready"
-                    else:data={"seed":42,"days":7,"run_on":g["run_on_id"] if g else "","run_off":g["run_off_id"] if g else "","metrics":[],"status":"pending" if g else "not_ready","note_vi":"Chưa có hai run hoàn chỉnh trong phiên. Tạo comparison qua /api/v1/comparisons; không dựng số thắng giả."}
+                        data=proof(service,c,p,g["run_on_id"],g["group_id"],request.query_params.get("variant","full_7d"));data["status"]="ready"
+                    else:
+                        if bootstrap_defaults: raise Fault('PROOF_NOT_READY','Chưa có hai run hoàn chỉnh trong phiên',409)
+                        data={"seed":42,"days":7,"run_on":g["run_on_id"] if g else "","run_off":g["run_off_id"] if g else "","metrics":[],"status":"pending" if g else "not_ready","note_vi":"Chưa có hai run hoàn chỉnh trong phiên. Tạo comparison qua /api/v1/comparisons; không dựng số thắng giả."}
             return respond(request,p,data,legacy=True)
         if tag=="night":
-            require(not body,"INVALID_FIELDS","Night không nhận trường tùy ý",422)
-            op=service.begin_night(p,r,request.headers.get("Idempotency-Key"))
+            expected_day=M.LegacyNight.model_validate(body).expected_day if bootstrap_defaults else None
+            if not bootstrap_defaults: require(not body,"INVALID_FIELDS","Night không nhận trường tùy ý",422)
+            op=service.begin_night(p,r,request.headers.get("Idempotency-Key"),expected_day)
             if op["status"]=="succeeded":return respond(request,p,op["result"],legacy=True)
+            if op["status"]=="failed":
+                return respond(request,p,{"error":{"code":op['error_code'] or 'LEARNING_FAILED','message_vi':'Tác vụ kết thúc ngày đã thất bại'},"operation_id":op['operation_id'],"status":"failed","day":op['day']},legacy=True,status=409)
             return respond(request,p,{"day":op["day"],"step":"day_done","operation_id":op["operation_id"],"status":op["status"],"error_code":op["error_code"]},legacy=True,status=202)
         def execute(c):
             if tag=="start":
                 require(not body,"INVALID_FIELDS","Start không nhận trường tùy ý",422)
-                run=service.run(c,p,r);service.operation(c,p,r,"start_day",dict(expected_day=run["current_day"],expected_version=run["version"]))
-                state=facade.state(c,p);return {"day":state["day"],"step":state["step"]}
+                run=service.run(c,p,r)
+                op=service.operation(c,p,r,"start_day",dict(expected_day=run["current_day"],expected_version=run["version"]))
+                state=facade.state(c,p);return {"day":state["day"],"step":state["step"],"operation_id":op['operation_id'],"status":op['status']}
+            if tag=='brief':
+                b=M.BriefConfirm.model_validate(body)
+                run=service.run(c,p,r)
+                require(run['phase']=='ready' and not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND kind='start_day'",(r,)),'DAY_STARTED','Không thể đổi brief sau khi bắt đầu')
+                brief={**b.model_dump(),'goal_vi':service.safe_text(c,r,b.goal_vi),'brief_id':uid('brief'),'version':run['brief_version']+1,'shop_id':run['demo_shop_id'],'confirmed':True}
+                c.execute('UPDATE runs SET brief_json=?,brief_version=?,version=version+1,updated_at=? WHERE run_id=?',(dumps(brief),brief['version'],now(),r))
+                service.event(c,r,run['current_day'],'brief_confirmed','seller',run['demo_shop_id'],{'brief_id':brief['brief_id'],'brief_version':brief['version']},visibility='shop_private',text='Người bán đã xác nhận mục tiêu')
+                return {'brief':brief,'step':'idle'}
             if tag=="decision":return facade.decide(c,p,r,body)
             if tag=="retry":return facade.retry(c,p,r,body)
             if tag=="apply":return facade.use_content(c,p,r,body)
@@ -380,14 +428,22 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
         key=request.headers.get("Idempotency-Key")
         require(key,"IDEMPOTENCY_KEY_REQUIRED","Cần Idempotency-Key để retry an toàn",400)
         result=service.command(p,r,request.url.path,key,body,execute)
-        return respond(request,p,result,legacy=True)
+        return respond(request,p,result,legacy=True,status=202 if tag in {'start','decision'} and result.get('status') in {'queued','running'} else 200)
 
     def legacy_endpoint(tag):
         async def endpoint(request:Request):return await legacy(request,tag)
         endpoint.__name__="demo_"+tag
         return endpoint
-    for path,tag,method in (("/state","state","GET"),("/reset","reset","POST"),("/day/start","start","POST"),("/events","events","GET"),("/decision","decision","POST"),("/content/retry","retry","POST"),("/content/apply","apply","POST"),("/night","night","POST"),("/proof","proof","GET")):
+    for path,tag,method in (("/state","state","GET"),("/reset","reset","POST"),("/brief/confirm","brief","POST"),("/day/start","start","POST"),("/events","events","GET"),("/decision","decision","POST"),("/content/retry","retry","POST"),("/content/apply","apply","POST"),("/night","night","POST"),("/proof","proof","GET")):
         application.add_api_route("/api"+path,legacy_endpoint(tag),methods=[method])
+
+    @application.get('/api/proof/demo')
+    def demo_proof(request:Request):
+        p=identity(request)
+        require(p.role=='seller' and ('D' in p.allowed_shop_ids or '*' in p.allowed_shop_ids),'FORBIDDEN','Báo cáo chỉ dành cho người bán shop D',403)
+        from .demo_proof import load_demo_proof
+        return respond(request,p,load_demo_proof(service.home),legacy=True)
+
     from .routes import register_integration_routes
     register_integration_routes(application,service,facade,identity,respond)
     original_openapi=application.openapi
@@ -400,9 +456,19 @@ def create_app(home=None, *, content_mode=None, learning_mode=None,calibration_p
                     if isinstance(operation,dict):operation["security"]=[{"BearerAuth":[]},{"SellerSession":[]}]
             for method,operation in operations.items():
                 if method in {"post","put"}:
-                    names=["Idempotency-Key"]+(["X-Request-ID"] if path.startswith(("/api/v1/","/internal/v1/")) else [])
+                    names=["Idempotency-Key","X-Request-ID"]
                     if path.endswith("/bytes"):names=[]
                     operation.setdefault("parameters",[]).extend({"name":name,"in":"header","required":True,"schema":{"type":"string"}} for name in names)
+        legacy_models={'/api/reset':M.LegacyReset,'/api/brief/confirm':M.BriefConfirm,'/api/decision':M.NativeDecision,
+                       '/api/content/retry':M.LegacyContentRetry,'/api/content/apply':M.LegacyContentApply,'/api/night':M.LegacyNight}
+        definitions=schema.setdefault('components',{}).setdefault('schemas',{})
+        for path,model in legacy_models.items():
+            model_schema=model.model_json_schema(ref_template='#/components/schemas/{model}')
+            definitions.update(model_schema.pop('$defs',{}));definitions[model.__name__]=model_schema
+            schema['paths'][path]['post']['requestBody']={'required':True,'content':{'application/json':{'schema':{'$ref':f'#/components/schemas/{model.__name__}'}}}}
+            for name in ('Idempotency-Key','X-Request-ID'):
+                parameters=schema['paths'][path]['post'].setdefault('parameters',[])
+                if not any(item.get('name')==name for item in parameters): parameters.append({'name':name,'in':'header','required':True,'schema':{'type':'string'}})
         return schema
     application.openapi=openapi
     return application

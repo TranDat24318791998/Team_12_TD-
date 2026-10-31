@@ -42,6 +42,9 @@ class Store:
             migrations = sorted(self.migrations_path.glob("[0-9]*.sql"))
             if [int(path.name.split('_',1)[0]) for path in migrations] != list(range(1,len(migrations)+1)):
                 raise ValueError("Migration phải liên tiếp từ 001")
+            # The runs table is rebuilt by migration 004. Disable FK rewriting
+            # before the transaction, then validate every relationship before commit.
+            c.execute("PRAGMA foreign_keys=OFF")
             c.execute("BEGIN IMMEDIATE")
             version = c.execute("PRAGMA user_version").fetchone()[0]
             if version > len(migrations):
@@ -61,6 +64,8 @@ class Store:
                     raise ValueError(f"Migration SQL chưa hoàn chỉnh: {path.name}")
                 c.execute("INSERT INTO schema_migrations VALUES(?,?)", (index, now()))
                 c.execute(f"PRAGMA user_version={index}")
+            if c.execute("PRAGMA foreign_key_check").fetchone():
+                raise ValueError("Migration vi phạm foreign key")
 
     @contextmanager
     def connect(self, write=False):

@@ -47,15 +47,15 @@ app/
     routes/             health.py, sessions.py, days.py, events.py, content.py, proof.py
   domain/               policies.py, finance.py, validators.py, privacy.py, formatting.py
     models/             shops, packages, negotiation, cards, content, learning, metrics, events
-  runtime/              session.py, manager.py, day.py
+  runtime/              data_worker.py (product); session/manager/day (core harness)
   agents/               tools.py, runner.py và content.py cho role/tool runtime
   negotiation/          agents.py, prompts.py, graph.py
   content/              text.py, images.py, video.py, prompts.py, service.py
   memory/               gateway.py, night.py, prompts.py
   simulation/           world.py, market.py, runner.py
-  infrastructure/       llm.py, images.py, muse.py, eventlog.py, store.py, tracing.py
+  infrastructure/       data_* adapters, sqlite_store, media_gateway, llm, replay
 frontend/               React source, CSS, ảnh và bundle đã build; được phục vụ tại /
-data/                   seed.json (dữ liệu nguồn)
+data/                   growth_data/ (business authority), migrations, seed, runtime ignored
 assets/products/        ảnh sản phẩm gốc
 contracts/              JSON mẫu của API
 replay/                 cache LLM và báo cáo đối chứng đã ghi
@@ -81,9 +81,9 @@ submission/             bài viết, khai báo và video script
 
 ```
 pip install -r requirements.txt
-uvicorn app.main:app --reload            # chạy web ở http://localhost:8000
-pytest -q                                # chạy test
-python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
+python scripts/local_stack.py start      # app8000 + media8010, một worker/no reload
+LLM_MODE=offline MEDIA_MODE=offline pytest -q
+python scripts/run_sim.py --help         # simulator Data ON/OFF; tham số theo CLI
 ```
 
 ## Biến môi trường
@@ -99,6 +99,8 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 | `LLM_MODE` | `live` gọi thật và ghi cache · `replay` đọc cache, thiếu thì dùng luật offline · `offline` không gọi · `auto` = live nếu có khoá |
 | `MUSE_API_BASE_URL`, `MUSE_API_KEY`, `MUSE_VIDEO_MODEL` | Muse Gateway backend-only, theo MUSE_API.md |
 | `MEDIA_MODE` | live/offline/replay độc lập LLM_MODE |
+| `MEDIA_API_BASE_URL`, `MEDIA_API_TOKEN` | HTTP service local; token khớp VIDEO_API_TOKEN trong experiment/.env |
+| `DEMO_PRODUCT_IMAGE_PATH` | ảnh D quạt để bàn được user chọn, đăng ký vào Data mỗi run |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | tuỳ chọn |
 | `SEED` | mặc định 42 |
 | `DEMO_SHOP` | shop giám khảo điều khiển, mặc định `D` |
@@ -123,7 +125,7 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 ## Cách làm một task
 
 1. Với task demo, dùng thứ tự/contract ở mục Phạm vi triển khai hiện hành. Đọc `docs/ARCHITECTURE.md`, file task trong `tasks/`, rồi `docs/CONTRACT.md`; đọc `docs/SEED_DATA.md` hoặc `docs/DESIGN.md` nếu task nhắc tới.
-2. Chỉ tạo hoặc sửa các file trong mục **Output** của task. Nếu thấy phải đổi hợp đồng chung, dừng lại, ghi `TODO(contract): …` và báo, không tự đổi.
+2. Theo ownership của plan hiện hành. Khi thay hợp đồng trong phạm vi đã giao, thống nhất chữ ký với owner rồi cập nhật callers/contracts/tests; chỉ hỏi khi cần quyết định ngoài phạm vi đó.
 3. Phần nào phụ thuộc module chưa có thì viết bản giả nhỏ trong `tests/fakes/` hoặc dùng JSON trong `contracts/`, đúng hình dạng hợp đồng.
 4. Viết test cho từng điều trong **Tiêu chí xong**, chạy `pytest -q`, báo lệnh đã chạy và kết quả.
 5. Commit nhỏ, message bắt đầu bằng mã task: `[1.3] validators: lãi sau phí và hoà vốn`.

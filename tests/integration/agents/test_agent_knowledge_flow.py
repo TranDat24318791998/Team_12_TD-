@@ -33,8 +33,8 @@ def test_two_day_workflow_learning_and_next_use(tmp_path):
         def finish(messages):
             value=json.loads(next(m.content for m in messages if isinstance(m,ToolMessage)))
             style=value['memory']['confirmed_style_notes']
-            return [call('finish_content',{'title':'Quạt nền sáng' if style else 'Quạt mini',
-                'description':'Sạc USB','checks':[]},'finish')]
+            return [call('finish_content',{'title':'Quạt nền sáng' if style else 'Quạt để bàn',
+                'description':'Có đế','checks':[]},'finish')]
         model=FakeLLM([[call('get_content_context',{},'read')],finish])
         tools=bind_role_tools(session,'content','D',card_id=card.card_id)
         result=run_agent('content',llm=model,tools=tools,messages=[HumanMessage(content='Viết nội dung')],
@@ -42,7 +42,7 @@ def test_two_day_workflow_learning_and_next_use(tmp_path):
             emit=lambda *_:None,run_name='content-test')
         assert result.source=='fixture'
         return result.value.title
-    assert content_title()=='Quạt mini'
+    assert content_title()=='Quạt để bàn'
     draft=session.content.retry('D','Ảnh nền tối quá, làm nền sáng')
     listing=apply_reviewed_content(session,card.card_id,1,draft.version,'B')
     assert session.states['D'].active.package==card.package

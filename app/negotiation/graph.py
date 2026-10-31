@@ -9,7 +9,7 @@ from app.domain.policies import MAX_ROUNDS
 from app.domain.finance import loss_warning
 from app.domain.privacy import leak_guard
 from app.domain.validators import brief_side_check, final_check, platform_side_check
-from app.negotiation.agents import decide_platform, decide_shop, emit_for
+from app.negotiation.agents import decide_platform, decide_shop, emit_for, replay_context_for
 from app.negotiation.referee import review_turn
 
 
@@ -23,11 +23,11 @@ class NegotiationState(TypedDict, total=False):
     focused_question: str | None
 
 
-def run_negotiation(session, shop_id, day, kind, owner_note=None):
+def run_negotiation(session, shop_id, day, kind, owner_note=None, *, negotiation_id=None, platform_context=None):
     if not session.brief or not session.brief.confirmed:
         raise ValueError('confirmed brief required')
     session.negotiation_attempt += 1
-    negotiation_id = f'{session.run_id}:{shop_id}:{day}:{session.negotiation_attempt}'
+    negotiation_id = negotiation_id or f'{session.run_id}:{shop_id}:{day}:{session.negotiation_attempt}'
     shop = session.states[shop_id]
     def fail(state, reason):
         return NegotiationResult(negotiation_id=negotiation_id, shop_id=shop_id, day=day, kind=kind,
@@ -38,7 +38,7 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
         rounds = state.get('rounds', 0) + 1
         turns = state.get('turns', [])
         try:
-            turn = decide_platform(session, shop_id, turns, None, negotiation_id=negotiation_id, initial_propose=not turns, focus=state.get('focused_question'))
+            turn = decide_platform(session, shop_id, turns, None, negotiation_id=negotiation_id, initial_propose=not turns, focus=state.get('focused_question'), platform_context=platform_context)
             if turn.package and (platform_side_check(turn.package, shop.public) or brief_side_check(turn.package, session.brief)):
                 return {'rounds':rounds, 'result':fail({'rounds':rounds}, 'Gói không hợp lệ phía sàn.'), 'route':'end'}
             last_counter = turns[-1].package if turns and turns[-1].actor == 'shop' and turns[-1].action == 'counter' else None
@@ -56,7 +56,8 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
         turns=state['turns']
         try:
             tools=bind_role_tools(session,'referee',shop_id,turns=turns)
-            result=review_turn(session.brief,turns,llm=session.llm,tools=tools,emit=emit_for(session,shop_id,'referee',negotiation_id))
+            result=review_turn(session.brief,turns,llm=session.llm,tools=tools,emit=emit_for(session,shop_id,'referee',negotiation_id),negotiation_id=negotiation_id,
+                               replay_context=replay_context_for(session,'referee',shop_id,negotiation_id=negotiation_id,turns=turns))
         except AgentToolError:
             return {'result':fail(state,'Không thể đánh giá cuộc thương lượng.'), 'route':'end'}
         safe_reason,_=leak_guard(result.reason_vi,shop.public,shop.private,session.world.fees)
@@ -73,7 +74,7 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None):
             if last.action == 'accept':
                 return {'result':fail(state,'Chưa thể chấp nhận khi trọng tài yêu cầu làm rõ.'), 'route':'end'}
             target=result.next_actor or ('shop' if last.actor=='platform' else 'platform')
-            if target == 'seller' or (target == 'shop' and last.actor != 'platform') or (target == 'platform' and state['rounds'] >= MAX_ROUNDS):
+            if target == 'seller' or target == last.actor or (target == 'platform' and state['rounds'] >= MAX_ROUNDS):
                 return {'result':fail(state,result.reason_vi), 'route':'end'}
             return {'route':target, 'focused_question':result.focused_question}
         last=turns[-1]

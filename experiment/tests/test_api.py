@@ -48,6 +48,17 @@ def test_auth_before_upload_and_job_access(api):
     assert client.get('/health').json()['openai_configured'] is False
 
 
+def test_local_readiness_probes_storage_without_touching_existing_files(api):
+    client,app=api
+    root=app.state.storage.root
+    other=root/'existing-object';other.write_bytes(b'keep')
+    assert client.get('/v1/readiness',headers=headers()).status_code==200
+    assert other.read_bytes()==b'keep' and list(root.iterdir())==[other]
+    other.unlink();root.rmdir();root.write_bytes(b'not a directory')
+    assert client.get('/v1/readiness',headers=headers()).status_code==503
+    assert root.read_bytes()==b'not a directory'
+
+
 def test_idempotency_conflict_owner_scope_and_queue_limit(api):
     client, app = api
     asset = upload(client)
@@ -133,13 +144,15 @@ def test_watch_page_requires_signature_and_escapes_script(api):
     client, app = api
     job_id, url = completed(api)
     row = app.state.store.job(job_id)
-    result = json.loads(row['result']) | {'script':'<script>alert(1)</script>'}
+    result = json.loads(row['result']) | {'script':'<script>alert(1)</script>', 'mode':'muse'}
     app.state.store.update(job_id,result=result)
     path = url.replace('https://video.example.com/v1/jobs/', '/watch/').replace('/play?', '?')
     response = client.get(path)
     assert response.status_code == 200
     assert '&lt;script&gt;' in response.text
     assert '<script>alert(1)</script>' not in response.text
+    assert 'Lưu trữ tệp cục bộ' in response.text
+    assert 'MinIO' not in response.text
     assert client.get(path+'tampered').status_code == 403
 
 

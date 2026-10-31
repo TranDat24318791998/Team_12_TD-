@@ -1,6 +1,6 @@
 # Plan của Toàn — Agent, Tools và Knowledge
 
-**Lượt tích hợp hiện hành:** [full-integration/README.md](full-integration/README.md), với chín Astra review riêng và plan giao Terra 6.1 max. Data/media đã có source; phạm vi mới nối thật và host local, thay các dependency đang chờ trong plan ban đầu này. Giữ core/native-tools/Knowledge, không dựng business Session cạnh tranh với Data.
+**Lượt tích hợp hiện hành đã hoàn tất trong phạm vi demo:** [kết quả nghiệm thu](full-integration/IMPLEMENTATION_STATUS.md), [plan và chín Astra review riêng](full-integration/README.md). Data, native agents/tools/Knowledge/SI, media và React đã nối trên host local; thay các dependency đang chờ trong plan ban đầu bên dưới. Các gate paid provider vẫn được ghi riêng.
 
 Cập nhật 31/10/2026 theo phần việc Toàn nhận từ đầu: **agent + điều phối + tool adapters + Knowledge + học ban đêm**. Đây là plan giao coder/reviewer; trạng thái implementation và lệnh chạy ở [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Bản này thay lịch trước đã dành quá nhiều thời gian cho UI/media và chỉ dùng LLM structured output.
 
@@ -9,8 +9,8 @@ Thư mục `docs/plans/toan/` chứa bộ plan/code task riêng của Toàn. B�
 ```text
 docs/plans/toan/
   README.md                  Phạm vi, lịch và prompt giao coder/reviewer
-  DEMO_RUNBOOK.md            Lệnh chạy và đầu nối còn chờ team
-  TEAM_INTEGRATION.md         Khác biệt cần chốt với Data/Frontend
+  DEMO_RUNBOOK.md            Luồng trình bày và giới hạn bằng chứng
+  TEAM_INTEGRATION.md         Đầu nối hiện hành với Data/Frontend/media
   AGENT_TOOL_KNOWLEDGE.md     Đặc tả agent, tool calling và quyền
   KNOWLEDGE_CONTRACT.md      Năm ngăn memory, retrieval và learning
   AGENT_SCOPE_MAP.md         Phần việc gốc và đầu nối với team

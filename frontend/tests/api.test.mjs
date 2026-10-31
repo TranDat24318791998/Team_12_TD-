@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createClient,selectPreview,commandTarget,commandFinished} from '../src/api.js';
+import {createClient,selectPreview,commandTarget,commandFinished,readEvents} from '../src/api.js';
 import {SIMULATION_DAYS} from '../src/config.js';
 import {dec,vnd,mediaURL} from '../src/format.js';
 const storage=()=>{const map=new Map();return {getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,String(value))};};
@@ -106,4 +106,11 @@ test('a night command remains in progress until close and advance have completed
   assert.equal(commandFinished(before,{...before,last_night:{day:7}},'/api/night'),false);
   assert.equal(commandFinished(before,{...before,step:'complete',last_night:{day:7}},'/api/night'),true);
   assert.equal(commandFinished({...before,day:1},{...before,day:2,step:'idle'},'/api/night'),true);
+});
+
+test('event reader drains hidden-only pages and rejects non-advancing cursors',async()=>{
+  const seen=[];const client={request:async path=>{const cursor=Number(new URL(path,'http://local').searchParams.get('after'));seen.push(cursor);return cursor===0?{run_id:'r',events:[],last_seq:100,has_more:true}:{run_id:'r',events:[{seq:101,run_id:'r'}],last_seq:101,has_more:false};}};
+  const result=await readEvents(client,'r');assert.deepEqual(seen,[0,100]);assert.equal(result.events[0].seq,101);
+  await assert.rejects(readEvents({request:async()=>({run_id:'r',events:[],last_seq:0,has_more:true})},'r'),/không tiến/);
+  await assert.rejects(readEvents({request:async()=>({run_id:'other',events:[],last_seq:0,has_more:false})},'r'),/Phiên đã thay đổi/);
 });

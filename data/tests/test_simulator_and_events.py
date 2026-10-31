@@ -119,7 +119,8 @@ def test_empty_outcomes_comparison_preserves_null_and_measured_money(client,serv
             run=h.get(f"/api/v1/runs/{r}",o)
             h.post(f"/api/v1/runs/{r}/days/advance",{"expected_day":day,"expected_version":run["version"]},o)
     report=h.get(f"/api/v1/runs/{pair['run_on']}/proof?group_id={pair['comparison_id']}")
-    assert all(row["on"] is None and row["off"] is None for row in report["metrics"][:3])
+    assert all(row["on"] is None and row["off"] is None for row in report["metrics"][:2])
+    assert report['metrics'][2]['on'] is not None and report['metrics'][2]['off'] is not None
     assert report["metrics"][3]["on"]==report["metrics"][3]["off"]==0
     legacy=h.get("/api/proof")
-    assert len(legacy["metrics"])==2 and all(row["on"] is not None for row in legacy["metrics"])
+    assert len(legacy['metrics'])==5 and legacy['metrics'][0]['on'] is None and legacy['metrics'][1]['on'] is None

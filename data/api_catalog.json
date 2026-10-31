@@ -1251,6 +1251,33 @@
       "scope": [
         "run"
       ]
+    },
+    {
+      "id": "API-075",
+      "method": "POST",
+      "path": "/api/brief/confirm",
+      "handler": "demo_brief",
+      "roles": ["seller"],
+      "public": false,
+      "scope": ["seller_session", "shop_D"]
+    },
+    {
+      "id": "API-076",
+      "method": "POST",
+      "path": "/internal/v1/runs/{r}/negotiations/{nid}/finalize",
+      "handler": "write_finalize_negotiation",
+      "roles": ["orchestrator"],
+      "public": false,
+      "scope": ["run", "shop", "negotiation"]
+    },
+    {
+      "id": "API-077",
+      "method": "GET",
+      "path": "/api/proof/demo",
+      "handler": "demo_proof",
+      "roles": ["seller"],
+      "public": false,
+      "scope": ["seller_session", "shop_D"]
     }
   ]
 }

@@ -72,7 +72,11 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                 LOG.error('Video job %s failed (%s)', row['id'], type(exc).__name__)
                 status_code = getattr(exc, 'status_code', None)
                 safe_hint = f' Provider HTTP {status_code}.' if isinstance(status_code, int) else f' Loại lỗi: {type(exc).__name__}.'
-                store.update(row['id'], status='failed', stage='failed', error=(
+                current = store.job(row['id'])
+                stage = current['stage'] if current else 'starting'
+                paid = stage.startswith(('openai_', 'muse_', 'gpt_', 'validating_muse', 'finalizing_muse', 'uploading_minio', 'saving_local'))
+                unknown = paid and type(exc).__name__ != 'MuseTaskFailed'
+                store.update(row['id'], status='failed', stage='outcome_unknown' if unknown else 'failed', error=(
                     'Không hoàn tất video. Kiểm tra cấu hình model, quyền API, MinIO và media đầu vào. '
                     'Không tự gọi lại OpenAI; có thể tạo yêu cầu mới sau khi kiểm tra.' + safe_hint))
 
@@ -154,6 +158,7 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
     def job_view(row, request):
         result = json.loads(row['result']) if row['result'] else None
         response = {'job_id': row['id'], 'status': row['status'], 'stage': row['stage'],
+                    'outcome_unknown': row['stage'] in ('interrupted', 'outcome_unknown'),
                     'error': row['error'], 'result': result, 'created_at': row['created'], 'updated_at': row['updated']}
         if row['status'] == 'done':
             expires = int(time.time()) + settings.playback_ttl_seconds
@@ -187,10 +192,13 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
             if hasattr(storage, 'check'):
                 storage.check()
         except Exception:
-            raise HTTPException(503, 'MinIO chưa sẵn sàng; kiểm tra endpoint, credentials, bucket')
+            raise HTTPException(503, 'Kho media chưa sẵn sàng')
         return {'ready': True, 'storage': settings.storage_backend,
                 'openai_configured': bool(settings.openai_api_key.get_secret_value()),
-                'muse_configured': bool(settings.muse_api_key.get_secret_value())}
+                'muse_configured': bool(settings.muse_api_key.get_secret_value()),
+                'contract_version': 'growth-media.v1',
+                'supported_product_kinds': ['handheld_fan', 'desktop_fan'],
+                'optional_logo': True, 'bright_background': True}
 
     @app.post('/v1/assets', status_code=201)
     async def upload(file: UploadFile = File(...), identity=Depends(owner)):
@@ -436,13 +444,14 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
         result = json.loads(row['result'])
         video = f'/v1/jobs/{job_id}/play?expires={expires}&signature={signature}'
         script = escape(result.get('script', ''))
-        label = 'GPT viết kịch bản · Muse tạo video · MinIO lưu trữ' if result.get('mode') == 'muse' else 'Video thử nghiệm'
+        storage_label = 'Lưu trữ tệp cục bộ' if settings.storage_backend == 'local' else 'Lưu trữ MinIO'
+        label = f'GPT viết kịch bản · Muse tạo video · {storage_label}' if result.get('mode') == 'muse' else 'Video thử nghiệm'
         html = ('<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-                '<meta name="referrer" content="no-referrer"><title>Video quảng cáo quạt để bàn</title>'
+                '<meta name="referrer" content="no-referrer"><title>Video quảng cáo sản phẩm</title>'
                 '<style>body{font:17px system-ui;background:#102037;color:white;margin:0;padding:32px}'
                 'main{max-width:1000px;margin:auto}video{width:100%;height:70vh;background:#000;border-radius:16px}'
                 'p{line-height:1.6;color:#dae3ef}a{color:#95cdfa}</style>'
-                f'<main><h1>Video marketing: một sản phẩm quạt để bàn</h1><p>{label}</p>'
+                f'<main><h1>Video marketing: một sản phẩm quạt</h1><p>{label}</p>'
                 f'<video controls playsinline preload="metadata" src="{escape(video, quote=True)}"></video>'
                 f'<p><strong>Script:</strong> {script}</p>'
                 f'<p>Thời lượng thực tế: {result.get("duration_seconds", "?")} giây. Bản demo cần người bán duyệt.</p>'
@@ -476,6 +485,3 @@ def create_app(settings=None, storage=None, processor=process_job, worker_enable
                                  status_code=206 if partial else 200, headers=headers, media_type='video/mp4')
 
     return app
-
-
-app = create_app()

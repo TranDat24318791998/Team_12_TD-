@@ -11,8 +11,8 @@ export function commandTarget(state,path){
   if(!state)return 'bootstrap';
   const base=[state.run_id,state.day];
   if(path==='/api/reset')return state.run_id;
-  if(path==='/api/decision')return JSON.stringify([...base,state.pending_card?.card_id]);
-  if(path.startsWith('/api/content/'))return JSON.stringify([...base,state.content_draft?.version,state.step]);
+  if(path==='/api/decision')return JSON.stringify([...base,state.pending_card?.card_id,state.pending_card?.version,state.pending_card?.brief_version]);
+  if(path.startsWith('/api/content/')){const d=state.content_draft;return JSON.stringify([...base,d?.card_id,d?.brief_version,d?.version,d?.job_id,d?.content_id]);}
   return JSON.stringify([...base,state.step,state.last_night?.day]);
 }
 export function commandFinished(before,after,path){
@@ -43,11 +43,24 @@ export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=g
       let result;try{result=await response.json();}catch{throw new Error('Máy chủ chưa trả JSON hợp lệ. Hãy kiểm tra API hoặc mở bản xem trước.');}
       const inProgress=mutating && (response.status===202 || result?.error?.code==='COMMAND_IN_PROGRESS');
       if(mutating && !inProgress && response.status<500 && response.status!==429)intents.delete(fingerprint);
-      if(inProgress){const error=new Error('Thao tác đang được máy chủ xử lý. Đang chờ trạng thái mới…');error.pending=true;error.code='COMMAND_IN_PROGRESS';throw error;}
+      if(inProgress){const error=new Error('Thao tác đang được máy chủ xử lý. Đang chờ trạng thái mới…');error.pending=true;error.code='COMMAND_IN_PROGRESS';error.operation_id=result?.operation_id;error.operation_status=result?.status;throw error;}
       if(!response.ok || result?.error){const error=new Error(result?.error?.message_vi || result?.error?.message || `Yêu cầu chưa thành công (HTTP ${response.status}).`);error.code=result?.error?.code;error.status=response.status;throw error;}
       return result;
     }catch(error){if(error.name==='AbortError' && !signal?.aborted)throw new Error('Máy chủ phản hồi chậm. Hãy kiểm tra trạng thái trước khi thử lại.');throw error;}
     finally{clearTimeout(timeout);signal?.removeEventListener('abort',abort);}
   }
   return {preview,request};
+}
+
+export async function readEvents(client,runId,after=0,signal){
+  let cursor=after,events=[];
+  while(true){
+    const result=await client.request('/api/events?after='+cursor+'&run_id='+encodeURIComponent(runId),{signal});
+    if(result.run_id && result.run_id!==runId)throw new Error('Phiên đã thay đổi. Hãy tải lại trạng thái.');
+    if(!Number.isInteger(result.last_seq) || result.last_seq<cursor)throw new Error('Con trỏ sự kiện không hợp lệ.');
+    events.push(...result.events.filter(event=>event.run_id===runId));
+    if(!result.has_more)return {events,last_seq:result.last_seq};
+    if(result.last_seq===cursor)throw new Error('Con trỏ sự kiện không tiến.');
+    cursor=result.last_seq;
+  }
 }

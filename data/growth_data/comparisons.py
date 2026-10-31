@@ -10,7 +10,7 @@ class ComparisonMixin:
         a=self.run(c,p,on);b=self.run(c,p,off)
         require(p.role in {"seller","orchestrator","evaluator","data_admin"},"FORBIDDEN","Không được đọc đối chứng tài chính",403)
         require(a["memory_enabled"] and not b["memory_enabled"],"COMPARISON_MISMATCH","Cặp phải đúng memory on/off")
-        for key in ("scenario_version","simulator_version","seed","simulation_days","execution_profile","content_mode","learning_mode","initial_snapshot_hash","config"):
+        for key in ("scenario_version","simulator_version","seed","simulation_days","demo_shop_id","execution_profile","content_mode","learning_mode","initial_snapshot_hash","config"):
             require(a[key]==b[key],"COMPARISON_MISMATCH",f"Cấu hình đối chứng khác: {key}")
         require(a["initial_snapshot_hash"],"COMPARISON_UNVERIFIED","Run cũ chưa có snapshot đầu vào")
         return a,b

@@ -16,7 +16,7 @@ Yêu cầu bàn giao mới nhất: mở đầu tại trang shop (mục 8); chuy�
 
 ## 2. Phần A: 9 API hiện hành
 
-Giữ `/api/*`, JSON trực tiếp và cookie HttpOnly `sid`; React không đọc envelope `/api/v1`, không kết nối database và không giữ service credential. Các body đang gửi không thêm field version mới ngoài hợp đồng.
+Giữ `/api/*`, JSON trực tiếp và cookie HttpOnly `growth_sid`; React không đọc envelope `/api/v1`, không kết nối database và không giữ service credential. Các body version/brief/draft/job/content và ack/skip theo DEMO_CONTRACT hiện hành; thêm đồng thời với Data DTO/fixtures.
 
 | Endpoint | Yêu cầu phục vụ giao diện |
 | --- | --- |

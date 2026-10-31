@@ -9,7 +9,7 @@ class Package(StrictModel):
     ads_daily_budget: int = Field(ge=0)
     voucher_pct: int = Field(ge=0, le=30)
     stop_roas_below: float | None = None
-    stop_after_days: int = Field(default=2, ge=1)
+    stop_after_days: int = Field(default=2, ge=1, le=14)
     duration_days: int = Field(ge=2, le=14)
 
 

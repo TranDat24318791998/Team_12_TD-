@@ -12,6 +12,17 @@ from app.domain.privacy import leak_guard
 from app.negotiation.prompts import PLATFORM_SYSTEM, SHOP_SYSTEM
 
 
+def replay_context_for(session, role, shop_id, *, negotiation_id=None, turns=(), platform_context=None):
+    cache=getattr(session.llm,'replay_cache',None)
+    if cache is None: return None
+    from app.infrastructure.replay import ReplayMiss, build_replay_context
+    models={entry.model_id for entry in cache.manifest.entries if entry.role==role and entry.shop_id==shop_id}
+    model=(session.settings.llm_model_reflect if role=='learning' else session.settings.llm_model) or (next(iter(models)) if len(models)==1 else None)
+    try:
+        return build_replay_context(session,role=role,shop_id=shop_id,negotiation_id=negotiation_id,turns=turns,platform_context=platform_context,model_id=model)
+    except (ReplayMiss,ValueError,KeyError): return None
+
+
 def emit_for(session, shop_id, role, negotiation_id):
     def emit(type, data):
         safe = {k: v for k, v in data.items() if k in {'role', 'tool_name', 'tool_call_id', 'requested_by', 'status', 'source', 'error_code', 'invocation_id', 'record_refs'}}
@@ -22,9 +33,9 @@ def emit_for(session, shop_id, role, negotiation_id):
     return emit
 
 
-def decide_platform(session, shop_id, turns, memory_view, *, negotiation_id='negotiation', initial_propose=False, focus=None):
+def decide_platform(session, shop_id, turns, memory_view, *, negotiation_id='negotiation', initial_propose=False, focus=None, platform_context=None):
     invocation_id = f'{negotiation_id}:platform:{len(turns)}'
-    tools = bind_role_tools(session, 'platform', shop_id, turns=turns, initial_propose=initial_propose, invocation_id=invocation_id)
+    tools = bind_role_tools(session, 'platform', shop_id, turns=turns, initial_propose=initial_propose, invocation_id=invocation_id, platform_memory=platform_context.memory if platform_context else None)
     latest_shop = turns[-1] if turns and turns[-1].actor == 'shop' and turns[-1].action == 'counter' else None
     def fallback(dispatch):
         dispatch('get_public_context', {})
@@ -36,7 +47,7 @@ def decide_platform(session, shop_id, turns, memory_view, *, negotiation_id='neg
             action = 'accept'
         else:
             history = next((record for record in memory.history if record.approved_package), None)
-            original = history.approved_package if history else Package.model_validate(DEFAULT_PACKAGE)
+            original = memory.skill.seed.package if memory.skill else history.approved_package if history else Package.model_validate(DEFAULT_PACKAGE)
             action = 'propose'
         check = dispatch('validate_platform_package', {'package': original.model_dump(mode='json')})
         if not check.corrected_package or check.violations_after:
@@ -47,9 +58,9 @@ def decide_platform(session, shop_id, turns, memory_view, *, negotiation_id='neg
         return PlatformTurn(action=action, package=package, message_vi=('Sàn đồng ý với phản đề xuất.' if action == 'accept' else 'Sàn đề xuất gói tăng trưởng phù hợp mục tiêu.'))
     initial = {'brief': session.brief.model_dump(mode='json'), 'turns': [t.model_dump(mode='json') for t in turns], 'shop_id':shop_id, 'refocus_vi':focus}
     run = run_agent('platform', llm=session.llm, tools=tools,
-        messages=[SystemMessage(content=PLATFORM_SYSTEM), HumanMessage(content=json.dumps(initial,ensure_ascii=False))],
+        messages=[SystemMessage(content=platform_context.base_text if platform_context else PLATFORM_SYSTEM), HumanMessage(content=json.dumps(initial,ensure_ascii=False))],
         output_schema=PlatformTurn, fallback=fallback, emit=emit_for(session, shop_id, 'platform', negotiation_id),
-        run_name=invocation_id)
+        run_name=invocation_id,replay_context=replay_context_for(session,'platform',shop_id,negotiation_id=negotiation_id,turns=turns,platform_context=platform_context))
     session.last_agent_source = run.source
     state = session.states[shop_id]
     message, _ = leak_guard(run.value.message_vi, state.public, state.private, session.world.fees)
@@ -81,10 +92,11 @@ def decide_shop(session, shop_id, proposal, memory_view, owner_note, *, negotiat
             + (f' và ngưỡng dừng {dec(safe.stop_roas_below)}.' if safe.stop_roas_below is not None else '.')),
             private_note_vi='Đã kiểm tra giới hạn shop.')
     initial = {'proposal': proposal.model_dump(mode='json'), 'owner_note': owner_note or '', 'shop_id':shop_id, 'refocus_vi':focus}
+    from app.memory.base import compose_base_text
     run = run_agent('shop', llm=session.llm, tools=tools,
-        messages=[SystemMessage(content=SHOP_SYSTEM), HumanMessage(content=json.dumps(initial,ensure_ascii=False))],
+        messages=[SystemMessage(content=compose_base_text('shop_negotiate',SHOP_SYSTEM)), HumanMessage(content=json.dumps(initial,ensure_ascii=False))],
         output_schema=ShopTurn, fallback=fallback, emit=emit_for(session, shop_id, 'shop', negotiation_id),
-        run_name=invocation_id)
+        run_name=invocation_id,replay_context=replay_context_for(session,'shop',shop_id,negotiation_id=negotiation_id,turns=turns))
     message, _ = leak_guard(run.value.message_vi, state.public, state.private, session.world.fees)
     session.last_agent_source = run.source
     return run.value.model_copy(update={'message_vi': message})

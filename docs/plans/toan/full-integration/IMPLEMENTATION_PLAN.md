@@ -111,7 +111,7 @@ Done: acceptance T01–T24 map vào test names thực; repository RAM/SQLite con
 
 Owner Media cho pipeline/client/worker; Data owner cho storage/result/publish helpers. Đọc MEDIA_REVIEW M1–M5 và MI01–MI02 detail. MI03 Session mutations trong plan cũ được thay bằng Data worker ở đây.
 
-1. Optional logo + product kind handheld/desktop + bright backgrounds xuyên Images/vision/plan/Muse/review. D explicitly handheld; không đổi seed thành desktop.
+1. Optional logo + product kind handheld/desktop + bright backgrounds xuyên Images/vision/plan/Muse/review. **Quyết định mới của user: D dùng desktop từ ảnh MinIO**, giữ số kinh doanh mô phỏng; Data facts/context và media kind phải khớp. Không giữ USB/pin/thuộc tính handheld chưa có nguồn trong listing mới.
 2. Capability growth-media.v1; terminal checksum/MIME/size/actual duration/source/review/outcome_unknown. Keep existing service idempotency; SDK retries0.
 3. Typed HTTP client same-origin signed download, no redirects/Bearer on playback; upload once per hash/owner, frozen request IDs. Renew signature bằng GET job, không regenerate.
 4. Native Content job worker, A→video→B/C, heartbeat, durable per-run cap/bindings, stale result denied. Import checked bytes qua Data; partial failures truthful.
@@ -127,6 +127,8 @@ Owner Data. Đọc API_REVIEW mục 3; chốt payload một lần với UI owner
 2. Add/pin brief và expected versions/identities cho decisions/retry/apply/night. Preserve idempotency payload hashing; normalize omission/default trước hash nếu contract cho phép.
 3. State/event/operation projection có current exact identity, coherent content progress, native source and safe telemetry; no global Session.
 4. Proof thực từ reports/Data comparison; không phát fixture preview như source runtime. Errors tiếng Việt và status code stable.
+
+Sau final API review, thêm đường giao báo cáo cho host: CLI xuất cặp D ON/OFF đã hoàn tất thành `data/runtime/demo-proof.json`, gồm manifest/hash, report và safe evidence của chính hai run. `GET /api/proof/demo` xác thực seller D và đọc artifact cố định, kiểm schema/hash, không chạy mô phỏng hay đổi active run. React có lựa chọn “Báo cáo mô phỏng đã chạy” riêng với current-session proof, gắn nhãn `precomputed_offline_simulation`/`provider_eval:not_run`; cả report/log export dùng artifact đó. SI owner viết helper/export, Data owner route, UI owner phần chọn/hiển thị. Không sao chép business rows giữa DB để phục vụ màn Proof.
 
 Done: test HTTP cookie reset→brief→day→decision→content→apply→night→reopen/state, errors and duplicateeffects; React requests match schema exactly.
 

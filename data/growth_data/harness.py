@@ -90,6 +90,7 @@ class HttpHarness:
         self.get(f"/api/v1/runs/{r}/proposals/{first['proposal_id']}",platform)
         counter=self.post(base+"/proposals",{"product_id":private["product_id"],"negotiation_id":nid,"parent_proposal_id":first["proposal_id"],"package":safe,"stance":"accept" if first_safe else "propose","shared_reason":"Fixture shop kiểm luật rồi phản hồi"},shop)
         final=counter if first_safe else self.post(base+"/proposals",{"product_id":private["product_id"],"negotiation_id":nid,"parent_proposal_id":counter["proposal_id"],"package":safe,"stance":"accept"},platform)
+        self.post(f"/internal/v1/runs/{r}/negotiations/{nid}/finalize",{"expected_version":neg['version']+(2 if first_safe else 3),"status":"agreed","final_proposal_id":final['proposal_id'],"rounds":1 if first_safe else 2,"referee_action":"continue","reason_vi":"Fixture verdict"},orchestrator)
         card=self.post(f"/api/v1/runs/{r}/proposals/{final['proposal_id']}/present",{"expected_version":final["version"]},orchestrator)
         return card,nid
 

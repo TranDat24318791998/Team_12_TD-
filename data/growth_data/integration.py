@@ -65,9 +65,17 @@ class IntegrationMixin:
 
     def safe_text(self, c, r, text, own_shop=None):
         """Strip shared financial secrets; seller view may retain its own values."""
+        sensitive=r'giá\s*vốn|vốn\s*nhập|lãi\s*(?:tối\s*thiểu|mỗi\s*đơn|trên\s*mỗi\s*đơn)|(?:roas\s*)?hòa\s*vốn|(?:roas\s*)?hoà\s*vốn|private[_\s-]*note'
+        if own_shop is None and re.search(sensitive,text,re.IGNORECASE):
+            return 'Shop đề xuất điều chỉnh gói để phù hợp với quy tắc đã đặt.'
+        from .seed import world
+        owners=world()['shops']
         for s in "ABCDE":
             if s == own_shop:
                 continue
+            owner=owners[s]['private']['owner_name']
+            if owner and re.search(r'(?<!\w)'+re.escape(owner)+r'(?!\w)',text,re.IGNORECASE):
+                return 'Shop đề xuất điều chỉnh gói để phù hợp với quy tắc đã đặt.'
             cost = self.current_cost(c, r, s)["unit_cost_vnd"]
             rules, _ = self.rules(c, r, s)
             text = redact(text, self.product(c, r, s)["list_price_vnd"], cost, rules, self.fee_config(c,r)[0])
@@ -88,7 +96,7 @@ class IntegrationMixin:
         run=self.run(c,p,r)
         require(run["current_day"]==op["day"] and run["phase"] not in {"settling","learning","day_closed","complete"},"DAY_CLOSED","Operation không còn thuộc ngày đang chạy")
         require(op["kind"] == "start_day" or op["kind"].startswith("renegotiate:"), "OPERATION_INTERNAL", "Operation do Data API điều phối", 403)
-        require(op["version"] == b.expected_version and op["status"] in {"queued", "failed"})
+        require(op["version"] == b.expected_version and op["status"] == "queued")
         c.execute("UPDATE operations SET status='running',claimed_by=?,lease_until=?,version=version+1,updated_at=? WHERE run_id=? AND operation_id=?",
                   (p.principal_id, self.expires(120), now(), r, oid))
         return self.entity(c, "operations", r, "operation_id", oid)
@@ -107,10 +115,11 @@ class IntegrationMixin:
             require(not one(c, "SELECT negotiation_id FROM negotiations WHERE run_id=? AND day=? AND status='running'", (r, op["day"])),
                     "NEGOTIATION_PENDING", "Còn thương lượng chưa hoàn tất")
             require(not one(c,"SELECT n.negotiation_id FROM negotiations n JOIN proposals p ON p.run_id=n.run_id AND p.proposal_id=n.final_proposal_id WHERE n.run_id=? AND n.day=? AND n.status IN ('agreed','warning_only') AND p.status='validated'",(r,op["day"])),"CARD_NOT_PRESENTED","Còn final proposal chưa trình seller")
-            q=one(c,"SELECT * FROM rule_questions WHERE run_id=? AND shop_id='D' AND status='pending' ORDER BY rowid LIMIT 1",(r,))
-            card = one(c, "SELECT card_id FROM cards WHERE run_id=? AND shop_id='D' AND status='pending'", (r,))
-            if q and not card and one(c,"SELECT campaign_id FROM campaigns WHERE run_id=? AND shop_id='D' AND status='active'",(r,)):
-                self.make_card(c,r,"D",op["day"],question=q)
+            demo=run['demo_shop_id']
+            q=one(c,"SELECT * FROM rule_questions WHERE run_id=? AND shop_id=? AND status='pending' ORDER BY rowid LIMIT 1",(r,demo))
+            card = one(c, "SELECT card_id FROM cards WHERE run_id=? AND shop_id=? AND status='pending'", (r,demo))
+            if q and not card and one(c,"SELECT campaign_id FROM campaigns WHERE run_id=? AND shop_id=? AND status='active'",(r,demo)):
+                self.make_card(c,r,demo,op["day"],question=q)
                 card=True
             c.execute("UPDATE runs SET phase=?,version=version+1 WHERE run_id=?", ("awaiting_seller" if card else "negotiating", r))
         if b.status == "failed":
@@ -126,10 +135,11 @@ class IntegrationMixin:
         c.execute("UPDATE operations SET result_json=? WHERE run_id=? AND operation_id=?",(dumps(result),r,oid))
         return self.entity(c, "operations", r, "operation_id", oid)
 
-    def begin_night(self, p, r, key):
+    def begin_night(self, p, r, key, expected_day=None):
         def begin(c):
             run = self.scope(c, p, r, roles={"seller"})
             day = run["current_day"]
+            require(expected_day is None or expected_day==day,'DAY_CHANGED','Ngày đã thay đổi')
             previous = one(c, "SELECT * FROM operations WHERE run_id=? AND day=? AND kind='night'", (r, day))
             if previous:
                 return {"operation_id": previous["operation_id"], "day": day}
@@ -140,7 +150,7 @@ class IntegrationMixin:
             c.execute("UPDATE learning_handoffs SET auto_advance=1 WHERE run_id=? AND day=?", (r, day))
             self.finish_night_tx(c, r, day)
             return {"operation_id": oid, "day": day}
-        receipt = self.command(p, r, "/api/night", key, {}, begin)
+        receipt = self.command(p, r, "/api/night", key, {} if expected_day is None else {'expected_day':expected_day}, begin)
         with self.store.connect() as c:
             return self.entity(c, "operations", r, "operation_id", receipt["operation_id"])
 
@@ -169,7 +179,10 @@ class IntegrationMixin:
         h = one(c, "SELECT * FROM learning_handoffs WHERE run_id=? AND day=?", (r, day))
         require(h, "NOT_FOUND", "Không có handoff", 404)
         run = self.run(c, p, r)
-        require(run["current_day"] == day and h["version"] == b.expected_version and h["status"] == "failed")
+        allowed={'failed'} if action=='retry' else {'pending','running','failed'}
+        require(run["current_day"] == day and h["version"] == b.expected_version and h["status"] in allowed)
+        reflection=one(c,'SELECT status FROM reflection_receipts WHERE run_id=? AND day=?',(r,day))
+        if action=='retry': require(not reflection or reflection['status'] not in {'reserved','unknown'},'REFLECTION_UNKNOWN','Kết quả học chưa rõ; không gửi lại model')
         status = "pending" if action == "retry" else "skipped"
         summary = None if action == "retry" else self.empty_summary(day)
         c.execute("UPDATE learning_handoffs SET status=?,night_summary_json=?,error_code=?,version=version+1,attempt=attempt+1,lease_until=?,updated_at=? WHERE run_id=? AND day=?",
@@ -188,7 +201,9 @@ class IntegrationMixin:
         self.scope(c, p, r, roles={"learning_worker"})
         b = M.LearningResult.model_validate(body)
         self.scope(c, p, r, b.shop_id)
-        require(b.shop_id == "D", "SUMMARY_SCOPE", "Handoff hiện chỉ trình bày học của shop D", 422)
+        run=self.run(c,p,r)
+        require(not (b.status=='completed' and run['config'].get('driver',{}).get('agent_version')=='native'),'NATIVE_PUBLICATION_REQUIRED','Hoàn tất học phải đi qua giao dịch publication')
+        require(b.shop_id == run['demo_shop_id'], "SUMMARY_SCOPE", "Handoff không thuộc shop của run", 422)
         h = one(c, "SELECT * FROM learning_handoffs WHERE run_id=? AND day=?", (r, b.day))
         require(h and h["settlement_cursor"] == b.settlement_cursor, "EVIDENCE_INVALID", "Sai evidence cursor", 409)
         if h["status"] in {"completed", "failed"} and b.receipt_id and h["receipt_id"] == b.receipt_id:

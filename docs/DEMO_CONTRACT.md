@@ -1,154 +1,83 @@
-# Hợp đồng runtime và tích hợp cho demo dưới 2 giờ
+# Hợp đồng tích hợp local — Data, agent và media
 
-Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](plans/toan/AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](plans/toan/KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; core đã có code và test với fixture; market/media thật và route nghiệp vụ còn chờ tích hợp. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
+Cập nhật 31/10/2026. Đây là hợp đồng dùng chung cho bản local. Chi tiết giao việc của Toàn ở [full-integration](plans/toan/full-integration/README.md); mỗi phần có báo cáo Astra riêng. Nguồn kết quả kiểm thực chạy nằm trong runbook/status, không suy ra PASS chỉ từ tài liệu này.
 
-## 1. Quyết định kiến trúc
+## 1. Authority và topology
 
-- FastAPI một process, một phiên demo do `SessionManager.current` giữ; chạy localhost. Không phục vụ nhiều seller thật bằng bản này.
-- `create_app` tạo manager và worker pool ở lifespan. Không tạo client mạng lúc import.
-- Session là nguồn state nghiệp vụ duy nhất. `states[shop].private.rules` là rules authoritative; MemoryGateway đọc qua Session. Store chỉ giữ prefs/history/calibration/lessons, không copy rules thành bản độc lập.
-- JSON seed nạp A–E; workflow và market P0 chỉ dùng D. Thị trường tương lai/Persona không bao giờ thành prompt.
-- LangGraph chỉ làm vòng thương lượng; graph trả result rồi kết thúc. HTTP seller decision tiếp tục workflow từ `pending_card`; không cần `interrupt`, persistent checkpointer hoặc resume sau restart.
-- EventLog giữ list trong run, seq tăng bằng lock và append JSONL vào `runs/<run_id>/events.jsonl`. Không replay JSONL để tự khôi phục phiên trong MVP.
-- Worker ảnh/video dùng một ThreadPoolExecutor tối đa 4 worker, Session RLock để cập nhật ngắn. Không giữ lock qua provider/network/LLM.
-- Mỗi run có một LLMClient; tool loop theo D02a, demo budget64. `remaining_calls` là budget duy nhất. Session.live_calls_left là property đọc từ client. Client reserve trước mỗi network request.
-- `LLM_MODE` và nguồn media tách biệt: LLM offline vẫn có thể chạy media thật nếu media client được cấu hình. Pytest luôn inject fake provider; không đọc token thật.
+- Một app FastAPI tại 127.0.0.1:8000 ghép Data API, native worker và React. Media `experiment` tại 127.0.0.1:8010, gọi bằng token backend. Khởi động qua factory, không mở DB/provider khi import.
+- `data/runtime/growth.db` là nguồn run/day/shop/rules/proposal/card/decision/campaign/stock/listing/content/settlement/events. Knowledge, skill versions, phase/budget receipts lưu trong cùng SQLite. Data cấp IDs và event seq.
+- `app/runtime/data_worker.py` gọi native runner/LangGraph qua scoped Data adapters. `Session`/`runtime.day` còn phục vụ core tests/harness độc lập; không chạy chúng như business authority thứ hai trong sản phẩm.
+- Data transaction ngắn chứa kiểm version, mutation, event và command receipt; không giữ write lock qua LLM/HTTP/poll. Một native worker giữ file lock; media giữ worker lock riêng.
+- Seller cookie là `growth_sid`, HttpOnly/SameSite. Browser chỉ đọc seller projection và same-origin asset URL. Không gửi private rows, Persona, raw prompts hoặc credentials xuống browser/model trái quyền.
+- Demo mặc định D, horizon 7; headless hỗ trợ 1..7 và shop được pin vào run. Theo xác nhận người dùng, **D là quạt để bàn từ MinIO**, giữ nguyên số kinh doanh mô phỏng. Facts không còn claim handheld/USB/pin chưa có nguồn.
 
-## 2. Model cốt lõi
+## 2. Agent, tiền và Knowledge
 
-Dùng Pydantic v2 và `extra='forbid'` cho input/output agent, HTTP. Domain model thuần, không import Session/API/client. Tiền VND integer; finance dùng Decimal ROUND_HALF_UP. Giá trị ROAS JSON hữu hạn hoặc null.
+Năm role Platform/Shop/Referee/Content/Learning dùng runner native: model tool call → role ACL/schema → callable read/compute → ToolMessage → terminal typed output. Tối đa ba provider requests/invocation và ba Platform rounds. Model không được gọi mutation/approval/provider job trực tiếp.
 
-Giữ nguyên các field của ShopPublic/ShopPrivate/ShopRules/FeeConfig, Package, PlatformTurn, ShopTurn, NegotiationResult, Calibration, LessonOp, NightSummary, DayMetrics trong CONTRACT. `Package`: voucher whole percent 0–30, ngân sách >=0, stop null khi không ads, duration 2–14; validator xử lý quy tắc shop. Khi model output không parse được, dùng fallback; không nới schema.
+Run dùng chung 64 native call reservations bền vững. Demo shop được ưu tiên LLM theo cấu hình; các shop nền vẫn qua cùng graph/tools với transport offline có nhãn để dành budget cho Content/Learning. Cache/replay đúng binding không trừ slot; unknown không hoàn slot và không resend với key mới. Nguồn live/replay/offline/fixture được ghi theo lời gọi thực, không suy từ requested mode.
 
-### Model mới và field bổ sung
+Platform/Referee không đọc giá vốn/min-profit/ROAS riêng; Shop output qua leak_guard với cùng snapshot tiền đã dùng cho tools. Forecast tool chỉ preview read-only, không tạo proposal. Data finalize sau Referee và code checks; accepted turn chưa được phép tự thành card. Seller approval vẫn là gate cuối.
 
-| Model / module | Field chính xác |
-|---|---|
-| IntentBrief / `domain/models/intent.py` | `brief_id:str, version:int, shop_id:str, intent:Literal['increase_orders'], goal_vi:str, allow_ads:bool, ads_daily_cap:int\|None, content_refresh:bool, duration_days:int, confirmed:bool` |
-| PublicTurn / `domain/models/negotiation.py` | `turn_id:str, actor:Literal['platform','shop'], round:int, action:str, package:Package\|None, message_vi:str` |
-| RefereeDecision / `domain/models/negotiation.py` | `action:Literal['continue','refocus','ask_human','stop'], reason_vi:str, evidence_refs:list[str], unresolved_terms:list[str], next_actor:Literal['platform','shop','seller']\|None, focused_question:str\|None` |
-| Card / `domain/models/cards.py` | Field cũ + `version:int=1, brief_version:int` |
-| SellerDecision | Field cũ + `expected_card_version:int, expected_brief_version:int`; HTTP P0 chỉ accept/negotiate/reject; edit/defer chưa hỗ trợ |
-| ContentDraft | Field cũ + `card_id:str, brief_version:int`; `version` 1..3 tính trong một card |
-| ContentText / `domain/models/content.py` | `title:str, description:str, checks:list[str]`; title/description chỉ dùng verified facts |
-| Preference / `domain/models/learning.py` | `pref_id:str, shop_id:str, field:Literal['content_style','voucher_max_pct'], value:str, status:Literal['candidate','asked','confirmed','declined'], evidence_seqs:list[int], asked_day:int\|None, declined_until:int\|None` |
-| ForecastSnapshot / `domain/models/metrics.py` | `prediction_id:str, shop_id:str, target_day:int, raw_point:float, issued_point:int, factor_used:float, package:Package` |
+Giữ Decimal ROUND_HALF_UP, VND integer, voucher percent nguyên0..30, Package duration2..14, stop_after_days1..14. D contribution không voucher31625, voucher3%=27136, break-even≈6.2555, stop6.5; đổi ảnh/tên sản phẩm không đổi các số này. Automatic action chỉ dừng/giảm chi.
 
-Public brief không tự copy hard cap 45.000đ của shop vào `ads_daily_cap`. Mặc định field này null, nghĩa là chưa có ngân sách người bán chủ động công khai; shop vẫn enforce hard rule 45.000đ. Nếu seller cung cấp public cap khác thì lấy min với hard rules ở shop. Không ép live LLM phải đề xuất 70.000đ khi public brief đã chặn mức đó.
+Rules đọc từ Data; chỉ seller xác nhận question đã lưu mới đổi. Voucher preference chỉ siết cap. Preferences/History/Calibration/Lessons là dẫn xuất typed có evidence/version. Candidate chưa confirmed không thành Content default. MemoryOFF không đọc/ghi learned state nhưng Rules/facts vẫn enforce. Chi tiết ở [Knowledge](plans/toan/KNOWLEDGE_CONTRACT.md) và [self-improve](plans/toan/self-improve/README.md).
 
-Referee chỉ nhận public brief + PublicTurn + public violation codes; không nhận ShopPrivate, private_note, raw Session, full EventLog hoặc finance cụ thể.
+## 3. Seller API
 
-### Session fields tối thiểu
+Giữ JSON trực tiếp tại `/api/*`; `/api/v1` dùng envelope. Mọi POST gửi `Idempotency-Key` và `X-Request-ID`. Body cùng key replay receipt, body khác conflict trước side effect. Lỗi seller: `{"error":{"code":"...","message_vi":"..."}}`; input422, state/version409, missing404. Unknown API route trả JSON404.
 
-```text
-run_id, settings, world, states, day=1, step='idle', interactive=True
-brief: IntentBrief|None
-pending_card: Card|None
-approved_card_id: str|None
-content_draft: ContentDraft|None
-last_night: NightSummary|None
-memory, log, llm, content
-negotiation_attempt: int=0
-rules_version: int=1
-knowledge_revision, memory_cursor  # read-only properties từ store, không copy counters
-forecast_snapshots: dict[(shop_id,day),ForecastSnapshot]
-settled_days: set[int]
-night_receipts: dict[int,dict]
-apply_receipts: dict[(card_id,draft_version),dict]
-phase_busy: bool=False
-lock: threading.RLock
-```
+| Endpoint | Body / response quan trọng |
+| --- | --- |
+| GET /api/state | run_id/day/step/mode/memory, simulation_days, brief hoặc null, rules_version, confirmed_style_notes, busy/active_operation, current card/draft và nguồn thực |
+| POST /api/reset | `{memory,seed}`; run mới, profile do backend chọn external/worker/external; không xóa lịch sử run cũ |
+| POST /api/brief/confirm | `{intent:'increase_orders',goal_vi,allow_ads:true,ads_daily_cap:null hoặc integer,content_refresh:true,duration_days:3}` → `{brief,step:'idle'}`; ID/version/confirmation do server persist |
+| POST /api/day/start | `{}`; cần brief đã confirmed; operation async →202 với ID/status khi chưa xong |
+| POST /api/decision | `{card_id,expected_card_version,expected_brief_version,action,note_vi,rule_answer}`; action accept/negotiate/reject |
+| POST /api/content/retry | `{card_id,expected_brief_version,expected_draft_version,expected_job_id,expected_content_id,feedback_vi,retry_scope:'all'}` → draft mới; không chờ render |
+| POST /api/content/apply | Cùng binding card/brief/draft/job/content, thêm `{cover_option,skip_video,video_review_ack}` → listing sau transaction approval/publish/activate |
+| POST /api/night | `{expected_day}`; settle/learn/advance một lần; pending202 với operation/status, terminal summary/next_day; ngày cuối next_day=null |
+| GET /api/events?after=N&run_id=R | `{run_id,events,last_seq,has_more}`; after>=0, bind đúng run; drain đến has_more=false kể cả page bị lọc rỗng |
+| GET /api/proof | Report đối chứng được lưu/scoped; chưa có pair hoàn tất →409 PROOF_NOT_READY, không placeholder số liệu và không tự chạy paid experiment |
+| GET /api/proof/demo | Seller D đọc artifact đối chứng offline đã xuất; envelope manifest/report/evidence, kiểm schema/hash, không đổi active run hoặc gọi provider |
 
-ShopState vẫn có public/private/persona/active/cooldown_until/metrics. Persona chỉ simulator dùng. `SessionManager.reset()` tạo run mới; callback giữ run cũ không được ghi vào manager.current mới.
+Card thêm version/brief_version/negotiation_id/proposal_id/proposal_version. Draft thêm card_id/brief_version/job_id/content_id/job_version/content_version. Draft `version` là attempt1..3, khác content_version và job heartbeat version. Seller action bind draft đã thấy, không tự chuyển sang latest khi conflict.
 
-## 3. API và trạng thái
+State chính: idle (brief chưa/đã confirmed) → negotiating → awaiting_decision → content_review → day_done → idle ngày sau hoặc complete. UI dùng brief.confirmed, không cần bước brief_confirmed riêng. Busy/active operation lấy từ Data, được phục hồi sau reload. Close day chặn operation/negotiation/content chưa resolved; summary có mặt chưa đồng nghĩa night đã advance.
 
-Chỉ route dùng SessionManager. Backend không tin shop_id của browser; P0 route luôn D. Lỗi thống nhất `{"error":{"code":"...","message_vi":"..."}}`. HTTP422 cho input không hỗ trợ,409 cho sai state/version,503 khi nội dung chưa cấu hình. API không trả token, URL có credential hoặc stacktrace.
+Question Yes dùng accept/true; No reject/false. Chỉ đổi Rules/preference, giữ campaign hiện hành. Offer accept ghi approval; refresh phải chờ Content Apply mới activate. Reject không tạo content/spend. Negotiate tạo attempt/card mới theo giới hạn Data; preset demo giảm voucher còn2%. Referee stop/ask_human hoặc lỗi kết thúc attempt có lý do, không bịa agreed/card.
 
-| Route | Request | Response/side effect |
-|---|---|---|
-| POST /api/reset | `{memory?:true,seed?:42}` | run mới, day1, mode, state; seed42 mặc định |
-| GET /api/state | — | StateView cũ + `brief, rules_version, confirmed_style_notes:list[str], busy:bool`; không serialize Session |
-| POST /api/brief/confirm | `{intent:'increase_orders',goal_vi,allow_ads:true,ads_daily_cap:null,content_refresh:true,duration_days:3}` | `{brief,step:'brief_confirmed'}`; id/version server cấp; chỉ ở idle |
-| POST /api/day/start | — | `{day,step}`; tạo thương lượng/thẻ hoặc câu hỏi ngày2 |
-| GET /api/events?after=N | — | `{events,last_seq}` của current run, own-seller projection |
-| POST /api/decision | `{card_id,expected_card_version,expected_brief_version,action:'accept'\|'negotiate'\|'reject',note_vi?:'',rule_answer?:null}` | `{step,card?}` |
-| POST /api/content/retry | `{card_id,expected_brief_version,expected_draft_version,feedback_vi}` | `{draft}`; tạo bản tiếp theo ngay, job chạy nền |
-| POST /api/content/apply | `{card_id,expected_brief_version,expected_draft_version,cover_option:'A'\|'B'\|'C',skip_video:false}` | `{listing}`; xác nhận bản nội dung, áp dụng listing và kích hoạt gói một lần |
-| POST /api/night | `{expected_day:int}` | `{summary,next_day}`; settle→learn→advance một lần; sau ngày2 next_day=null |
-| GET /api/proof | — | 409 `PROOF_NOT_READY` khi chưa có đối chứng thật |
+## 4. Media và publication
 
-State `idle → brief_confirmed → negotiating → awaiting_decision → content_review → day_done → idle` (ngày2). Nhánh không content: accept→day_done. Reject→day_done. Ngày2 question-only resolve→day_done. Night cuối ngày2→complete. Giữ `night_done` trong enum nếu đã có, nhưng endpoint này advance xong trả idle/complete; `last_night` vẫn đọc được.
+Dùng `ContentService(bridge, settings, llm, *, media_client=None)`, `await process_job(run_id,job_id)`, `close()`. Worker đọc approved Data snapshot và checksum-verified original trong registry; native Content trả title/description chỉ từ facts. Text phải được kiểm trước tạo paid jobs và kiểm lại khi nhận result.
 
-Sau night, idle + day=2 + brief.confirmed=true hiển thị Bắt đầu ngày 2, không bắt xác nhận lại brief. `StateView.busy` đọc `Session.phase_busy`; không tạo hai cờ độc lập.
+Media API qua `MEDIA_API_BASE_URL`/`MEDIA_API_TOKEN`, không import `experiment` vào app. Upload nguồn một lần/binding; image JSON `/v1/image-jobs`, video JSON `/v1/jobs`. Raw Muse `/v1/videos` là tầng API khác; xem [MUSE_API](MUSE_API.md).
 
-`/day/start` là sync trong handler thường `def`, FastAPI threadpool chạy; UI thấy busy local ngay, có thể poll events từ request khác. Mỗi model call tối đa 8 giây, tối đa 12 actor invocations, mỗi invocation tối đa 3 model calls = 36 calls/negotiation (trọng tài sau mỗi lượt sàn/shop); không giữ Session.lock cả vòng. Server đánh dấu busy trước khi nhả lock, command xung đột trả 409. Không làm thêm operation/job framework cho day start.
+- Service hỗ trợ desktop_fan/handheld_fan, optional logo, bright preference. D hiện dùng desktop_fan. Một draft A/B/C; A xong thì queue video5giây realistic_human từ A cùng attempt rồi B/C. Chọn B/C không tạo video mới.
+- Initial+2retry, tối đa9image/3video submissions cho cả run; media text/vision tối đa3/video ghi riêng native64. Request body/hash/key/remote ID/status/unknown ở Data; queue limit không thay budget.
+- Retry nền sáng là all, giữ images-only semantics của caller cũ. Feedback chỉ tác động draft hiện tại; night tạo candidate, seller Yes mới đổi default.
+- HTTP accepted nhưng mất/malformed response là outcome_unknown; không đổi thành known failure để tạo key mới. Remote poll/signature refresh không regenerate. Service restart giữ task ID/unknown, không tự gọi lại raw Muse.
+- Signed download chỉ qua configured origin/path, no redirect/Bearer; kiểm MIME/magic/size/SHA rồi import Data assets. Video cap50MB. Browser dùng authenticated Data asset URL; signed/MinIO URL không là listing bền vững.
+- Apply cần exact current binding, selected cover ready và bytes đúng checksum/size/ownership. Video pass review có thể include; false/null cần explicit ack hoặc skip. Missing/running/failed video cần skip. Ack không vượt file check.
+- Skip publish video=null; late worker không gắn video vào listing đã chốt. Approval+listing+campaign+event+receipt cùng transaction. Failed validation rollback toàn bộ.
+- Source fixture/cache/live/unavailable phải đúng bằng chứng. Các output nhập từ bản đồng nghiệp là cache/imported chưa tự chứng minh provider; không gắn nhãn live local.
 
-P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, duration_days=3. Giá trị ngoài slice trả 422 `DEMO_BRIEF_UNSUPPORTED`; không xây thêm nhánh rồi bỏ thiếu UI. Public cap được chọn hoặc null. Gateway HTTP retry/apply cần cả card và brief version vì draft version bắt đầu lại từ 1 mỗi card.
+## 5. Night và self-improve
 
-### Decision semantics
+Data ghi daily prediction trên effective state trước actual và settlement một lần; không lấy forecast3ngày so với outcome1ngày. Public evidence freeze tại settlement_cursor, join exact negotiation/card/decision/applied/campaign/prediction refs. Agreed/approved chưa applied không là fact đã chạy; không dùng mutable latest rows để đoán history.
 
-1. Card cũ/version sai →409 trước side effect.
-2. Question-only: `action=accept,rule_answer=true` là Có; `action=reject,rule_answer=false` là Không. Chỉ sửa rules/preferences, không tạo ActivePackage/content job. Giữ gói đang active.
-3. Offer accept: ghi approval, chưa activate nếu cần content. `ContentService.start(D)` trả draft và khởi động jobs. Nếu không content, activate ngay qua helper dùng chung.
-4. Offer negotiate: tối đa một lần trong demo. Chỉ hỗ trợ note chọn sẵn `Giảm voucher còn 2%`; tạo attempt mới, Card ID mới, giữ brief. Text khác→422 `DEMO_NOTE_UNSUPPORTED`. Agent vẫn nhận owner_note. Không đưa note private cho sàn.
-5. Offer reject: resolve card→day_done, không tạo content/gói mới. Giữ active cũ nếu có. Reject không phải lỗi server.
-6. `ask_human`/`stop` từ referee: không tạo offer đã agreed; kết thúc có lý do/failed, trả step=brief_confirmed và clear busy, UI cho reset/chỉnh lại brief bằng reset. Free-form clarification chưa làm. Đây là giới hạn demo, không giả vờ đã hỗ trợ hội thoại bất kỳ.
+Một night entrypoint: prior receipt → immutable snapshot → reflection claim → reserve model slots → native Learning/fallback → terminal output → pure stage/compiler/eval → atomic publication. Publication chứa Knowledge/skill versions/meta/full receipt và Data handoff/event/advance trong một short transaction. Rules confirmation+preference cũng atomic. Network không nằm trong transaction.
 
-## 4. Gói, tiền, privacy
+Bốn base skills, learned policy chỉ Platform offer/renew với allowlist đã chốt; không sinh arbitrary code/tiền. Version hiệu lực d+1; attempt pin seed/version từ đầu, native và fallback dùng cùng seed nhưng vẫn qua validators/seller. Unknown reflection không resend; retry đọc receipt. Schema/provenance ở [self-improve.v1](../contracts/self_improve/README.md).
 
-- Offline sàn mở đầu đúng DEFAULT_PACKAGE; shop clamp thành counter45k/3/6.5; sàn accept identical parent ở lượt2. Mọi sửa package phải được ghi thành candidate mới; không accept gói khác âm thầm.
-- MAX_ROUNDS tính lượt sàn. Guard counter ở code/graph, không hỏi referee có muốn vượt3.
-- `profit_per_unit(D,0)=31625`, ở3%=27136; break-even≈6.2555, stop6.5; voucher4% break-even>6.5 dù vẫn đủ minimum profit.
-- B lỗ→content-only warning; cần unit test finance nhưng chưa cần chạy B trong UI.
-- Financials tính từ rules thật; allowlist projection rồi leak_guard bổ sung text. Không chỉ regex che số trên nguyên Session.
-- Chỉ tăng ngân sách bằng offer mới + seller duyệt; automatic action chỉ pause/reduce.
+D/E ON/OFF proof chạy Data simulator với cùng seed/horizon/scenario, memory tách run; số đo lấy persisted settlements, không yêu cầu ON thắng và không dùng UI preview làm evidence. Calibration chỉ prior-day đủ5samples. Provider evaluation, native fixture protocol, offline simulation, durable persistence và media live là các gate riêng.
 
-## 5. Media và phê duyệt
+Báo cáo demo đã chạy được xuất vào cố định `data/runtime/demo-proof.json` và chọn riêng trong UI. Source `precomputed_offline_simulation`, `provider_eval:not_run`; giữ run IDs/seed/horizon/common brief và các reference thực. Download/log dùng frozen evidence ON/OFF trong artifact. Không lấy events của browser run hiện tại để ghép với pair ở DB khác; artifact thiếu/hỏng trả lỗi có kiểm soát.
 
-Cập nhật sau source `experiment/` ở commit a0a93f0. Đường triển khai mới dùng service hiện có qua HTTP, theo [media-integration contract](plans/toan/media-integration/CONTRACT.md); MI01–MI04 là plan, chưa phải code đã tích hợp. Phân biệt media service với raw Muse Gateway trong [MUSE_API](MUSE_API.md).
+## 6. Events và persistence
 
-- Native Content Agent ở core tạo title/description và đọc confirmed style. Ảnh dùng OpenAI; video dùng Muse qua experiment. MEDIA_MODE độc lập LLM_MODE; service có env/token riêng, core dùng MEDIA_API_BASE_URL/MEDIA_API_TOKEN sau khi adapter được implement.
-- Input D là ảnh đúng quạt mini cầm tay; logo tùy chọn sau MI01. Thiếu ảnh thì chặn input, không đổi SKU sang quạt bàn hoặc tự dùng text-to-video. Luồng chính tạo3ảnh, video5giây realistic_human từ A cùng draft; chọn B/C chỉ đổi cover.
-- `ContentService(session, *, media_client, executor, input_resolver)` là constructor mới; start/retry/apply giữ interface nghiệp vụ. Service cài draft trước workers, runtime không ghi đè snapshot cũ khi callback đã cập nhật. Không giữ lock qua provider IO.
-- Binding gồm run/shop/card/brief/draft/slot. Callback chỉ ghi đúng draft hiện tại chưa publish. Reset/retry/apply vô hiệu hóa callback cũ.
-- Status ảnh running/done/failed/cached; video thêm pending. Path chỉ có khi file local đúng run/replay thật đã tải và kiểm checksum; signed URL hoặc MinIO URI không thay local artifact gate.
-- Additive fields dự kiến: cover source/error; video source/reference_option/visual_review_passed/review_notes_vi. Cập nhật model/serializer/fixtures cùng MI03; client cũ không được tự suy luận review=true khi field thiếu.
-- Ba bản tổng = initial +2retry. Feedback nền sáng áp dụng draft hiện tại; Rules chỉ đổi sau seller confirmation. Một feedback event, không lặp khi poll.
-- Apply kiểm cover selected ready và file. Video ready nhưng review false/null cần video_review_ack=true, hoặc seller chọn skip_video=true. Ack không vượt lỗi file. Sau publish không tự gắn video về muộn.
-- Planned request extension: POST /api/content/apply thêm `video_review_ack:false`; runtime helper thêm keyword cùng tên và receipt payload kiểm cả ack/skip/cover. API owner chỉ bật khi schema/fixture/React cùng cập nhật; facade Data hiện chưa nhận extension này.
-- `ContentService.apply(shop_id, cover_option, *, skip_video=False) -> ShopPublic` chỉ mutate listing sau kiểm gate, không gọi mạng/activate. Runtime tạo forecast snapshots trước rồi activate exact approved package, giữ receipt và clear draft/card.
-- Root same-key/body recovery chỉ gọi API media có transactional idempotency. Raw Muse POST không tự lặp sau unknown. Budget, unknown status và replay manifest theo contract media; không âm thầm tạo job trả phí mới.
-- UI/Data dùng [handoff](plans/toan/media-integration/UI_DATA_HANDOFF.md). Data accept→activate trước content và thiếu brief/version vẫn là blocker sản phẩm; media service không sửa các semantics đó thay owner.
+Business events cùng Data seq; safe telemetry gồm tool_called/tool_result/agent_completed, agent_activity, memory_read/skill_used và record/version refs. Không log raw private ToolMessage. Card/decision/applied events giữ immutable IDs để UI/evidence không lookup nhầm current card về sau.
 
-## 6. Memory và simulation
+Event cursor tiến qua event không được seller xem; run change reset buffer. Export phải đầy đủ authorized cursor/JSONL, không giới hạn một page100. Seller proof không tổng tài chính riêng của shop ngoài grant. Missing transcript/source giữ unavailable, không nhập hội thoại preview.
 
-- DayMetrics P0 của D được tính bằng market code deterministic theo seed/day/shop/kind, channel organic/paid tách lúc tính; trả aggregate theo CONTRACT. ROAS=paid revenue/paid spend hoặc null khi spend0.
-- ForecastSnapshot trước settlement, raw daily cùng ngày. Không lấy forecast3ngày chia outcome1ngày. Chỉ D 1–2 mẫu→factor giữ1.0 đến đủ5mẫu.
-- `market.build_forecast_snapshots(shop,pkg,start_day,seed,calibration) -> list[ForecastSnapshot]` là hàm thuần trả các ngày trong thời hạn. `forecast_package` tổng hợp cùng output. `runtime.activate_approved_package` lưu các snapshot của gói đã duyệt vào Session trước settlement; function forecast không dùng global/Session để tự ghi. Retry apply dùng receipt, không tạo lại snapshot sau khi biết actual.
-- History lưu package seller thực sự áp dụng, refs negotiation/card, kết quả công khai; không có lãi/cost/private note trong platform_view.
-- Quyền, DTO typed và atomic commit của cả năm ngăn theo KNOWLEDGE_CONTRACT; các mục dưới chỉ giữ kịch bản D. Shop A có fixture seller edit voucher để test preference voucher_max_pct; chưa mở A UI.
-- Candidate `content_style='ảnh nền sáng'` lấy từ feedback event có thật. `pref_id` ổn định trong run/shop/field/value. Night chỉ tạo candidate, không sửa rules.
-- `Preference.evidence_seqs` là integer event seq. `LessonOp.evidence` giữ đúng CONTRACT: negotiation ID strings có thật; lấy liên kết từ event.data.negotiation_id. Không dùng chuỗi hóa event seq làm mã thương lượng.
-- Ngày2 start: đang có gói nên chỉ tạo question card. Yes→append style một lần và rules_version+1; No→declined/14ngày im lặng. Không chạy lại campaign.
-- Memory OFF: rules vẫn enforce; không ghi learned history/prefs/calibration/lessons. NightSummary rỗng và có nguồn offline/skipped rõ.
-- `/night expected_day=1` gọi lại trả receipt cũ, không settle/học/tăng ngày lần2. `/apply` dùng receipt `(card_id,draft_version)` khi lặp đúng request; đổi cover cùng receipt→409.
-
-## 7. Event tối thiểu
-
-Giữ Event của CONTRACT. Mọi `data` chứa IDs/version liên quan; thêm `source:live|replay|offline|fixture` cho model/media để UI phân biệt. Không ghi secrets/raw prompt riêng vào public event.
-
-Các event cần có: `intent_confirmed`, `day_start`, `platform_turn`, `shop_turn`, `code_check`, `referee_review`, `card_sent`, `seller_decision`, `content_job`, `content_applied`, `package_applied`, `market_result`, `memory_read`, `memory_write`, `night_summary`, `rules_confirmed`.
-
-Tool events thêm `tool_called`, `tool_result`, `agent_completed`: schema và privacy theo D02a. Không xuất raw private ToolMessage. Model source và requested_by phân biệt native tool request với offline dispatch.
-
-`content_job` khi retry chứa feedback_vi và draft version. `seller_decision` chứa card/version và rule_answer. `package_applied` chứa approved card ID và exact package. Platform/referee prompt được dựng từ PublicTurn, không dùng browser seller event stream.
-
-
-## 8. Runtime giữ phần việc điều phối gốc
-
-D03 có monitor/match/renew helpers theo task gốc 1.6; không cần UI nhiều shop hay Send fan-out để test. Monitor dùng metrics đã settle: dừng ads khi đủ số ngày dưới ngưỡng, tồn kho thiếu hoặc hết hạn; không tăng chi. Match trả selected/rejected có lý do; C stock15 bị loại. Gói hết hạn tạo đề xuất renew mới và cần approval mới. Fixture E kiểm pause trước spend ngày3, fixture A kiểm sở thích voucher; chúng không biến demo D2ngày thành proof A–E.
-
-Day/daystart cùng current session, không dùng persistent interrupt/checkpointer ở slice này. Seller approval và content phiên bản vẫn là gate bắt buộc. Model không được gọi thẳng confirm_preference, commit_memory_updates, apply hoặc provider job.
-
-Market-result evidence giữ card/negotiation/prediction refs xuyên ngày; quy tắc join/không đếm support hai lần theo KNOWLEDGE_CONTRACT mục5.
+Chạy local và kiểm thực tế xem [LOCAL_RUN](LOCAL_RUN.md). Test dùng temporary DB, explicit fake providers/offline mode, không đọc dữ liệu run người dùng hoặc gọi API trả phí.

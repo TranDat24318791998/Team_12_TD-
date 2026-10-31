@@ -28,6 +28,13 @@ class Settings(BaseModel):
     muse_api_key: str = Field(default="", repr=False)
     muse_video_model: str = "muse-video"
     media_mode: Literal["live", "replay", "offline"] = "offline"
+    media_api_base_url: str = "http://127.0.0.1:8010"
+    media_api_token: str = Field(default="", repr=False)
+    media_poll_seconds: float = Field(default=2, gt=0)
+    media_draft_timeout_seconds: int = Field(default=1200, gt=0)
+    max_image_jobs_per_session: int = Field(default=9, ge=0)
+    demo_product_image_path: str = ""
+    demo_logo_image_path: str = ""
     langfuse_public_key: str = Field(default="", repr=False)
     langfuse_secret_key: str = Field(default="", repr=False)
     langfuse_host: str = ""
@@ -65,10 +72,11 @@ class Settings(BaseModel):
     def describe(self) -> str:
         data = self.model_dump()
         for field in (
-            "openai_api_key", "useapi_token", "muse_api_key", "langfuse_public_key", "langfuse_secret_key"
+            "openai_api_key", "useapi_token", "muse_api_key", "media_api_token", "langfuse_public_key", "langfuse_secret_key"
         ):
             value = data[field]
             data[field] = (
+                "[đã ẩn]" if field == "media_api_token" and value else
                 f"{value[:4]}…{value[-4:]}" if len(value) > 8 else "[đã ẩn]" if value else ""
             )
         data["resolved_mode"] = self.resolved_mode()

@@ -14,6 +14,8 @@ class CoverImage(StrictModel):
     status: Literal["running", "done", "failed", "cached"]
     path: str | None = None
     prompt: str = ""
+    source: Literal["live", "cache", "fixture", "unavailable"] = "unavailable"
+    error: str | None = None
 
 
 class VideoJob(StrictModel):
@@ -22,6 +24,10 @@ class VideoJob(StrictModel):
     job_id: str | None = None
     prompt: str = ""
     error: str | None = None
+    source: Literal["live", "cache", "fixture", "unavailable"] = "unavailable"
+    reference_option: Literal["A"] = "A"
+    visual_review_passed: bool | None = None
+    review_notes_vi: str | None = None
 
 
 class ContentDraft(StrictModel):

@@ -1,11 +1,19 @@
 """Kiểm thử HTTP qua ứng dụng FastAPI thực."""
 
 from fastapi.testclient import TestClient
+import pytest
 
-from app.main import app, create_app
+from app.core.settings import Settings
+from app.main import create_app
 
 
-def test_health_and_static_page():
+@pytest.fixture
+def offline_settings(monkeypatch):
+    monkeypatch.setattr('app.core.settings.Settings', lambda: Settings(_env_file=None, llm_mode='offline', media_mode='offline'))
+
+
+def test_health_and_static_page(tmp_path, offline_settings):
+    app = create_app(home=tmp_path)
     with TestClient(app) as client:
         response = client.get("/health")
         assert response.status_code == 200
@@ -20,17 +28,18 @@ def test_health_and_static_page():
             assert client.get(f"/{name}.html").status_code == 200
 
 
-def test_static_serving_does_not_depend_on_working_directory(tmp_path, monkeypatch):
+def test_static_serving_does_not_depend_on_working_directory(tmp_path, monkeypatch, offline_settings):
     monkeypatch.chdir(tmp_path)
+    app = create_app(home=tmp_path/'data')
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
         assert client.get("/media/replay/.gitkeep").status_code == 200
         assert client.get("/media/missing.mp4").status_code == 404
 
 
-def test_app_instances_keep_runtime_state_separate():
-    first = create_app()
-    second = create_app()
+def test_app_instances_keep_runtime_state_separate(tmp_path, offline_settings):
+    first = create_app(home=tmp_path/'first')
+    second = create_app(home=tmp_path/'second')
     first.state.session_marker = "first"
     assert not hasattr(second.state, "session_marker")
     with TestClient(second) as client:

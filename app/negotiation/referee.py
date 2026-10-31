@@ -5,7 +5,7 @@ from app.domain.models.negotiation import RefereeDecision
 from app.negotiation.prompts import REFEREE_SYSTEM
 
 
-def review_turn(brief_public, turns, *, llm, tools, emit):
+def review_turn(brief_public, turns, *, llm, tools, emit, negotiation_id=None, replay_context=None):
     def fallback(dispatch):
         ctx = dispatch('get_referee_context', {})
         refs = [ctx.turns[-1].turn_id] if ctx.turns else []
@@ -22,4 +22,4 @@ def review_turn(brief_public, turns, *, llm, tools, emit):
     return run_agent('referee', llm=llm, tools=tools,
         messages=[SystemMessage(content=REFEREE_SYSTEM), HumanMessage(content=json.dumps(payload,ensure_ascii=False))],
         output_schema=RefereeDecision, fallback=fallback, emit=emit,
-        run_name=f'{brief_public.brief_id}:referee:{len(turns)}').value
+        run_name=f'{negotiation_id or brief_public.brief_id}:referee:{len(turns)}',replay_context=replay_context).value

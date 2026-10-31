@@ -4,17 +4,17 @@ Dự án cho SEAxOpenAI Hackathon: hai agent đại diện sàn và shop thươn
 
 ## Trạng thái
 
-Core Agent + Tools + Knowledge đã có code và test headless với fixture market/media; xem [runbook phần Toàn](docs/plans/toan/DEMO_RUNBOOK.md). Frontend React có 5 màn hình và preview 7 ngày. Data service local đã được team triển khai riêng trong `data/`; route, market và media cần ghép với agent trước khi chạy toàn sản phẩm bằng dữ liệu thật.
+Bản local ghép Data SQLite, native agent/tools/Knowledge/self-improve, React và media service. Đọc [cách chạy local](docs/LOCAL_RUN.md), [hợp đồng tích hợp](docs/DEMO_CONTRACT.md) và [plan/review riêng từng phần](docs/plans/toan/full-integration/README.md). Test fixture/offline và live provider được báo riêng; preview7ngày không là proof thực nghiệm.
 
 ## Cấu trúc codebase
 
 | Khu vực | Trách nhiệm |
 | --- | --- |
-| `app/api/` | Router theo tài nguyên, HTTP schema và dependency |
+| `data/growth_data/` | HTTP facade, business state, assets, simulator và SQLite authority |
 | `app/domain/` | Model chia theo nghiệp vụ, công thức tiền, validators và privacy |
-| `app/runtime/` | Session, SessionManager và workflow một ngày |
+| `app/runtime/` | Data-native worker; Session/day độc lập giữ cho core tests |
 | `app/negotiation/` | Hai agent, prompt và graph thương lượng |
-| `app/content/` | Tạo, góp ý và áp dụng nội dung |
+| `app/content/` | Native Content và HTTP media worker; Data giữ publication |
 | `app/memory/` | Quyền đọc bộ nhớ, học ban đêm và prompt riêng |
 | `app/simulation/` | Seed world, thị trường và chạy đối chứng |
 | `app/infrastructure/` | Client LLM/ảnh/Muse, SQLite/store và tracing |
@@ -26,29 +26,30 @@ Xem [kiến trúc chi tiết](docs/ARCHITECTURE.md) để biết hướng import
 
 ## Cài đặt và chạy
 
-Cần Python 3.11 và Git. Chạy từ thư mục gốc repo:
+Cần Python 3.11 cho app, Python 3.12 cho media và Git. Chạy từ thư mục gốc repo; giữ nguyên các file env đang dùng nếu đã cài:
 
 ```sh
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload
 ```
 
-Mở http://localhost:8000/; kiểm tra http://localhost:8000/health sẽ nhận `{"ok": true}`. Khi chưa có khoá API, cấu hình mặc định chạy offline; khung hiện tại không gọi dịch vụ trả phí.
+Cài thêm môi trường Python3.12/dependencies của `experiment/`, tạo env riêng theo [LOCAL_RUN](docs/LOCAL_RUN.md), rồi mở http://127.0.0.1:8000/?preview=0. `/health` là liveness; `/ready` kiểm Data/worker. Khi mode live, thao tác demo có thể gọi provider; health/start không tạo generation để thử.
+
+Khi cả hai môi trường đã sẵn sàng, chạy `.venv/bin/python scripts/local_stack.py start`. Màn Proof có lựa chọn **Báo cáo mô phỏng đã chạy** để xem cặp native ON/OFF đã xuất từ Data; nguồn và bằng chứng được giữ riêng với phiên hiện tại.
 
 Điền khoá vào `.env` trên máy hoặc Secrets của host. Không commit `.env`. Các biến model dùng tên model tài khoản được cấp.
 
 ```sh
-pytest -q
+LLM_MODE=offline MEDIA_MODE=offline pytest -q
 python -m pip check
 git check-ignore .env
 ```
 
 ## Frontend React
 
-**Mở đầu buổi demo tại trang shop:** http://127.0.0.1:8765/?preview=1. Từ đó chọn “Bắt đầu demo” để vào chat/hậu trường, hoặc “Nhảy tới ngày 7” để nạp bộ mẫu trình chiếu. Không dùng `demo.html` làm link mở đầu.
+**Bản product local:** http://127.0.0.1:8000/?preview=0. **Bản trình chiếu mẫu riêng:** http://127.0.0.1:8765/?preview=1. Từ đó chọn “Bắt đầu demo” để vào chat/hậu trường, hoặc “Nhảy tới ngày 7” để nạp bộ mẫu trình chiếu. Không dùng `demo.html` làm link mở đầu.
 
 Bundle đã được tạo tại `frontend/js/app.js`; FastAPI hiện phục vụ `frontend/` tại `/`. Mở http://localhost:8000/?preview=1 để thử giao diện cam với dữ liệu mẫu, hoặc `?preview=0` để gọi 9 API của backend. Bản xem trước không gọi API trả phí và không phải bằng chứng thực nghiệm.
 
@@ -69,7 +70,7 @@ Xem [bàn giao React và ghép dữ liệu](docs/FRONTEND_HANDOFF.md). Giao di�
 
 Agent backend đọc [yêu cầu tích hợp giao diện](docs/FRONTEND_REQUIREMENTS.md) trước khi nối workflow/API: mapping state/events sang sơ đồ hai agent, payload telemetry/trọng tài, polling và checklist nghiệm thu. Khối tương tác mới nằm ở `frontend/src/components/AgentActivity.jsx`, projection ở `frontend/src/activity.js`.
 
-Agent data đọc [yêu cầu về data](docs/FRONTEND_DATA_REQUIREMENTS.md): grain và identity, quan hệ đề xuất–duyệt–áp dụng, phiên bản, cursor, quyền public/private, nguồn số liệu và transaction. Các mở rộng chưa có trong hợp đồng được ghi `TODO(contract)`; backend thật cần thống nhất trước khi bật. Bản `?preview=1` đã minh họa luồng; bản `?preview=0` chờ các API nghiệp vụ.
+Agent data đọc [yêu cầu về data](docs/FRONTEND_DATA_REQUIREMENTS.md): grain và identity, quan hệ đề xuất–duyệt–áp dụng, phiên bản, cursor, quyền public/private, nguồn số liệu và transaction. Các mở rộng chưa có trong hợp đồng được ghi `TODO(contract)`; backend thật cần thống nhất trước khi bật. Bản `?preview=1` là mẫu minh họa; `?preview=0` dùng Data facade và worker đã ghép theo DEMO_CONTRACT.
 
 Màn `proof.html?preview=1` so sánh hai khung chat không học/có học từ lịch sử, chọn ngày 1–7 và chỉ rõ nguồn bộ nhớ từ ngày trước. Mặc định mở ngày 2; ngày 1 có cùng điểm xuất phát. Luồng agent chỉ một hàng, chỉ số mở trong phần chi tiết. Backend đọc [frontend requirements mục 7](docs/FRONTEND_REQUIREMENTS.md) và [data requirements mục 11](docs/FRONTEND_DATA_REQUIREMENTS.md) để cung cấp `ProofReport.comparison_days` từ transcript đã lưu.
 
@@ -89,8 +90,10 @@ Màn `proof.html?preview=1` so sánh hai khung chat không học/có học từ 
 
 ## Link demo
 
+[Mở bản local](http://127.0.0.1:8000/?preview=0). [Kết quả nghiệm thu](docs/plans/toan/full-integration/IMPLEMENTATION_STATUS.md) ghi rõ tests, review và các gate provider chưa chạy.
+
 ## Thử nghiệm video marketing
 
-`experiment/` là dịch vụ FastAPI độc lập cho OpenAI script/ảnh/giọng, render local, lưu MinIO và phát video qua Cloudflare Tunnel. Xem [hướng dẫn experiment](experiment/README.md). Từ gốc repo, chạy `cd experiment` trước các lệnh trong hướng dẫn; dùng môi trường `.venv` riêng của experiment.
+`experiment/` là dịch vụ FastAPI độc lập dùng OpenAI Images/vision/planning/review và Muse video/audio. Bản local lưu file và phát signed media tại8010; MinIO/tunnel là topology khác, không bắt buộc. Xem [hướng dẫn experiment](experiment/README.md). Từ gốc repo, chạy `cd experiment` trước các lệnh trong hướng dẫn; dùng môi trường `.venv` riêng của experiment.
 
 ## Video demo

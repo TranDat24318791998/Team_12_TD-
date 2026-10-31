@@ -1,5 +1,5 @@
+import hashlib
 import json
-from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,7 +18,7 @@ STYLES = {
 
 def minio_location(settings, key):
     return {'minio_uri': f's3://{settings.minio_bucket}/{key}' if settings.storage_backend == 'minio' else None,
-            'minio_path': f'{settings.minio_bucket}/{key}',
+            'minio_path': f'{settings.minio_bucket}/{key}' if settings.storage_backend == 'minio' else None,
             'minio_url': f'{"https" if settings.minio_secure else "http"}://{settings.minio_endpoint}/{settings.minio_bucket}/{key}'
                          if settings.storage_backend == 'minio' else None}
 
@@ -40,13 +40,23 @@ def process_image_job(settings, store, storage, row, provider_factory=OpenAIMedi
         if not asset or asset['kind'] != 'image':
             raise RuntimeError('Ảnh đầu vào không thuộc người dùng')
         paths.append(Path(asset['path']))
-    prompt = ('Create ONE polished ecommerce advertisement, square format. Input image 1 is the seller logo; '
-              'reproduce its exact lettering, symbol and brand colors as a small clear logo in the upper corner. '
-              'Input image 2 is the sole product identity reference: preserve that exact desktop fan, cage, blades, '
-              'base, proportions and colors. Show exactly ONE fan, no extra product or person. '
-              'Do not invent specifications, prices, discounts or slogans. ' + STYLES[request.style]['prompt'])
+    product_index = 2 if request.logo_asset_id else 1
+    shape = ('body, handle, grip, cage, blades, proportions and colors' if request.product_kind == 'handheld_fan'
+             else 'cage, blades, base, proportions and colors')
+    prompt = 'Create ONE polished ecommerce advertisement, square format. '
+    if request.logo_asset_id:
+        prompt += 'Input image 1 is the seller logo; reproduce its exact lettering and colors as a small logo in the upper corner. '
+    else:
+        prompt += 'No seller logo was supplied; do not invent a logo. '
+    style = 'summer_fresh' if request.background_preference == 'bright' and request.style == 'premium_studio' else request.style
+    prompt += (f'Input image {product_index} is the sole product identity reference for {request.product_name}; '
+               f'preserve that exact {request.product_kind.replace("_", " ")}, {shape}. '
+               'Show exactly ONE fan, no extra product or person. Do not invent specifications, prices, discounts or slogans. '
+               + STYLES[style]['prompt'])
+    if request.background_preference == 'bright':
+        prompt += ' Use a bright, light background.'
     if request.style_asset_id:
-        prompt += ' Input image 3 is a mood/style reference ONLY; borrow its lighting and palette, never its objects or lettering.'
+        prompt += f' Input image {product_index + 1} is a mood/style reference ONLY; borrow its lighting and palette, never its objects or lettering.'
     (work / 'image-prompt.txt').write_text(prompt)
     store.update(job_id, stage='openai_generating_image')
     output = work / 'image.jpg'
@@ -57,13 +67,14 @@ def process_image_job(settings, store, storage, row, provider_factory=OpenAIMedi
             raise RuntimeError('OpenAI output phải là JPEG')
         dimensions = [image.width, image.height]
     key = f'images/{owner}/{job_id}/image.jpg'
-    store.update(job_id, stage='uploading_minio')
+    store.update(job_id, stage='uploading_minio' if settings.storage_backend == 'minio' else 'saving_local')
     storage.put(key, output)
     asset_id = uuid4().hex
     store.add_asset(asset_id, owner, 'image', output)
-    result = {'media_type': 'image/jpeg', 'provider': 'openai', 'style': request.style,
-              'style_label': STYLES[request.style]['label'], 'object_key': key,
-              'bucket': settings.minio_bucket, 'storage': settings.storage_backend,
+    result = {'media_type': 'image/jpeg', 'provider': 'openai', 'style': style,
+              'product_kind': request.product_kind, 'sha256': hashlib.sha256(output.read_bytes()).hexdigest(),
+              'style_label': STYLES[style]['label'], 'object_key': key,
+              'bucket': settings.minio_bucket if settings.storage_backend == 'minio' else None, 'storage': settings.storage_backend,
               'asset_id': asset_id, 'size_bytes': storage.stat(key), 'dimensions': dimensions,
               'prompt': prompt, **minio_location(settings, key)}
     store.update(job_id, status='done', stage='done', result=result)

@@ -28,7 +28,7 @@ def main():
     docs=sub.add_parser("export-docs");docs.add_argument("--output",type=Path,default=Path(__file__).resolve().parents[1]/"datasets");docs.add_argument("--font",type=Path)
     sub.add_parser("recover")
     serve=sub.add_parser("serve");serve.add_argument("--host",default="127.0.0.1");serve.add_argument("--port",type=int,default=8001)
-    run=sub.add_parser("run-scenario");run.add_argument("--seed",type=int,default=42);run.add_argument("--days",type=int,choices=[6,7],default=7);run.add_argument("--compare",action="store_true")
+    run=sub.add_parser("run-scenario");run.add_argument("--seed",type=int,default=42);run.add_argument("--days",type=int,choices=range(1,8),default=7);run.add_argument("--compare",action="store_true")
     for command in ("export-proof","export-replay"):
         export=sub.add_parser(command);export.add_argument("--run-id",required=True);export.add_argument("--output",type=Path,required=True)
         if command=="export-proof":export.add_argument("--group-id",required=True);export.add_argument("--variant",choices=["full_7d","legacy_6d"],default="full_7d")

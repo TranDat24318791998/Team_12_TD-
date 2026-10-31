@@ -33,10 +33,10 @@ Khi giám khảo chơi, shop D do giám khảo quyết định thay cho người
 
 ## 2. Listing của shop D (giám khảo đóng vai chị Lan)
 
-- Tiêu đề gốc: `Quạt mini cầm tay sạc usb loại tốt giá rẻ`
-- Mô tả gốc: `Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.`
-- Thuộc tính (agent nội dung chỉ được dùng các thuộc tính này): `3 tốc độ gió`, `sạc USB`, `pin 2000mAh`, `3 màu: Trắng, Hồng, Xanh mint`
-- Ảnh gốc: `assets/products/D-1.jpg` … `D-4.jpg`, nền tối, chụp đơn giản. Ảnh tự chụp hoặc tự tạo trong ngày thi; không dùng ảnh có bản quyền của người khác.
+- Quyết định người dùng ngày 31/10/2026: đổi D sang quạt để bàn từ MinIO được cung cấp, giữ nguyên toàn bộ số kinh doanh mô phỏng ở bảng trên.
+- Tiêu đề gốc: `Quạt để bàn màu trắng`.
+- Thuộc tính nguồn hiện tại: `quạt để bàn`, `thân màu trắng`, `cánh màu xanh nhạt`, `có đế`, `có núm điều chỉnh`. Không suy công suất, pin, USB hoặc tốc độ gió từ ảnh.
+- Ảnh gốc: `assets/products/demo-d-desktop.jpg`; provenance/checksum ở `assets/products/demo-d-desktop.source.json`. Data đăng ký ảnh riêng cho mỗi run; pipeline dùng `desktop_fan`.
 
 Các shop khác chỉ cần tiêu đề và mô tả ngắn cùng kiểu, không cần ảnh.
 

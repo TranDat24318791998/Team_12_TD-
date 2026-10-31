@@ -19,7 +19,7 @@ from video_api.models import CreativePlan
 def test_muse_defaults_and_one_product_prompt():
     request = VideoRequest(product_name='Quạt để bàn')
     assert request.mode == 'muse' and request.voice == 'muse' and request.input_asset_id is None
-    plan = MuseCreativePlan(is_desktop_fan=True, product_description='White circular desk fan',
+    plan = MuseCreativePlan(product_kind='desktop_fan', product_description='White circular desk fan',
         presenter_description='An adult woman', setting_description='Home office',
         narration='Quạt để bàn cho góc làm việc.', visual_prompt='The presenter gently holds the fan base.')
     prompt = build_muse_prompt(request, plan)
@@ -43,7 +43,7 @@ def test_muse_task_persisted_and_no_second_submit(tmp_path):
     output, task = adapter.generate('one fan', image=None, duration=5, aspect='9:16',
         idempotency_key='stable-key', work=tmp_path, on_task=lambda value: events.append(('saved',value)),
         on_update=lambda value: events.append(('stage',value)))
-    assert events[0] == ('saved','remote-task-123')
+    assert events[:2] == [('stage','muse_submitting'), ('saved','remote-task-123')]
     assert task['task_id'] == 'remote-task-123'
     client.create_video.assert_called_once()
     assert client.create_video.call_args.kwargs['idempotency_key'] == 'stable-key'
@@ -84,9 +84,9 @@ def test_muse_pipeline_uses_generated_frames_not_still_compositor(tmp_path,monke
     class Provider:
         def __init__(self,settings): pass
         def muse_plan(self,request,image):
-            return MuseCreativePlan(is_desktop_fan=True,product_description='one white fan',
+            return MuseCreativePlan(product_kind='desktop_fan',product_description='one white fan',
                 presenter_description='one adult',setting_description='real room',narration='Quạt để bàn.',visual_prompt='Live action.')
-        def review_muse(self,frames):
+        def review_muse(self,frames,**kwargs):
             assert len(frames)==3 and all(p.is_file() for p in frames)
             return MuseVisualReview(photorealistic=True,adult_presenter_visible=True,single_fan_product=True,consistent_product=True,notes_vi='fixture')
     class Generator:
@@ -104,4 +104,5 @@ def test_muse_pipeline_uses_generated_frames_not_still_compositor(tmp_path,monke
     done=store.job(row['id']);result=json.loads(done['result'])
     assert done['status']=='done' and result['provider']=='muse'
     assert result['muse_task_id']=='remote-id' and result['visual_review_passed'] is True
+    assert result['media_text_vision_calls_reserved']==result['media_text_vision_calls_completed']==2
     assert result['motion_source']=='muse_generated_live_action'

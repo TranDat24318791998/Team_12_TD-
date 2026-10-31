@@ -1,4 +1,4 @@
-import {commandTarget,commandFinished} from './api.js';
+import {commandTarget,commandFinished,readEvents} from './api.js';
 import {useCallback,useEffect,useRef,useState} from 'react';
 
 export function useRun(client,{enabled=true,poll=false}={}){
@@ -19,7 +19,7 @@ export function useRun(client,{enabled=true,poll=false}={}){
       const sameRun=before.state?.run_id===state.run_id;
       let events=sameRun?before.events:[],lastSeq=sameRun?before.lastSeq:0,feedError=null;
       try{
-        const result=await client.request('/api/events?after='+lastSeq,{signal});
+        const result=await readEvents(client,state.run_id,lastSeq,signal);
         const known=new Set(events.map(event=>event.seq));
         events=[...events,...result.events.filter(event=>event.run_id===state.run_id && !known.has(event.seq))].sort((a,b)=>a.seq-b.seq);
         lastSeq=result.last_seq;
@@ -53,18 +53,28 @@ export function useRun(client,{enabled=true,poll=false}={}){
       try{await client.request(path,{method:'POST',target,...(body?{body}:{})});}
       catch(error){
         if(!error.pending)throw error;
+        if(path==='/api/day/start' && error.operation_id){
+          const state=await refresh(true);
+          if(state.run_id!==before.run_id)throw new Error('Phiên đã thay đổi. Hãy kiểm tra trạng thái.');
+          return true;
+        }
         // Accepted operations keep controls disabled until their exact target advances.
         const deadline=Date.now()+70000;let advanced=false;
         while(alive.current && Date.now()<deadline){
           await new Promise(resolve=>setTimeout(resolve,1500));
           const state=await refresh(true);
-          if(commandFinished(before,state,path)){advanced=true;break;}
+          if(error.operation_id){
+            const envelope=await client.request('/api/v1/runs/'+encodeURIComponent(before.run_id)+'/operations/'+encodeURIComponent(error.operation_id));
+            const operation=envelope.data || envelope;
+            if(['failed','unknown','timed_out'].includes(operation.status))throw new Error(operation.error_code || 'Thao tác chưa hoàn tất; hãy kiểm tra trạng thái.');
+            if(['succeeded','completed'].includes(operation.status)){advanced=true;break;}
+          }else if(commandFinished(before,state,path)){advanced=true;break;}
         }
         if(alive.current && !advanced)throw new Error('Máy chủ chưa hoàn tất thao tác. Hãy kiểm tra trạng thái trước khi thử lại.');
       }
       if(alive.current)await refresh(true);
       return true;
-    }catch(error){if(alive.current)setActionError(error.message);return false;}
+    }catch(error){if(alive.current){setActionError(error.message);if(error.status===409)await refresh(true).catch(()=>{});}return false;}
     finally{mutation.current=false;if(alive.current)setPending(null);}
   },[client,refresh]);
   return {...data,pending,actionError,clearActionError:()=>setActionError(null),refresh,act};

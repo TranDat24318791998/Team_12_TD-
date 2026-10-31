@@ -35,9 +35,9 @@ def test_v1_migration_preserves_audit_and_failed_ddl_rolls_back(tmp_path,monkeyp
     c.close()
     store=Store(path)
     with store.connect() as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0]==2
+        assert c.execute("PRAGMA user_version").fetchone()[0]==4
         assert c.execute("SELECT * FROM sessions").fetchall()[0][0]=="historical-session"
-        assert [x[0] for x in c.execute("SELECT version FROM schema_migrations ORDER BY version")]==[1,2]
+        assert [x[0] for x in c.execute("SELECT version FROM schema_migrations ORDER BY version")]==[1,2,3,4]
     Store(path)  # Idempotent upgrade, no second migration effects.
 
 
@@ -144,7 +144,7 @@ def test_publish_failure_rolls_back_and_restore_seed_and_previous(client,service
     with service.store.connect() as c:
         old=service.entity(c,"content_versions",run,"content_id",published)
         assert one(c,"SELECT * FROM campaigns WHERE run_id=? AND shop_id='D'",(run,))==package
-    again=client.post("/api/content/undo",json={"target_content_id":published,"expected_active_content_id":restored.json()["data"]["content_id"],"expected_content_version":old["version"]},headers={"Idempotency-Key":"restore-published"})
+    again=client.post("/api/content/undo",json={"target_content_id":published,"expected_active_content_id":restored.json()["data"]["content_id"],"expected_content_version":old["version"]},headers={"Idempotency-Key":"restore-published","X-Request-ID":"restore-published"})
     assert again.status_code==200,again.text
     assert again.json()["listing"]["title"]==state["demo_shop"]["title"]
 
@@ -231,7 +231,7 @@ def test_images_only_retry_preserves_video_and_rejects_text_changes(client,servi
     new_job=h.get(f"/api/v1/runs/{r}/state")["jobs"][-1]
     assigned=h.token(r,"content_worker","D",new_job["job_id"])
     new_draft=next(x for x in h.get(f"/api/v1/runs/{r}/shops/D/content",assigned) if x["content_id"] in new_job["output_content_ids"])
-    changed={"title":"Quạt mini","description":after["description"],"images":new_draft["cover_options"],"video":new_draft["video_job"]}
+    changed={"title":"Quạt để bàn","description":after["description"],"images":new_draft["cover_options"],"video":new_draft["video_job"]}
     bad=client.post(f"/internal/v1/runs/{r}/content-jobs/{new_job['job_id']}/result",json={"expected_job_version":new_job["version"],"status":"succeeded","fallback_used":True,"content_candidates":changed},headers=headers(assigned,"changed-text"))
     assert bad.status_code==422 and bad.json()["error"]["code"]=="RETRY_SCOPE"
     assert client.post(f"/internal/v1/runs/{r}/content-jobs/{job['job_id']}/result",json={"expected_job_version":2,"status":"running"},headers=headers(token,"late-result")).status_code==409

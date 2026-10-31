@@ -20,6 +20,6 @@ export function comparisonDays(report){
 }
 
 function validMessages(messages){
-  return messages.filter(message=>message && text(message.id) && text(message.text_vi) && actors.has(message.actor)
+  return messages.filter(message=>message && text(message.id) && text(message.text_vi) && actors.has(message.actor) && Number.isInteger(message.event_seq) && message.event_seq>0
     && messages.filter(other=>other?.id===message.id).length===1);
 }

@@ -92,7 +92,7 @@ def test_seven_day_reproducibility_and_no_fake_learning(service):
         report=proof(service,c,p,a,gid)
         assert report["days"]==7 and len(report["metrics"])==5
         assert all(m["on"]==m["off"] for m in report["metrics"])
-        assert "chưa nối" in report["note_vi"]
+        assert "reference" in report["note_vi"]
         assert proof(service,c,p,a,gid,"legacy_6d")["days"]==6
     reopened=DataService(service.home)
     with reopened.store.connect() as c:assert reopened.run(c,p,a)["phase"]=="complete"

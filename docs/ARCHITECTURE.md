@@ -1,162 +1,85 @@
 # Kiến trúc codebase Growth Agents
 
-Ứng dụng chạy trong một tiến trình FastAPI. Backend chia theo tính năng; model và luật thuần dùng chung nằm trong domain. Frontend dùng React, giao tiếp qua 9 API HTTP dành cho seller; esbuild tạo bundle được FastAPI phục vụ trực tiếp. Lệnh chạy giữ nguyên: `uvicorn app.main:app --reload`.
+Bản local có hai process: app Data + agent + React tại8000, media service tại8010. Một SQLite của Data giữ business state và Knowledge. Không chạy song song hai workflow business. Hợp đồng dùng chung ở [DEMO_CONTRACT](DEMO_CONTRACT.md); cách chạy ở [LOCAL_RUN](LOCAL_RUN.md).
 
-## Bổ sung được chốt cho phần Agent + Tools + Knowledge
+## Quyền sở hữu dữ liệu
 
-Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](plans/toan/KNOWLEDGE_CONTRACT.md); core đã được triển khai. `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
+| Dữ liệu | Owner |
+| --- | --- |
+| Run/day/shop/rules/brief/proposals/cards/decisions/campaigns/stock/listing/content/assets/settlements/events | `data/growth_data/`, `data/runtime/growth.db` |
+| History/Preferences/Calibration/Lessons, skill versions, snapshots/reflection/night receipts và native budget | `app/memory/` kiểm nghĩa; `app/infrastructure/sqlite_store.py` lưu cùng Data DB |
+| Provider jobs/intermediate bytes, signed playback | `experiment/video_api/`, `experiment/data/local/`; không sở hữu approval/campaign |
+| UI state/cursor | React; lấy lại business state từ API sau reload |
+| RAM Session/core harness | Tests và headless core độc lập; không là authority của integrated HTTP |
 
-Hướng phụ thuộc: `agents.runner` dùng domain + transport LLM được inject; `agents.tools` dùng domain và callable gateway/market được inject. Không import runtime/API/main hoặc tạo client. Feature callers lắp role tools trong các closure; `runtime.manager` cấp dependencies. LangGraph quyết định role; runner điều hành tool calls bên trong role; workflow giữ approval và mọi mutation.
-
-Store in-memory atomic trong demo và DB teammate adapter dùng cùng contract; không bỏ schema/ACL/evidence vì chưa có DB. SQLite/persistent checkpoint trong thiết kế đầy đủ chưa nằm trên critical path dưới2giờ. Chi tiết ownership mới ở [AGENT_SCOPE_MAP](plans/toan/AGENT_SCOPE_MAP.md).
-
-## Cấu trúc chính
+## Module đang dùng trong sản phẩm
 
 ```text
 app/
-├── main.py                 create_app(): lắp router, lifespan và static
-├── core/
-│   ├── settings.py         Biến môi trường và hạn mức dịch vụ
-│   └── paths.py            Đường dẫn tuyệt đối theo vị trí repo
-├── api/
-│   ├── router.py           Ghép các router dưới /api
-│   ├── dependencies.py     Lấy SessionManager/phiên từ request và app.state
-│   ├── schemas.py          StateView, request/response HTTP
-│   ├── mock.py             Kịch bản mock theo phiên, dùng contracts/
-│   └── routes/             health, sessions, days, events, content, proof
-├── domain/
-│   ├── models/             Model chia theo nhóm nghiệp vụ
-│   ├── policies.py         Hằng số của kịch bản mô phỏng
-│   ├── finance.py          Phí, lãi, hoà vốn, voucher tối đa
-│   ├── validators.py       Kiểm tra và clamp gói
-│   ├── privacy.py          leak_guard cho dữ liệu gửi sang agent sàn
-│   └── formatting.py       vnd(), dec()
-├── runtime/
-│   ├── session.py          Session, ShopState: dữ liệu của mỗi run
-│   ├── manager.py          SessionManager: tạo phiên và nối service
-│   └── day.py              Workflow một ngày, interrupt và quyết định người bán
-├── agents/                 D02a: tools.py + runner.py + content.py cho tool loop và Content role
-├── negotiation/
-│   ├── agents.py           Quyết định của agent sàn/shop và luật offline
-│   ├── prompts.py          Chỉ prompt thương lượng và input đã lọc
-│   └── graph.py            Subgraph thương lượng, ghi sự kiện từng lượt
-├── content/
-│   ├── service.py          start/retry/apply, phiên bản và job nền
-│   ├── text.py             Viết chữ và kiểm tra thông số
-│   ├── images.py           Điều phối ba phương án ảnh và cache
-│   ├── video.py            Điều phối video, polling và cache
-│   └── prompts.py          Prompt chữ, ảnh, video
-├── memory/
-│   ├── gateway.py          Phân quyền và thao tác bộ nhớ
-│   ├── night.py            Học từ nhật ký sau mỗi ngày
-│   └── prompts.py          Prompt sở thích và bài học chiến lược
-├── simulation/
-│   ├── world.py            Nạp seed.json, trend và lịch
-│   ├── market.py           Dự báo, kết quả thị trường, SellerSimulator
-│   └── runner.py           Chạy headless nhiều ngày, so sánh hai run
-└── infrastructure/
-    ├── llm.py              LLMClient, structured output, retry và cache
-    ├── images.py           Client nhà cung cấp ảnh
-    ├── muse.py             MuseClient và MuseError, chi tiết HTTP
-    ├── eventlog.py         Nhật ký SQLite
-    ├── store.py            Store cho bộ nhớ
-    └── tracing.py          Langfuse tuỳ chọn
+  main.py                       Factory ghép Data API/lifespan/worker/static
+  core/                         Settings và paths
+  domain/                       Models, Decimal finance, validators/privacy
+    models/skills.py            Typed facts/policy/artifact/version
+    models/learning.py          Knowledge/publication/replay DTO
+  runtime/data_worker.py         Claim Data operation → native graph/content/night
+  agents/                       Tool ACL/protocol, Content role
+  negotiation/                  Platform/Shop/Referee, prompts, LangGraph
+  content/service.py            Data-bound Content/media worker
+  memory/                       Gateway, facts/compiler/stage/night/prompt
+  infrastructure/
+    data_agents.py              Scoped context, tools, event/turn projection
+    data_content.py             Claim/reserve/asset/result transaction adapters
+    data_knowledge.py           Rules/evidence/reference projections
+    sqlite_store.py             Durable Knowledge/receipt repository
+    store.py                    RAM adapter và shared repository semantics
+    llm.py, replay.py            OpenAI transport, durable budget/cache binding
+    media_gateway.py            HTTP client tới experiment, verified import
+  simulation/                   World/core fixtures và Data-backed proof runner
+  runtime/session.py, day.py     Standalone core path retained for tests
+  api/                          Legacy scaffold; không ghép thêm facade thứ hai
 
-frontend/                   src/ (React), css/, img/, js/app.js; 5 HTML entry dùng chung bundle
-assets/products/            Ảnh nguồn
-data/                       seed.json
-contracts/                  JSON mock đúng hợp đồng HTTP
-replay/                     Cache LLM, proof.json và thông tin bản ghi
-media/replay/               Media phát lại được commit
-media/<run_id>/             Media sinh trong phiên, Git bỏ qua
-runs/<run_id>/              Database và báo cáo theo run, Git bỏ qua
-scripts/                    CLI mỏng, gọi module backend
-submission/                 Bài viết và tài liệu nộp bài
-docs/                       Đặc tả và kiến trúc hiện hành
-docs/reference/             PDF kế hoạch gốc, giữ làm tài liệu tham khảo
-tasks/                      Phạm vi output và tiêu chí hoàn thành
-tests/
-├── unit/<package>/         Settings, domain, agent/service với fake client
-├── integration/<feature>/  API, workflow nhiều module, storage thật tạm thời
-└── fakes/                  Fake client chia file theo nhà cung cấp
+data/growth_data/
+  api.py, routes.py, facade.py   HTTP/auth/session/9seller API + brief
+  service.py, integration.py     Authoritative commands và worker handoff
+  media.py                      Assets/content/publish gates
+  storage.py, migrations/       SQLite/WAL/atomic migration/commands
+  simulation.py, finance.py     Simulator/calculation authority của Data run
+
+experiment/video_api/            Images/vision/Muse/queue/storage/playback
+frontend/src/                    React components và API consumer
+scripts/local_stack.py           Hai owned processes: start/status/stop
+scripts/run_sim.py               Data-backed offline comparison CLI
+contracts/                      Shared wire fixtures và SI schema/examples
+tests/                          Unit, contract, integration và fake providers
 ```
 
-## Model thuộc về đâu
+File trong `app/content/images.py`, `video.py`, `infrastructure/images.py`, `muse.py` thuộc khung cũ không phải provider path của product. Không chép pipeline `experiment` sang đó. `app/api` không được copy Data routes để tạo state riêng.
 
-| File | Model |
-| --- | --- |
-| `domain/models/shops.py` | ShopPublic, ShopPrivate, ShopRules, SellerPersona, FeeConfig |
-| `domain/models/packages.py` | Package, ActivePackage |
-| `domain/models/negotiation.py` | PlatformTurn, ShopTurn, Violation, NegotiationResult |
-| `domain/models/cards.py` | RuleQuestion, Card, SellerDecision |
-| `domain/models/content.py` | ContentText, CoverImage, VideoJob, ContentDraft |
-| `domain/models/learning.py` | Calibration, LessonOp, NightSummary |
-| `domain/models/metrics.py` | Forecast, DayMetrics, ProofMetric, ProofReport |
-| `domain/models/events.py` | Event |
-| `api/schemas.py` | StateView và các request/response HTTP, dùng lại domain model |
-| `runtime/session.py` | Session, ShopState |
-| `simulation/world.py`, `simulation/runner.py` | World, RunResult |
+## Hướng gọi
 
-Các đường dẫn trong bảng tính từ `app/`. Import từ module định nghĩa trực tiếp, ví dụ `from app.domain.models.shops import FeeConfig`. Không sao chép model sang từng tính năng; không gom re-export mọi model vào `__init__.py`.
+1. React gửi same-origin seller command với IDs/versions/idempotency; Data kiểm quyền, lưu effect+event+receipt trong transaction.
+2. Native worker nhận Data operation, tạo scoped context từ current business versions và pin brief/skill. Tools chỉ read/compute; graph trả turn/verdict qua Data sinks. Data finalize trước present.
+3. Seller accept content-refresh tạo Data content job; Content Agent dùng facts/confirmed style, media worker gọi experiment. Bytes verified nhập Data asset registry. Seller Apply mới publish+activate atomic.
+4. Data settle ghi prediction/outcome/cutoff; Learning freeze public evidence, claim/reserve, stage/eval và publish durable Knowledge cùng handoff. Ngày sau read_memory trả artifact/seed đã pin.
 
-## Hướng phụ thuộc
+`domain` chỉ dùng stdlib/Pydantic và models thuần; không đọc env/SQL/HTTP. `core` nạp config. Infrastructure giữ SQL/HTTP/SDK và public/private projections; runtime giữ orchestration. Feature modules không import FastAPI/main. Data package nhận callbacks/injection, không import ngược app để biết SI algorithm. Không tạo clients, DB hoặc threads ở module import.
 
-| Phần | Được gọi/import | Giới hạn |
-| --- | --- | --- |
-| `domain` | Standard library, Pydantic, module khác trong domain | Không đọc .env, gọi HTTP/SQLite hoặc import tầng bên ngoài |
-| `core` | Standard library, dotenv, Pydantic, domain model cấu hình | Không import API, runtime hay client dịch vụ |
-| `infrastructure` | core, domain và SDK/driver | Không import workflow hay router |
-| `negotiation`, `content`, `memory.gateway` | domain, core, client được truyền vào; facade bộ nhớ/dự báo khi cần | Không import FastAPI, request hay main |
-| `simulation.world`, `simulation.market` | domain, core; I/O seed cục bộ ở world | Không import runner hoặc workflow ngày |
-| `runtime.day` | negotiation.graph, content.service, memory.gateway, simulation.market | Không import simulation.runner |
-| `memory.night` | memory.gateway, simulation.market, client LLM, domain | Không import workflow ngày hay simulation.runner |
-| `simulation.runner` | runtime.day, memory.night, simulation.market | Chỉ điều phối headless, không được market gọi ngược |
-| `api` | schema, runtime/service | Không chứa công thức tài chính hay lời gọi provider trực tiếp |
-| `main`, `runtime.manager` | Các thành phần cần lắp ứng dụng/phiên | Chỉ ở đây nối các concrete service với nhau |
+## Persistence và version
 
-Giữ `runtime.session` là nơi định nghĩa trạng thái; việc gắn LLM, memory, eventlog và content diễn ra trong `runtime.manager`. Dùng `TYPE_CHECKING` cho type hint tham chiếu Session nếu cần để tránh import vòng. Không tạo client mạng khi import module.
+Data `Store.connect(write=True)` dùng short BEGIN IMMEDIATE, WAL và foreign keys. Migration mới nối tiếp; không sửa001/002, không reset database để nâng CHECK. Migrate có backup khi DB thực tồn tại; kiểm integrity/FK và rollback fault.
 
-## Tách đường đi HTTP và nghiệp vụ
+Không giữ DB lock qua model/provider. Snapshot/claim/budget reserve trước network; terminal output lưu trước publication. Duplicate receipt trả result cũ; cùng key khác body/hash conflict. Unknown không được cấp key mới để resend. One native file lock và media worker lock chống hai process cùng home; leases/version chặn late write.
 
-- `api/routes/sessions.py`: `/api/reset`, `/api/state`.
-- `api/routes/days.py`: `/api/day/start`, `/api/decision`, `/api/night`.
-- `api/routes/events.py`: `/api/events`.
-- `api/routes/content.py`: `/api/content/retry`, `/api/content/apply`.
-- `api/routes/proof.py`: `/api/proof`.
-- `api/routes/health.py`: `/health`, độc lập với phiên và dịch vụ ngoài.
+Rules authoritative ở Data, Knowledge chỉ derived. Same-connection helper bảo đảm Rules+preference và Knowledge+skill+night receipt+handoff atomic. Một event seq xuyên business và learning; JSONL legacy không dùng để resume Data run.
 
-Route lấy phiên qua dependency, kiểm tra payload rồi gọi workflow/service. `SessionManager` sẽ được khởi tạo trong lifespan và gắn vào `app.state`; các yêu cầu cùng sid dùng chung khoá của phiên. Mock API cũng có state riêng theo sid. Các router dùng chung nhưng không giữ state của người dùng.
+## Media và local assets
 
-Thứ tự lắp ở `create_app()`: health → API → media → frontend tại `/`. Vì vậy static không che các endpoint. Quy tắc URL và JSON nằm trong `CONTRACT.md`.
+Original D là ảnh quạt để bàn được user chọn từ MinIO đồng nghiệp; metadata/facts đổi theo ảnh, số tài chính mô phỏng giữ nguyên. Imports/checksum manifest nằm dưới ignored `data/runtime/imports/`. Mỗi run đăng ký bản sao riêng qua Data; seed placeholder không bị ghi đè. Signed service links chỉ là transport, listing giữ Data asset IDs.
 
-## Phân chia công việc
+Local profile dùng file storage đã có; không cần MinIO daemon, cloud tunnel hoặc Docker. Có thể dùng MinIO backend ở deployment khác theo experiment docs. Cả hai app bind loopback, một worker/no reload. Static frontend mount cuối; private Data objects không được mount public.
 
-| Người | Khu vực sở hữu chính |
-| --- | --- |
-| TV1 | domain, runtime/session + day, negotiation, infrastructure/llm + tracing |
-| TV2 | simulation, memory, infrastructure/eventlog + store |
-| TV3 | api, runtime/manager, frontend, app/main và deploy |
-| TV4 | content, infrastructure/images + muse, submission và công cụ tài liệu |
+## Kiểm thử và review
 
-Task 1.2 khởi tạo các model dùng chung; các task sau thêm trường đúng hợp đồng và phối hợp với người sở hữu model liên quan. Mỗi nhóm có prompt riêng, thay đổi nội dung không cần sửa prompt thương lượng. Các Output trong `tasks/` đã chuyển sang đường dẫn mới.
+Root/core, Data, experiment và React có suites riêng. Thêm contract tests RAM/SQLite, real Data + fake HTTP media, native ToolMessage next-use và Data-backed D/E seven-day reports. Test không gọi paid provider; report tách source fixture/offline/live và không tạo uplift giả.
 
-## Những gì đã chạy
-
-Domain, tool runner, graph thương lượng, knowledge gateway/learning và runtime ngày đã có code và test headless với fixture. Settings, app factory, `/health` và frontend tĩnh chạy được. Router nghiệp vụ, market và media thật vẫn chờ member tích hợp; xem [runbook](plans/toan/DEMO_RUNBOOK.md). Test không gọi API trả phí.
-
-Không duy trì shim tại các đường dẫn phẳng cũ; các tài liệu đang dùng đã cập nhật đường dẫn. PDF trong `docs/reference/` là kế hoạch gốc; đường dẫn triển khai lấy từ tài liệu Markdown hiện hành.
-
-## Hợp đồng ghép tính năng hiện hành
-
-Các điểm night/idle, retry async, ba phiên bản tổng cộng, replay thiếu key đã được chốt tại [DEMO_CONTRACT](DEMO_CONTRACT.md). Native tools/budget/typed memory theo hai contract mới ở trên. Coder sửa cả caller/fixture của task khi thực hiện các thay đổi đã được chốt; không giữ TODO cũ như một quyết định chưa có.
-## Ghép với thiết kế dữ liệu hiện hành
-
-`data/growth_agents_data_api_design.md` v1.1 chốt adapter dành cho giao diện tại mục 10. Bản React đã dùng các quy ước này; nhóm backend triển khai cùng adapter và persistence tương ứng:
-
-- Giữ 9 endpoint `/api/*` và response JSON trực tiếp; `/api/v1` có envelope riêng.
-- Thiết kế frontend/data là 7 ngày; phần agent headless hiện kiểm 2 ngày và chưa được nối vào data service. Khi ghép, ngày cuối trả `complete`/`next_day=null`, không suy ra proof từ fixture.
-- Retry nội dung trả trạng thái running để polling; 3 attempt tổng cộng, gồm bản đầu và hai lần làm lại.
-- Frontend gửi Idempotency-Key và X-Request-ID cho POST; server kiểm tra phiên bản/ownership và transaction.
-- Replay đọc cache không cần key, không tự chuyển live để gọi dịch vụ trả phí. Settings đã giữ replay khi thiếu key; adapter cache còn cần tích hợp.
-
-Hướng dẫn build React, nguồn dữ liệu, kiểm tra và các phần chưa triển khai nằm trong `docs/FRONTEND_HANDOFF.md`. Tài liệu dữ liệu là thiết kế; không coi nó là bằng chứng backend đã chạy.
+Mỗi phần có một [Astra review riêng](plans/toan/full-integration/REVIEW_ASSIGNMENTS.md); Terra implementation theo [ownership](plans/toan/full-integration/IMPLEMENTATION_PLAN.md). Kết quả thực và phần chưa kiểm nằm ở implementation status/runbook. Các PDF/task gốc giữ làm reference, không thay contract integrated hiện hành.

@@ -1,25 +1,16 @@
-# Ghép Agent/Knowledge với Data và Frontend
+# Các đầu nối đã chốt cho bản local
 
-Đối chiếu commit Data `229b1f5`, Frontend `e627db8` với core Agent/Knowledge. Kiểm bằng TestClient trên database tạm, không gọi provider hoặc dùng run của người khác. Data service và React đã có source; chúng **chưa được nối** vào workflow trong `app/runtime/day.py`. Media service mới ở `experiment/` (a0a93f0) có source riêng; kế hoạch nối core ở [media-integration](media-integration/README.md), phần Data/UI nhận ở [handoff](media-integration/UI_DATA_HANDOFF.md).
+Bản tích hợp dùng Data authority theo [DEMO_CONTRACT](../../DEMO_CONTRACT.md). Chín báo cáo [Astra riêng](full-integration/REVIEW_ASSIGNMENTS.md) ghi baseline và lỗi trước implementation; các blocker cũ như accept→activate sớm đã được Data sửa từ9621b14. Không dùng bảng cũ để dựng một Session business thứ hai.
 
-| Đầu nối cần chốt | Hiện tại | Để ghép đúng phần Toàn |
-|---|---|---|
-| Điểm vào UI | `app.main` trả 404 cho `/api/state`; Data service có facade `/api/*` riêng ở cổng 8001 | API owner chọn một facade cùng origin cho React và nối nó với một nguồn run/state; không khởi tạo hai Session độc lập cho cùng demo |
-| Điều phối agent | Data `operation(start_day)` luôn chạy `reference_offer` và ghi `offline_reference`; không gọi graph/tool runner | Data/API owner bổ sung chế độ external agent để bắt đầu ngày mà không tạo offer mẫu; sau đó orchestrator dùng API negotiation/proposal/present và trace thật của agent |
-| Brief | Data không có `/api/brief/confirm`; core cần brief đã xác nhận | Chốt endpoint hoặc mapping seller-confirmed brief và version; truyền cùng brief tới cả hai phía trước đề xuất |
-| Version seller | Card Data facade thiếu `version`/`brief_version`; body core cần `expected_card_version`, `expected_brief_version` (Data hiện trả 422 nếu nhận hai field này) | Chốt schema facade/version và kiểm trong transaction; React gửi phiên bản vừa thấy, không tự đoán |
-| Duyệt và apply | Data legacy accept áp dụng campaign trước khi tạo content job; `content_create` yêu cầu proposal đã `applied`. Core chờ người bán duyệt content trước activation | Data/media/API owner sửa contract và transaction để content job nhận đúng offer đã duyệt nhưng chưa activate; publish + activate đúng version sau quyết định content. Không dùng facade hiện tại để nhận rằng gate này đã đạt |
-| Trả lời Không | React/Data có thể dùng `action=accept, rule_answer=false`; core yêu cầu action reject cho Không | Chốt một mapping duy nhất ở facade và thêm test Có/Không, giữ active campaign |
-| Knowledge | Data có `learning-input`/`learning-results` và SQLite; core memory đang in-process theo run | Nối worker qua token đúng scope, giữ cursor, evidence IDs và authority rules; không tự copy dữ liệu private sang platform. Chỉ advance sau learning handoff thực sự hoàn tất/skipped có nhãn |
-| Số ngày | Frontend/Data mặc định 7 ngày; headless core mặc định demo 2 ngày nhưng `Session`/`SessionManager` nhận `simulation_days` (1–7) | Adapter truyền cùng horizon của Data run; đã kiểm chuyển ngày 2 sang 3 với horizon 7, chưa chạy proof tích hợp 7 ngày. Proof 7 ngày chỉ dùng dữ liệu simulator đã thực chạy; không dùng fixture hai ngày |
-| Media | experiment có OpenAI Images/Muse/MinIO jobs; core ContentService vẫn khung, Data vẫn placeholder/fallback | Theo MI01–MI04: sửa product kind D, optional logo/bright style, client HTTP và local artifact/version/review gate; không viết lại provider. UI_PRODUCT vẫn chờ facade transaction |
+| Đầu nối | Contract hiện hành |
+| --- | --- |
+| UI/API | `app.main:create_app` ghép Data facade/worker/static cùng origin8000; cookie growth_sid; không thêm facade RAM |
+| Agent | Data operation → scoped Data context → native graph/tools → explicit Referee finalize → card; không HttpHarness/reference_offer trong product worker |
+| Brief/versions | Seller persist confirmed brief; card/brief/draft/job/content IDs do Data cấp; React gửi expected versions/identity đã xem |
+| Approval | Accept tạo approved content job; Apply kiểm actual asset bytes + video choice rồi listing/campaign/event/receipt atomic |
+| Knowledge | Rules Data authority; derived records/skill/phase/budget ở cùng SQLite; same-connection publication và preference confirmation |
+| Night | Daily prediction trước settlement, immutable cutoff, public evidence, one publication/handoff; complete sau horizon1..7, default7 |
+| Media | HTTP tới experiment8010; original D desktop được user chọn từ MinIO; optional logo, bright/all retry, video từ A cùng attempt, verified Data assets |
+| Local | Hai loopback processes, file storage media, owned lifecycle; không cần MinIO daemon/tunnel |
 
-Chạy kiểm tra hiện có:
-
-```sh
-.venv/bin/python -m pytest -q
-PYTHONPATH=data .venv/bin/python -m pytest -q data/tests
-.venv/bin/python scripts/run_agent_demo.py --mode offline --seed 42
-```
-
-Các test từng workstream qua không chứng minh API/worker đã nối nhau. Core không gọi thẳng SQL của Data và không gửi token hoặc Persona vào prompt. Những thay đổi ở interface dùng chung cần cập nhật `docs/DEMO_CONTRACT.md`, frontend/data fixtures và test tương ứng cùng lúc.
+Phạm vi/file ownership và chữ ký giao coder tại [IMPLEMENTATION_PLAN](full-integration/IMPLEMENTATION_PLAN.md). Các source/live/offline/fixture gate tách riêng. Cả suites từng lane pass vẫn cần test integrated native protocol, Data transaction/reopen, actual HTTP media fakes và local startup.

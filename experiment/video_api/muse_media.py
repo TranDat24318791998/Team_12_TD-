@@ -32,6 +32,7 @@ class MuseMedia:
                       idempotency_key=idempotency_key)
         if image:
             params['image'] = file_to_data_url(image)
+        on_update('muse_submitting')
         created = self.client.create_video(prompt, **params)
         task_id = _extract_task_id(created)
         if not task_id:

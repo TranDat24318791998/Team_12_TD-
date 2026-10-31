@@ -1,0 +1,92 @@
+[
+  {
+    "schema_version": "self-improve.v1",
+    "model": "EvidenceFact",
+    "source": "fixture",
+    "payload": {
+      "fact_id": "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090",
+      "run_id": "r1",
+      "shop_id": "E",
+      "category": "quat_mini",
+      "day": 1,
+      "kind": "approved_package",
+      "negotiation_id": "n1",
+      "card_id": "c1",
+      "package_applied_seq": 11,
+      "support_seq": 11,
+      "source_seqs": [
+        10,
+        11
+      ],
+      "package": {
+        "content_refresh": true,
+        "ads_daily_budget": 50000,
+        "voucher_pct": 5,
+        "stop_roas_below": 5.5,
+        "stop_after_days": 2,
+        "duration_days": 3
+      }
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "EvidenceFact",
+    "source": "fixture",
+    "payload": {
+      "fact_id": "ba98444895c0ccc92fdbc2c9e3c7f7aaa14b688dfb5bf3b688e0f897c9cbd7e4",
+      "run_id": "r1",
+      "shop_id": "E",
+      "category": "quat_mini",
+      "day": 1,
+      "kind": "seller_approved_voucher_edit",
+      "negotiation_id": "n1",
+      "card_id": "c1",
+      "package_applied_seq": 11,
+      "support_seq": 11,
+      "source_seqs": [
+        6,
+        8,
+        10,
+        11
+      ],
+      "package": {
+        "content_refresh": true,
+        "ads_daily_budget": 50000,
+        "voucher_pct": 5,
+        "stop_roas_below": 5.5,
+        "stop_after_days": 2,
+        "duration_days": 3
+      }
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "EvidenceFact",
+    "source": "fixture",
+    "payload": {
+      "fact_id": "79c568f63694b34961e5d029d934565f70d8fc3fc04dca7b907b40855e9cbe6a",
+      "run_id": "r1",
+      "shop_id": "E",
+      "category": "quat_mini",
+      "day": 3,
+      "kind": "ads_auto_paused",
+      "negotiation_id": "n1",
+      "card_id": "c1",
+      "package_applied_seq": 11,
+      "support_seq": 20,
+      "source_seqs": [
+        10,
+        11,
+        20
+      ],
+      "package": {
+        "content_refresh": true,
+        "ads_daily_budget": 50000,
+        "voucher_pct": 5,
+        "stop_roas_below": 5.5,
+        "stop_after_days": 2,
+        "duration_days": 3
+      }
+    }
+  }
+]

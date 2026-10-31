@@ -11,9 +11,39 @@ from .errors import Fault, require
 from .seed import ATTRIBUTES
 from .simulation import business_date
 from .storage import dumps, fingerprint, insert, many, now, one, timestamps, uid
+from .text_validation import content_matches_facts
 
 
 class MediaMixin:
+    def content_approval(self,c,r,job):
+        """Resolve the card named by the exact approval event for this job's proposal."""
+        prop=one(c,"SELECT * FROM proposals WHERE run_id=? AND proposal_id=?",(r,job['proposal_id']))
+        if not prop or prop['shop_id']!=job['shop_id'] or prop['product_id']!=job['product_id']:
+            return None,None
+        approvals=many(c,"SELECT * FROM decisions WHERE run_id=? AND shop_id=? AND target_type='proposal' AND target_id=? AND action='approve'",(r,job['shop_id'],prop['proposal_id']))
+        if len(approvals)!=1:return None,None
+        approval=approvals[0]
+        events=many(c,"SELECT * FROM events WHERE run_id=? AND shop_id=? AND type='seller_decision' AND json_extract(payload_json,'$.decision_id')=?",(r,job['shop_id'],approval['decision_id']))
+        if len(events)!=1:return None,None
+        payload=events[0]['payload']
+        if (payload.get('target_type')!='proposal' or payload.get('target_id')!=prop['proposal_id']
+                or payload.get('negotiation_id')!=prop['negotiation_id'] or events[0]['actor_role']!=approval['actor_type']
+                or payload.get('action')!=('edit' if approval['edited_package'] is not None else 'accept')):
+            return None,None
+        card=one(c,"SELECT * FROM cards WHERE run_id=? AND shop_id=? AND card_id=? AND status='resolved' AND kind='offer'",(r,job['shop_id'],payload.get('card_id')))
+        negotiation=one(c,"SELECT * FROM negotiations WHERE run_id=? AND shop_id=? AND negotiation_id=?",(r,job['shop_id'],prop['negotiation_id']))
+        if not card or not negotiation or card['day']!=negotiation['day'] or events[0]['day']!=negotiation['day']:
+            return None,None
+        if card['proposal_id']!=prop['proposal_id']:
+            parent=one(c,"SELECT * FROM proposals WHERE run_id=? AND proposal_id=?",(r,prop['parent_proposal_id']))
+            if not (parent and parent['proposal_id']==card['proposal_id'] and parent['shop_id']==prop['shop_id']
+                    and parent['product_id']==prop['product_id'] and parent['negotiation_id']==prop['negotiation_id']
+                    and approval['edited_package']==prop['package'] and prop['author_role']==approval['actor_type']):
+                return None,None
+        elif approval['edited_package'] is not None:
+            return None,None
+        return card,approval
+
     def object_path(self,key):
         path=(self.objects/key).resolve()
         require(path.is_relative_to(self.objects.resolve()),"PATH_INVALID","Đường dẫn không hợp lệ",422)
@@ -95,6 +125,8 @@ class MediaMixin:
         attempt=prior["attempt"]+1 if prior else 1
         require(attempt<=3,"MAX_VERSIONS","Tối đa ba bản nội dung")
         if prior: require(b.expected_current_attempt==prior["attempt"])
+        if prior:
+            require(not any(slot.get('status') in {'reserved','unknown','outcome_unknown','running'} for slot in prior['provider_state'].values()), 'PROVIDER_OUTCOME_UNKNOWN', 'Cần xử lý kết quả media chưa rõ trước khi làm lại')
         worker=run["content_mode"]=="worker" and not force_local
         for aid in b.input_asset_ids:
             a=self.asset_access(c,p,r,aid)
@@ -115,19 +147,20 @@ class MediaMixin:
             covers.append({"option":opt,"status":"cached","asset_id":aid,"path":f"/api/v1/runs/{r}/assets/{aid}/download","prompt":"Ảnh hình học fallback, không phải ảnh sản phẩm do model tạo"})
         video=source["video_job"] if prior and b.retry_scope in {"images","text"} else {"status":"failed","asset_id":None,"path":None,"job_id":None,"prompt":"","error":"Offline: chưa nối video provider"}
         if prior and b.retry_scope=="text":covers=source["cover_options"]
-        title=source["title"] if prior and b.retry_scope=="images" else "Quạt mini cầm tay sạc USB, 3 tốc độ gió, pin 2000mAh, 3 màu"
-        description=source["description"] if prior and b.retry_scope=="images" else "Quạt mini cầm tay\n"+"\n".join("• "+v for v in ATTRIBUTES)
+        title=source['title']
+        description=source['description']
         insert(c,"content_versions",run_id=r,content_id=cid,product_id=b.product_id,content_version=version,parent_content_id=source["content_id"],title=title,description=description,cover_options_json=covers,video_job_json=video,feedback_history_json=feedback,style_notes_json=notes+feedback,cover_asset_id=asset,video_asset_id=video.get("asset_id"),quality_gain=.25,published_day=None,validation_json=["Không thêm thông số","Ảnh placeholder/fallback; không gọi model"],status="validated",**timestamps())
         if prior:
             c.execute("UPDATE content_versions SET status='superseded' WHERE run_id=? AND content_id IN (SELECT value FROM json_each(?)) AND status IN ('draft','validated')",(r,dumps(prior["output_content_ids"])))
             c.execute("UPDATE content_jobs SET status='failed',error_code='SUPERSEDED',lease_until=NULL,version=version+1 WHERE run_id=? AND job_id=? AND status IN ('queued','running')",(r,prior["job_id"]))
         if worker:c.execute("UPDATE content_versions SET status='draft' WHERE run_id=? AND content_id=?",(r,cid))
-        source_assets=list(dict.fromkeys(b.input_asset_ids+[asset]+[v["asset_id"] for v in source["cover_options"]]+([source["video_asset_id"]] if source["video_asset_id"] else [])))
-        insert(c,"content_jobs",run_id=r,job_id=jid,shop_id=s,product_id=b.product_id,proposal_id=b.proposal_id,attempt=attempt,brief_json={"facts":prod["facts"],"attributes":ATTRIBUTES,"confirmed_style":notes,"previous_content":{"title":source["title"],"description":source["description"],"images":source["cover_options"],"video":source["video_job"]},"retry_scope":b.retry_scope if prior else "all"},feedback_history_json=feedback,style_notes_json=notes+feedback,input_asset_ids_json=source_assets,provider="assigned_worker" if worker else "local_fallback",provider_job_id=None,cache_key=fingerprint({"r":r,"s":s,"attempt":attempt,"feedback":feedback}),status="queued" if worker else "succeeded",output_content_ids_json=[cid],fallback_used=not worker,error_code=None,lease_until=self.expires(120) if worker else None,retry_scope=b.retry_scope if prior else "all",source_content_id=source["content_id"],**timestamps())
+        original=one(c,"SELECT asset_id FROM assets WHERE run_id=? AND product_id=? AND origin='supplied' AND source_reference LIKE 'local_import:sha256:%' ORDER BY created_at LIMIT 1",(r,b.product_id))
+        source_assets=list(dict.fromkeys(b.input_asset_ids+([original['asset_id']] if original else [])+[asset]+[v["asset_id"] for v in source["cover_options"] if v.get('asset_id')]+([source["video_asset_id"]] if source["video_asset_id"] else [])))
+        insert(c,"content_jobs",run_id=r,job_id=jid,shop_id=s,product_id=b.product_id,proposal_id=b.proposal_id,attempt=attempt,brief_json={"facts":prod["facts"],"attributes":[v['text_vi'] for v in prod['facts']['verified_claims']],"confirmed_style":notes,"previous_content":{"title":source["title"],"description":source["description"],"images":source["cover_options"],"video":source["video_job"]},"retry_scope":b.retry_scope if prior else "all"},feedback_history_json=feedback,style_notes_json=notes+feedback,input_asset_ids_json=source_assets,provider="assigned_worker" if worker else "local_fallback",provider_job_id=None,cache_key=fingerprint({"r":r,"s":s,"attempt":attempt,"feedback":feedback}),status="queued" if worker else "succeeded",output_content_ids_json=[cid],fallback_used=not worker,error_code=None,lease_until=self.expires(120) if worker else None,retry_scope=b.retry_scope if prior else "all",source_content_id=source["content_id"],**timestamps())
         for aid in set(source_assets+[x["asset_id"] for x in covers]):
             c.execute("INSERT OR IGNORE INTO asset_jobs VALUES(?,?,?)",(r,aid,jid))
         self.event(c,r,run["current_day"],"content_job","content_worker",s,{"job_id":jid,"attempt":attempt,"feedback_vi":b.feedback_vi,"fallback_used":not worker,"kind":"draft","status":"running" if worker else "cached","version":attempt},visibility="shop_private",text="Đã giao content worker" if worker else "Nội dung local và ảnh fallback có nhãn")
-        if s=="D": c.execute("UPDATE runs SET phase='content_review' WHERE run_id=?",(r,))
+        if s==run['demo_shop_id']: c.execute("UPDATE runs SET phase='content_review' WHERE run_id=?",(r,))
         return self.entity(c,"content_jobs",r,"job_id",jid)
 
     def publish(self,c,p,r,cid,body):
@@ -144,20 +177,46 @@ class MediaMixin:
         require(job and cid in job["output_content_ids"] and job["status"] in {"succeeded","failed","timed_out"},"STALE_DRAFT","Chỉ xuất bản draft mới nhất đã sẵn sàng")
         option=next((x for x in content["cover_options"] if x["option"]==decision["cover_option"]),None)
         require(option and option["status"] in {"done","cached"},"ASSET_PENDING","Ảnh chưa sẵn sàng")
-        asset=self.entity(c,"assets",r,"asset_id",option["asset_id"])
-        require(asset["product_id"]==prod["product_id"] and asset["upload_status"]=="ready")
+        asset=self.checked_job_asset(c,r,job,option['asset_id'],'image')
+        video=content['video_job']
+        video_id=video.get('asset_id')
+        if not b.skip_video and video.get('status') in {'done','cached'}:
+            require(video_id is not None,'ASSET_PENDING','Video chưa sẵn sàng')
+            self.checked_job_asset(c,r,job,video_id,'video')
+            if run['config'].get('driver',{}).get('agent_version')=='native': require(video.get('review_passed') is True or b.video_review_ack,'VIDEO_REVIEW_REQUIRED','Cần xác nhận video chưa được kiểm duyệt')
+        elif not b.skip_video and run['config'].get('driver',{}).get('agent_version')=='native':
+            raise Fault('VIDEO_SKIP_REQUIRED','Chọn bỏ video chưa sẵn sàng',409)
+        if b.skip_video:
+            video={**video,'asset_id':None,'path':None,'status':'skipped'}
+            video_id=None
         c.execute("UPDATE content_versions SET status='superseded',version=version+1 WHERE run_id=? AND content_id=?",(r,prod["active_content_id"]))
-        c.execute("UPDATE content_versions SET status='published',cover_asset_id=?,published_day=?,version=version+1 WHERE run_id=? AND content_id=?",(asset["asset_id"],run["current_day"],r,cid))
+        c.execute("UPDATE content_versions SET status='published',cover_asset_id=?,video_asset_id=?,video_job_json=?,published_day=?,version=version+1 WHERE run_id=? AND content_id=?",(asset["asset_id"],video_id,dumps(video),run["current_day"],r,cid))
         c.execute("UPDATE products SET active_content_id=?,version=version+1 WHERE run_id=? AND product_id=?",(cid,r,prod["product_id"]))
         c.execute("UPDATE assets SET visibility='published' WHERE run_id=? AND asset_id=?",(r,asset["asset_id"]))
-        self.event(c,r,run["current_day"],"content_applied","orchestrator",prod["shop_id"],{"content_id":cid,"cover_option":decision["cover_option"]},text="Xuất bản đúng nội dung người bán đã chọn")
+        self.event(c,r,run["current_day"],"content_applied","orchestrator",prod["shop_id"],{"content_id":cid,"job_id":job['job_id'],"attempt":job['attempt'],"cover_option":decision["cover_option"],"skip_video":b.skip_video,"video_review_ack":b.video_review_ack},text="Xuất bản đúng nội dung người bán đã chọn")
         proposal=self.entity(c,"proposals",r,"proposal_id",job["proposal_id"])
         approval=one(c,"SELECT * FROM decisions WHERE run_id=? AND target_type='proposal' AND target_id=? AND action='approve'",(r,job["proposal_id"]))
         require(approval,"APPROVAL_REQUIRED","Chưa có approval gói")
         _,versions=self.evaluation(c,r,prod["shop_id"],proposal["package"])
         self.apply(c,p,r,{"proposal_id":proposal["proposal_id"],"approval_decision_id":approval["decision_id"],"expected_inventory_version":versions["inventory_version"],"expected_rules_version":versions["rules_version"]})
-        if prod["shop_id"]=="D": c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
+        if prod["shop_id"]==run['demo_shop_id']: c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
         return self.public(c,r,prod["shop_id"])
+
+    def checked_job_asset(self,c,r,job,aid,kind):
+        asset=self.entity(c,'assets',r,'asset_id',aid)
+        require(asset['kind']==kind and asset['product_id']==job['product_id'] and asset['upload_status']=='ready' and one(c,'SELECT job_id FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?',(r,job['job_id'],aid)),'ASSET_SCOPE','File không thuộc job hiện tại',404)
+        path=self.object_path(asset['object_key'])
+        require(path.is_file() and path.stat().st_size==asset['size_bytes'] and hashlib.sha256(path.read_bytes()).hexdigest()==asset['sha256'],'ASSET_INVALID','File thiếu hoặc checksum không khớp',422)
+        return asset
+
+    def validate_content_text(self,c,r,job,title,description):
+        source=self.entity(c,'content_versions',r,'content_id',job['source_content_id'])
+        product=self.product(c,r,job['shop_id'])
+        styles=self.rules(c,r,job['shop_id'])[0]['content_style_notes']
+        facts=[source['title'],source['description'],*[v['text_vi'] for v in product['facts']['verified_claims']],*styles]
+        text=title+'. '+description
+        require(bool(title.strip()) and len(title)<=120 and 0<len(description)<=5000 and not any(term in text.casefold() for term in ('bảo hành','chống nước','không ồn','5000mah')) and content_matches_facts(text,facts),'CLAIM_INVALID','Nội dung không khớp thuộc tính đã kiểm chứng',422)
+        return True
 
     def content_result(self,c,p,r,jid,body):
         job=self.entity(c,"content_jobs",r,"job_id",jid)
@@ -172,21 +231,19 @@ class MediaMixin:
             candidate=b.content_candidates
             allowed={"content_id","content_version","title","description","images","video","feedback_history","style_notes","checks"}
             require(set(candidate)<=allowed and {"title","description","images","video"}<=set(candidate),"CONTENT_SCHEMA","Bản nháp sai schema",422)
-            text=candidate["title"]+" "+candidate["description"]
-            require(len(candidate["title"])<=120 and len(candidate["description"])<=5000 and set(re.findall(r"\d+",text))<= {"3","2000"},"CLAIM_INVALID","Thông số ngoài listing",422)
-            require(not any(term in text.casefold() for term in ("bảo hành","chống nước","không ồn","5000mah")),"CLAIM_INVALID","Chưa xác minh tuyên bố này",422)
-            # This local MVP uses a constrained vocabulary rather than pretending
-            # a number-only check can verify arbitrary generated factual prose.
-            vocabulary=set(re.findall(r"\w+",("Quạt mini cầm tay sạc USB "+" ".join(ATTRIBUTES)+" với và có sản phẩm tính năng chi tiết").casefold()))
-            require(set(re.findall(r"\w+",text.casefold()))<=vocabulary,"CLAIM_INVALID","Chữ ngoài bộ thuộc tính đã kiểm chứng",422)
-            for value in re.findall(r"pin\s+(\d+)\s*mah",text.casefold()):require(value=="2000","CLAIM_INVALID","Sai dung lượng pin",422)
+            self.validate_content_text(c,r,job,candidate['title'],candidate['description'])
             require(len(candidate["images"])==3 and {v["option"] for v in candidate["images"]}==set("ABC"),"CONTENT_SCHEMA","Cần đúng ba phương án",422)
             for image in candidate["images"]:
+                if image['status'] not in {'done','cached'}:
+                    require(image.get('asset_id') is None,'CONTENT_SCHEMA','Ảnh chưa sẵn sàng không có asset',422)
+                    image['path']=None
+                    continue
+                require(image.get('asset_id') is not None,'ASSET_PENDING','Ảnh chưa sẵn sàng',422)
                 a=self.asset_access(c,p,r,image["asset_id"])
                 require(a["kind"]=="image" and a["product_id"]==job["product_id"] and a["upload_status"]=="ready")
                 require(one(c,"SELECT job_id FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?",(r,jid,image["asset_id"])),"ASSET_SCOPE","Ảnh không thuộc job hiện tại",404)
                 require(image.get("status") in {"done","cached"},"ASSET_PENDING","Ảnh kết quả chưa sẵn sàng",422)
-                require(set(image)<={"option","status","asset_id","path","prompt"},"CONTENT_SCHEMA","Ảnh sai schema",422)
+                require(set(image)<={"option","status","asset_id","path","prompt","source","error"},"CONTENT_SCHEMA","Ảnh sai schema",422)
                 image["path"]=f"/api/v1/runs/{r}/assets/{a['asset_id']}/download"
             if not b.fallback_used and all(x["status"]=="done" for x in candidate["images"]):
                 hashes={self.entity(c,"assets",r,"asset_id",x["asset_id"])["sha256"] for x in candidate["images"]}
@@ -194,11 +251,15 @@ class MediaMixin:
             require(not one(c,"SELECT * FROM content_jobs WHERE run_id=? AND proposal_id=? AND attempt>?",(r,job["proposal_id"],job["attempt"])),"SUPERSEDED_JOB","Job đã bị thay thế")
             video=candidate["video"]
             require(isinstance(video,dict) and video.get("status") in {"pending","running","done","failed","cached"},"CONTENT_SCHEMA","Video sai schema",422)
-            require(set(video)<={"status","asset_id","path","job_id","prompt","error"},"CONTENT_SCHEMA","Video có trường không hợp lệ",422)
+            require(set(video)<={"status","asset_id","path","job_id","prompt","error","source","reference_asset_id","reference_job_id","reference_attempt","review_passed","review_notes","duration_seconds"},"CONTENT_SCHEMA","Video có trường không hợp lệ",422)
             video_id=video.get("asset_id")
             if video_id:
                 a=self.asset_access(c,p,r,video_id);require(a["product_id"]==job["product_id"] and a["kind"]=="video" and a["upload_status"]=="ready")
                 require(one(c,"SELECT job_id FROM asset_jobs WHERE run_id=? AND job_id=? AND asset_id=?",(r,jid,video_id)),"ASSET_SCOPE","Video không thuộc job",404)
+                run=self.entity(c,'runs',r,'run_id',r)
+                if run['config'].get('driver',{}).get('agent_version')=='native' and job['retry_scope']=='all':
+                    first=next((image for image in candidate['images'] if image['option']=='A'),None)
+                    require(first and first.get('asset_id') and video.get('reference_asset_id')==first['asset_id'] and video.get('reference_job_id')==jid and video.get('reference_attempt')==job['attempt'],'VIDEO_REFERENCE_INVALID','Video phải dùng ảnh A của lần tạo hiện tại',422)
                 video["path"]=f"/api/v1/runs/{r}/assets/{a['asset_id']}/download"
             else:video["path"]=None
             content=self.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
@@ -212,8 +273,13 @@ class MediaMixin:
         elif b.status=="succeeded":
             raise Fault("CONTENT_REQUIRED","Job thành công cần bản nháp hợp lệ",422)
         elif b.status in {"failed","timed_out"}:
-            # Keep the explicitly labeled source fallback; seller must still approve it.
-            c.execute("UPDATE content_versions SET status='validated',version=version+1 WHERE run_id=? AND content_id=?",(r,job["output_content_ids"][0]))
+            run=self.entity(c,'runs',r,'run_id',r)
+            if run['config'].get('driver',{}).get('agent_version')=='native':
+                unavailable=[{'option':option,'status':'failed','asset_id':None,'path':None,'error':b.error_code or 'MEDIA_UNAVAILABLE'} for option in 'ABC']
+                video={'status':'failed','asset_id':None,'path':None,'error':b.error_code or 'MEDIA_UNAVAILABLE'}
+                c.execute("UPDATE content_versions SET cover_options_json=?,video_job_json=?,video_asset_id=NULL,status='validated',version=version+1 WHERE run_id=? AND content_id=?",(dumps(unavailable),dumps(video),r,job['output_content_ids'][0]))
+            else:
+                c.execute("UPDATE content_versions SET status='validated',version=version+1 WHERE run_id=? AND content_id=?",(r,job["output_content_ids"][0]))
         c.execute("UPDATE content_jobs SET status=?,provider_job_id=COALESCE(?,provider_job_id),fallback_used=?,error_code=?,lease_until=?,version=version+1,updated_at=? WHERE run_id=? AND job_id=?",(b.status,b.provider_job_id,b.fallback_used or b.status in {"failed","timed_out"},b.error_code,self.expires(120) if b.status=="running" else None,now(),r,jid))
         return self.entity(c,"content_jobs",r,"job_id",jid)
 

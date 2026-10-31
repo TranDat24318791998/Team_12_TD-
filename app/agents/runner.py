@@ -1,14 +1,13 @@
 """Bounded native tool protocol with role isolation and deterministic fallback."""
 
 import json
-import re
-import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import BaseModel, ValidationError
 from app.agents.tools import ROLE_TOOLS
+from data.growth_data.text_validation import content_matches_facts as _content_matches_facts
 
 
 class AgentToolError(RuntimeError):
@@ -39,31 +38,6 @@ def _schema(name, schema):
 
 def _same(a, b):
     return a is not None and b is not None and a.model_dump(mode='json') == b.model_dump(mode='json')
-
-
-def _content_matches_facts(text, sources):
-    neutral = {'và', 'với', 'có', 'của', 'cho', 'là', 'được', 'từ', 'như', 'để', 'trong',
-               'theo', 'bằng', 'sản', 'phẩm', 'khi', 'một', 'các', 'dùng', 'sử', 'dụng'}
-    def clauses(value):
-        value = unicodedata.normalize('NFC', value).casefold()
-        return [[word for word in re.findall(r'\w+', clause) if word not in neutral]
-                for clause in re.split(r'[,;:!?]|(?<!\d)\.(?!\d)', value)]
-    source_clauses = [tokens for source in sources for tokens in clauses(source)]
-    allowed = {word for tokens in source_clauses for word in tokens} | neutral
-    output = clauses(text)
-    if not set(re.findall(r'\w+', unicodedata.normalize('NFC', text).casefold())) <= allowed:
-        return False
-    source_pairs = {(a,b) for tokens in source_clauses for a,b in zip(tokens,tokens[1:])}
-    for tokens in output:
-        for index, token in enumerate(tokens):
-            if not re.search(r'\d', token):
-                continue
-            pairs = set()
-            if index: pairs.add((tokens[index-1],token))
-            if index+1 < len(tokens): pairs.add((token,tokens[index+1]))
-            if not pairs.intersection(source_pairs):
-                return False
-    return True
 
 
 def _can_finish(role, output, successful, tools):
@@ -115,7 +89,7 @@ def _can_finish(role, output, successful, tools):
     return False
 
 
-def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_name):
+def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_name, replay_context=None):
     if role not in ROLE_TOOLS:
         raise ValueError('unknown role')
     tools = {name: tool for name, tool in tools.items() if name in ROLE_TOOLS[role]}
@@ -170,11 +144,14 @@ def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_
         allowed_schemas = [final_schema] if step == 2 else normal_schemas + [final_schema]
         try:
             model = llm.settings.llm_model_reflect if role == 'learning' else None
+            call_id=f'{run_name}:{step}'
+            replay_kwargs={'replay_context':{**replay_context,'step':step}} if replay_context is not None else {}
             response = llm.invoke_tools(conversation, tools=allowed_schemas,
                                         tool_choice=terminal if step == 2 else 'auto',
-                                        parallel_tool_calls=step < 2, run_name=run_name, model=model)
+                                        parallel_tool_calls=step < 2, run_name=run_name, model=model, call_id=call_id, **replay_kwargs)
         except Exception:
             return offline('provider_unavailable')
+        model_source='fixture' if getattr(llm,'is_fixture',False) else getattr(llm,'last_source',None) or 'live'
         if not isinstance(response, AIMessage):
             return offline('invalid_provider_response')
         calls = response.tool_calls
@@ -209,6 +186,7 @@ def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_
             output = validated[0][1]
             if not _can_finish(role, output, successful, tools):
                 return offline('prerequisite_failed')
+            if hasattr(llm,'confirm_replay'): llm.confirm_replay(call_id)
             log('agent_completed', {'role': role, 'source': model_source, 'error_code': None, 'invocation_id': run_name})
             return AgentRun(output, model_source, list(trace_ids), None)
         for name, arguments, call_id in validated:
@@ -220,4 +198,5 @@ def run_agent(role, *, llm, tools, messages, output_schema, fallback, emit, run_
             except AgentToolError:
                 content = json.dumps({'error': 'TOOL_FAILED'})
             conversation.append(ToolMessage(content=content, name=name, tool_call_id=call_id))
+        if hasattr(llm,'confirm_replay'): llm.confirm_replay(f'{run_name}:{step}')
     return offline('call_limit')

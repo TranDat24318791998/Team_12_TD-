@@ -7,11 +7,12 @@ class VideoRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     input_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     product_name: str = Field(min_length=1, max_length=90)
+    product_kind: Literal['handheld_fan', 'desktop_fan'] = 'desktop_fan'
     verified_facts: list[str] = Field(default_factory=list, max_length=12)
     script: str = Field(default='', max_length=1200)
     tagline: str = Field(default='', max_length=120)
     cta: str = Field(default='Tìm hiểu sản phẩm', max_length=65)
-    motion_prompt: str = Field(default='A desk fan operating naturally, slow oscillation, stable product design, locked camera.', max_length=1000)
+    motion_prompt: str = Field(default='One fan operating naturally, stable product design, locked camera.', max_length=1000)
     mode: Literal['muse', 'motion_graphics', 'source_video', 'local_i2v'] = 'muse'
     output_type: Literal['chibi_3d', 'realistic_human'] = 'realistic_human'
     product_description: str = Field(default='', max_length=900)
@@ -40,7 +41,7 @@ class VideoRequest(BaseModel):
                 raise ValueError('mode=muse yêu cầu GPT viết prompt/script: generate_script=true')
             if self.duration not in (5, 10, 15):
                 raise ValueError('Thời lượng Muse chỉ nhận 5, 10 hoặc 15 giây')
-            if self.script and len(self.script.split()) > int(self.duration * 5):
+            if self.script and len(self.script.split()) > int(self.duration * 4):
                 raise ValueError('Script quá dài cho video Muse; rút gọn hoặc tăng thời lượng')
             if self.generate_image:
                 raise ValueError('Muse dùng ảnh tham chiếu gốc; tắt generate_image để tránh đổi sản phẩm')
@@ -65,7 +66,7 @@ class CreativePlan(BaseModel):
 
 
 class MuseCreativePlan(BaseModel):
-    is_desktop_fan: bool
+    product_kind: Literal['handheld_fan', 'desktop_fan', 'other']
     product_description: str
     presenter_description: str
     setting_description: str
@@ -83,7 +84,7 @@ class MuseVisualReview(BaseModel):
 
 
 class ProductImageAnalysis(BaseModel):
-    is_desktop_fan: bool
+    product_kind: Literal['handheld_fan', 'desktop_fan', 'other']
     product_count: int
     product_description: str
     logo_text: str
@@ -100,7 +101,10 @@ ImageStyle = Literal['clean_white', 'pastel_lifestyle', 'premium_studio', 'summe
 class ImageRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     job_type: Literal['image'] = 'image'
-    logo_asset_id: str = Field(pattern=r'^[a-f0-9]{32}$')
+    logo_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     product_asset_id: str = Field(pattern=r'^[a-f0-9]{32}$')
     style: ImageStyle
     style_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    product_kind: Literal['handheld_fan', 'desktop_fan'] = 'desktop_fan'
+    product_name: str = Field(default='Quạt để bàn', min_length=1, max_length=90)
+    background_preference: Literal['default', 'bright'] = 'default'

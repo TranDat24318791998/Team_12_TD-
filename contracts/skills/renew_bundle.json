@@ -1,0 +1,49 @@
+{
+  "schema_version": "self-improve.v1",
+  "model": "SkillBundle",
+  "source": "fixture",
+  "payload": {
+    "run_id": "r1",
+    "shop_id": "E",
+    "category": "quat_mini",
+    "version": 1,
+    "effective_from_day": 4,
+    "skill": {
+      "skill_id": "platform_renew",
+      "base_hash": "f6e5bd1d413f674d0ce5b0975045aae98340008038464d1b52341a46c9dfe173",
+      "learned_steps": [
+        {
+          "policy_id": "platform_renew:seed_last_approved",
+          "lesson_id": "c29b3b530025aec4",
+          "target_skill": "platform_renew",
+          "trigger": "approved_package",
+          "action": "seed_last_approved",
+          "evidence_fact_ids": [
+            "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+          ]
+        },
+        {
+          "policy_id": "platform_renew:seed_approved_voucher",
+          "lesson_id": "9ce2f848609c0c7b",
+          "target_skill": "platform_renew",
+          "trigger": "seller_approved_voucher_edit",
+          "action": "seed_approved_voucher",
+          "evidence_fact_ids": [
+            "ba98444895c0ccc92fdbc2c9e3c7f7aaa14b688dfb5bf3b688e0f897c9cbd7e4"
+          ]
+        },
+        {
+          "policy_id": "platform_renew:disable_ads_on_renewal",
+          "lesson_id": "56ab8412c10ff8c4",
+          "target_skill": "platform_renew",
+          "trigger": "ads_auto_paused",
+          "action": "disable_ads_on_renewal",
+          "evidence_fact_ids": [
+            "79c568f63694b34961e5d029d934565f70d8fc3fc04dca7b907b40855e9cbe6a"
+          ]
+        }
+      ]
+    },
+    "artifact_hash": "33fdccbc2ced9e26abc829c2dbf395d836979bb1cd618796f4765c2189ec9fd7"
+  }
+}

@@ -23,8 +23,9 @@ def _has_number(text):
 
 
 class MemoryGateway:
-    def __init__(self, store, enabled, log=None, run_id=None, session=None):
+    def __init__(self, store, enabled, log=None, run_id=None, session=None, source=None):
         self.store, self.enabled, self.log, self.run_id, self.session = store, enabled, log, run_id, session
+        self.source = source
         self._learning_snapshot = None
         self._lock = RLock()
 
@@ -36,7 +37,16 @@ class MemoryGateway:
             self.log.add(self.run_id, self.session.day, type, 'memory', shop_id, 'Bộ nhớ đã được xử lý.', data)
 
     def get_rules(self, shop_id):
+        if self.source is not None:
+            return self.source.rules_state(shop_id).rules.model_copy(deep=True)
         return self.session.states[shop_id].private.rules.model_copy(deep=True)
+
+    def _rules_state(self, shop_id):
+        if self.source is not None:
+            state = self.source.rules_state(shop_id)
+            return state.rules.model_copy(deep=True), state.version, list(state.evidence_seqs)
+        evidence = [e.seq for e in self.log.since(self.run_id, 0) if e.type == 'rules_confirmed' and e.shop_id == shop_id] if self.log else []
+        return self.get_rules(shop_id), self.session.rules_version, evidence
 
     def get_history(self, shop_id):
         if not self.enabled:
@@ -58,29 +68,68 @@ class MemoryGateway:
         history = self.get_history(shop_id)[:5]
         record = self.store.get(self._ns('calibration', category), category) if self.enabled else None
         lessons = self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5]
-        self._event('memory_read', shop_id, {'who': 'platform', 'items': [x.negotiation_id for x in history] + [x.lesson_id for x in lessons], 'versions': {x.negotiation_id:x.version for x in history} | {x.lesson_id:x.version for x in lessons}, 'invocation_id':invocation_id})
+        refs = [{'id':x.negotiation_id,'version':x.version} for x in history] + [{'id':x.lesson_id,'version':x.version} for x in lessons]
+        if record:
+            refs.append({'id':f'calibration:{category}','version':record.version})
+        self._event('memory_read', shop_id, {'who':'platform','items':[x['id'] for x in refs],
+            'versions':{x['id']:x['version'] for x in refs},'record_refs':refs,
+            'memory_revision':self.session.knowledge_revision,'invocation_id':invocation_id})
         return PlatformMemoryView(history=history, calibration=record.value if record else None,
                                   lessons=lessons, knowledge_revision=self.session.knowledge_revision)
 
+    def skill_bundle(self, shop_id, skill_id, day, *, base_text):
+        from hashlib import sha256
+        from app.domain.models.skills import SkillBundle
+        from app.memory.skills import compile_skill, dump_skill, load_skill
+        category = self.session.states[shop_id].public.category
+        base = compile_skill(skill_id, base_text, [])
+        def base_only():
+            return SkillBundle(run_id=self.run_id, shop_id=shop_id, category=category, version=0,
+                effective_from_day=1, skill=base, artifact_hash=sha256(dump_skill(base)).hexdigest())
+        if not self.enabled:
+            return base_only()
+        try:
+            versions = self.store.list_skill_versions(self.run_id, shop_id, skill_id)
+            eligible = [v for v in versions if v.bundle.effective_from_day <= day]
+            if not eligible:
+                return base_only()
+            version = eligible[-1]
+            skill = load_skill(version.artifact_json.encode('utf-8'), expected_hash=version.bundle.artifact_hash)
+            if skill.base_hash != base.base_hash:
+                raise ValueError('BASE_SKILL_CHANGED')
+            if version.bundle.category != category:
+                raise ValueError('SKILL_SCOPE_MISMATCH')
+            return version.bundle.model_copy(deep=True)
+        except (ValueError, TypeError) as exc:
+            code = 'BASE_SKILL_CHANGED' if str(exc) == 'BASE_SKILL_CHANGED' else 'SKILL_ARTIFACT_INVALID'
+            self._event('base_skill_changed' if code == 'BASE_SKILL_CHANGED' else 'skill_artifact_invalid',
+                        shop_id, {'skill_id':skill_id,'code':code})
+            return base_only()
+
     def shop_view(self, shop_id, *, invocation_id=None):
-        prefs = self.store.list(self._ns('preferences', shop_id)) if self.enabled else []
-        evidence = [e.seq for e in self.log.since(self.run_id, 0) if e.type == 'rules_confirmed' and e.shop_id == shop_id] if self.log else []
-        self._event('memory_read', shop_id, {'who': 'shop', 'items': [p.pref_id for p in prefs], 'rules_version':self.session.rules_version, 'invocation_id':invocation_id})
-        return ShopMemoryView(rules=self.get_rules(shop_id), rules_version=self.session.rules_version,
+        prefs = sorted(self.store.list(self._ns('preferences', shop_id)),key=lambda p:p.pref_id) if self.enabled else []
+        rules, version, evidence = self._rules_state(shop_id)
+        refs = [{'id':p.pref_id,'version':None} for p in prefs] + [{'id':f'rules:{shop_id}','version':version}]
+        self._event('memory_read', shop_id, {'who':'shop','items':[p.pref_id for p in prefs],
+            'record_refs':refs,'rules_version':version,'memory_revision':self.session.knowledge_revision,'invocation_id':invocation_id})
+        return ShopMemoryView(rules=rules, rules_version=version,
                               rules_evidence_seqs=evidence, preferences=prefs,
                               knowledge_revision=self.session.knowledge_revision)
 
     def content_view(self, shop_id, *, invocation_id=None):
-        prefs = self.store.list(self._ns('preferences', shop_id)) if self.enabled else []
+        prefs = sorted(self.store.list(self._ns('preferences', shop_id)),key=lambda p:p.pref_id) if self.enabled else []
         ids = [p.pref_id for p in prefs if p.status == 'confirmed' and p.field == 'content_style']
-        self._event('memory_read', shop_id, {'who': 'content', 'items': ids, 'rules_version':self.session.rules_version, 'invocation_id':invocation_id})
-        return ContentMemoryView(confirmed_style_notes=list(self.get_rules(shop_id).content_style_notes),
-                                 rules_version=self.session.rules_version, preference_ids=ids)
+        rules, version, _ = self._rules_state(shop_id)
+        refs = [{'id':p,'version':None} for p in ids] + [{'id':f'rules:{shop_id}','version':version}]
+        self._event('memory_read', shop_id, {'who':'content','items':ids,'record_refs':refs,
+            'rules_version':version,'memory_revision':self.session.knowledge_revision,'invocation_id':invocation_id})
+        return ContentMemoryView(confirmed_style_notes=list(rules.content_style_notes),
+                                 rules_version=version, preference_ids=ids)
 
     def prefs_to_ask(self, shop_id, day):
         if not self.enabled:
             return []
-        prefs = self.store.list(self._ns('preferences', shop_id))
+        prefs = sorted(self.store.list(self._ns('preferences', shop_id)), key=lambda p:p.pref_id)
         return [p for p in prefs if p.observation_count >= PREF_ASK_THRESHOLD and
                 (p.status == 'candidate' or (p.status == 'declined' and p.declined_until is not None and day >= p.declined_until))]
 
@@ -140,10 +189,20 @@ class MemoryGateway:
             return self._learning_snapshot.model_copy(deep=True)
         return self.freeze_learning_evidence(day)
 
-    def freeze_learning_evidence(self, day):
+    def freeze_learning_evidence(self, day, *, through_seq=None):
+        if self.source is not None:
+            if through_seq is None:
+                raise ValueError('integrated learning requires settlement cutoff')
+            shop_id = self.session.settings.demo_shop
+            category = self.session.states[shop_id].public.category
+            self._learning_snapshot = self.source.freeze_evidence(day=day, after_seq=self.session.memory_cursor,
+                through_seq=through_seq, knowledge_revision=self.session.knowledge_revision,
+                existing_lessons=self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5])
+            return self._learning_snapshot.model_copy(deep=True)
         all_events = self.log.since(self.run_id, 0)
-        events = [event for event in all_events if event.seq > self.session.memory_cursor]
-        through = max((e.seq for e in events), default=self.session.memory_cursor)
+        events = [event for event in all_events if event.seq > self.session.memory_cursor and
+                  (through_seq is None or event.seq <= through_seq)]
+        through = through_seq if through_seq is not None else max((e.seq for e in events), default=self.session.memory_cursor)
         shop_id = self.session.settings.demo_shop
         state = self.session.states[shop_id]
         projected, ids = [], set()

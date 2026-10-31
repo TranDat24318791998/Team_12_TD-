@@ -42,10 +42,10 @@ test('content attempt 3 disables retry; running covers disable publication while
   const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
   assert.match(button(html,'retry'),/disabled/);assert.match(button(html,'apply'),/disabled/);assert.match(html,/Chưa tạo được video/);assert.match(html,/Lần 3 \/ 3/);
 });
-test('ready covers permit publication without waiting for video',()=>{
+test('ready covers require an explicit video choice',()=>{
   const draft={version:1,title:'Tiêu đề',description:'Mô tả',images:[{option:'A',status:'cached',path:'https://demo.test/media/a.jpg'}],video:{status:'running'},feedback_history:[]};
   const html=renderToStaticMarkup(<ContentReview draft={draft} original={shop} onRetry={noop} onApply={noop} onNotice={noop}/>);
-  assert.ok(button(html,'apply'));assert.doesNotMatch(button(html,'apply'),/disabled/);
+  assert.ok(button(html,'apply'));assert.match(button(html,'apply'),/disabled/);assert.match(html,/Dùng ảnh, bỏ qua video/);
 });
 test('seller backstage escapes event text and excludes other shops',()=>{
   const events=[{seq:1,run_id:state.run_id,day:1,shop_id:'Z',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'<img src=x onerror=alert(1)>',data:{private_note_vi:'Ghi chú riêng của shop Z.'}},{seq:2,run_id:state.run_id,day:1,shop_id:'A',actor:'shop_agent',type:'shop_turn',ts:'10:00',text_vi:'Bí mật shop khác',data:{private_note_vi:'Không hiển thị.'}}];
@@ -66,6 +66,13 @@ test('proof respects the response horizon and does not fabricate missing values'
   const html=renderToStaticMarkup(<ProofReport report={report} preview={false} onReset={noop} onExport={noop}/>);
   assert.match(html,/id="proof-days">7/);assert.match(html,/Chưa có dữ liệu/);assert.doesNotMatch(html,/NaN|Số liệu minh họa/);
   const legacy=renderToStaticMarkup(<ProofReport report={{...report,days:6}} preview={false} onReset={noop} onExport={noop}/>);assert.match(legacy,/Báo cáo tương thích 6 ngày/);
+});
+test('precomputed proof identifies its offline source and preserves run identifiers',()=>{
+  const report={days:7,seed:42,run_on:'original-on',run_off:'original-off',metrics:[],source:'precomputed_offline_simulation'};
+  const html=renderToStaticMarkup(<ProofReport report={report} manifest={{comparison_id:'pair-1',provider_eval:'not_run',artifact_sha256:'abc'}} onReset={noop} onExport={noop}/>);
+  assert.match(html,/Mô phỏng ngoại tuyến đã chạy/);assert.match(html,/Chưa đánh giá provider/);
+  assert.match(html,/original-on \/ original-off/);assert.match(html,/pair-1/);assert.match(html,/not_run/);
+  assert.match(html,/Bắt đầu phiên demo mới/);assert.doesNotMatch(html,/Chạy lại từ đầu/);
 });
 
 test('agent overview shows package changes, safe referee text and distinct validation',()=>{

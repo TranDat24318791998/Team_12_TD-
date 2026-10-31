@@ -95,7 +95,8 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     const fail=message=>{throw new Error(message);};
     if(url.pathname==='/api/reset' && method==='POST') { const next=fresh(body.memory??true); write(next); return clone({run_id:next.state.run_id,day:1,mode:next.state.mode,state:next.state}); }
     if(url.pathname==='/api/state' && method==='GET') result=s;
-    else if(url.pathname==='/api/events' && method==='GET') result={events:db.events.filter(e=>e.seq>Number(url.searchParams.get('after') || 0)),last_seq:db.events.length};
+    else if(url.pathname==='/api/events' && method==='GET') result={run_id:s.run_id,events:db.events.filter(e=>e.seq>Number(url.searchParams.get('after') || 0)),last_seq:db.events.length,has_more:false};
+    else if(url.pathname==='/api/brief/confirm' && method==='POST'){s.brief={...body,confirmed:true,version:1};result={brief:s.brief,step:'idle'};}
     else if(url.pathname==='/api/day/start' && method==='POST') {
       if(s.step==='complete' || s.day>SIMULATION_DAYS) fail('Phiên mô phỏng đã hoàn tất. Hãy đặt lại để chạy phiên mới.');
       if(s.step!=='idle' && s.step!=='night_done') fail('Ngày hiện tại đã bắt đầu.');

@@ -40,7 +40,8 @@ class RunCreate(Strict):
     seed: int = 42
     mode: Literal["offline", "replay", "live"] = "offline"
     memory_enabled: bool = True
-    simulation_days: Literal[6, 7] = 7
+    simulation_days: int = Field(default=7, ge=1, le=7)
+    demo_shop_id: Literal['A', 'B', 'C', 'D', 'E'] = 'D'
     execution_profile: Literal["reference", "external"] = "reference"
     content_mode: Literal["local", "worker"] | None = None
     learning_mode: Literal["skip", "external"] | None = None
@@ -64,6 +65,30 @@ class NegotiationCreate(Strict):
     source_card_id: str | None = None
 
 
+class BriefConfirm(Strict):
+    intent: Literal['increase_orders']
+    goal_vi: str = Field(min_length=1, max_length=500)
+    allow_ads: bool
+    ads_daily_cap: int | None = Field(default=None, ge=0)
+    content_refresh: bool
+    duration_days: int = Field(ge=3,le=3)
+
+    @model_validator(mode='after')
+    def supported(self):
+        if not self.allow_ads or not self.content_refresh:
+            raise ValueError('Mục tiêu này yêu cầu nội dung và cho phép ads')
+        return self
+
+
+class NegotiationFinalize(Strict):
+    expected_version: int = Field(ge=1)
+    status: Literal['agreed', 'failed']
+    final_proposal_id: str | None = None
+    rounds: int = Field(ge=0, le=3)
+    reason_vi: str = Field(default='', max_length=500)
+    referee_action: Literal['continue', 'stop', 'ask_human', 'refocus'] | None = None
+
+
 class CheckRequest(Strict):
     product_id: str
     package: Package
@@ -76,6 +101,8 @@ class ProposalCreate(Strict):
     package: Package | None
     shared_reason: str = Field(default="", max_length=2000)
     stance: Literal["propose", "accept", "reject", "withdraw"] = "propose"
+    native_action: Literal['propose', 'accept', 'reject', 'withdraw', 'counter'] | None = None
+    turn_id: str | None = Field(default=None, max_length=200)
 
 
 class DecisionCreate(Strict):
@@ -148,6 +175,8 @@ class ContentResult(Strict):
 class Publish(Strict):
     approval_decision_id: str
     expected_active_content_id: str
+    skip_video: bool = False
+    video_review_ack: bool = False
 
 
 class UploadCreate(Strict):
@@ -212,9 +241,9 @@ class CalibrationView(Strict):
     version: str = Field(min_length=1)
     as_of_day: int = Field(ge=0,le=7)
     points: int = Field(ge=0)
-    factor: float = Field(gt=0)
+    factor: float = Field(ge=0)
     q_low: float = Field(ge=0)
-    q_high: float = Field(gt=0)
+    q_high: float = Field(ge=0)
 
     @model_validator(mode="after")
     def ordered(self):
@@ -350,18 +379,55 @@ class TelemetryEvent(Strict):
 
 class LegacyDecision(Strict):
     card_id: str
+    expected_card_version: int | None = Field(default=None, ge=1)
+    expected_brief_version: int | None = Field(default=None, ge=1)
     action: Literal["accept","edit","reject","negotiate"]
     note_vi: str = Field(default="",max_length=2000)
     edited_package: Package | None = None
     rule_answer: bool | None = None
 
 
+class NativeDecision(LegacyDecision):
+    expected_card_version: int = Field(ge=1)
+    expected_brief_version: int = Field(ge=1)
+
+
+class LegacyReset(Strict):
+    memory: bool = True
+    seed: int = 42
+
+
+class LegacyContentBinding(Strict):
+    card_id: str
+    expected_brief_version: int = Field(ge=1)
+    expected_draft_version: int = Field(ge=1, le=3)
+    expected_job_id: str
+    expected_content_id: str
+
+
+class LegacyContentRetry(LegacyContentBinding):
+    feedback_vi: str = Field(min_length=1, max_length=2000)
+    retry_scope: Literal['images', 'text', 'all'] = 'images'
+
+
+class LegacyContentApply(LegacyContentBinding):
+    cover_option: Literal['A', 'B', 'C']
+    skip_video: bool = False
+    video_review_ack: bool = False
+
+
+class LegacyNight(Strict):
+    expected_day: int = Field(ge=1, le=7)
+
+
 class WorkerImage(Strict):
     option: Literal["A","B","C"]
-    status: Literal["done","cached"]
-    asset_id: str
+    status: Literal["pending","running","done","cached","failed"]
+    asset_id: str | None = None
     path: str | None = None
     prompt: str = Field(default="",max_length=4000)
+    source: str | None = None
+    error: str | None = None
 
 
 class WorkerVideo(Strict):
@@ -371,6 +437,13 @@ class WorkerVideo(Strict):
     job_id: str | None = None
     prompt: str = Field(default="",max_length=4000)
     error: str | None = Field(default=None,max_length=1000)
+    source: str | None = None
+    reference_asset_id: str | None = None
+    reference_job_id: str | None = None
+    reference_attempt: int | None = None
+    review_passed: bool | None = None
+    review_notes: str | None = None
+    duration_seconds: float | None = None
 
     @model_validator(mode="after")
     def ready_asset(self):

@@ -4,6 +4,8 @@ Ngày 31/10/2026. Bộ này cập nhật phạm vi sau khi Data và media đã �
 
 Đọc [phân công review](REVIEW_ASSIGNMENTS.md), các báo cáo riêng bên dưới, rồi [plan triển khai](IMPLEMENTATION_PLAN.md). Đây là plan của Toàn; chỉ các thay đổi interface dùng chung mới cập nhật tài liệu chung của repo.
 
+**Implementation đã nghiệm thu cho demo local.** [Trạng thái cuối](IMPLEMENTATION_STATUS.md) tập hợp chín final reviews, tests, URL chạy, proof artifact và giới hạn live provider. Bảng dưới giữ các review ban đầu làm lịch sử/đầu vào implementation.
+
 | Phần | Review riêng / đầu vào implementation |
 | --- | --- |
 | Data và DB | [DB_REVIEW.md](DB_REVIEW.md) |
@@ -21,7 +23,7 @@ Ngày 31/10/2026. Bộ này cập nhật phạm vi sau khi Data và media đã �
 1. **Data là nguồn business state duy nhất:** run, day, rules, approval, listing, campaign, settlement và event sequence. Dùng SQLite hiện có tại `data/runtime/growth.db`. Không chạy business workflow của `app/runtime/day.py` song song với Data và không dùng `Session.new()` để giả resume một Data run.
 2. Agent hiện có tiếp tục dùng native tool calling và LangGraph. Worker lấy context đã bind từ Data, gọi runner thật, persist turn/verdict, rồi Data kiểm và tạo card. Không dùng `HttpHarness` làm agent sản phẩm.
 3. Knowledge và self-improve lưu trong **cùng SQLite**. Giữ schema `self-improve.v1`; bổ sung adapter, migration và transaction thật. Những câu trì hoãn DB/`durable NOT_CONNECTED` trong plan cũ được thay bởi phạm vi mới này.
-4. Dùng lại `experiment/` qua HTTP cho OpenAI Images và Muse video. Media worker không giữ một listing/approval/campaign riêng trong Session. Bản mới hỗ trợ quạt cầm tay D, logo tùy chọn và nền sáng.
+4. Dùng lại `experiment/` qua HTTP cho OpenAI Images và Muse video. Media worker không giữ một listing/approval/campaign riêng trong Session. Bản mới hỗ trợ handheld/desktop, logo tùy chọn và nền sáng. Theo xác nhận mới của người dùng, demo D dùng **quạt để bàn từ MinIO**, giữ nguyên số kinh doanh mô phỏng; cập nhật facts để không còn các claim handheld/USB/pin chưa có nguồn.
 5. Ghép API Data và React trong một app tại `http://127.0.0.1:8000`; media service tại `http://127.0.0.1:8010`. Một worker mỗi process, không reload. Dùng file storage local đã có cho media; không cần dựng thêm MinIO/Postgres/Docker/tunnel cho bản local. MinIO của đồng nghiệp là nguồn đọc để nhập dữ liệu cần thiết, không phải nơi ghi business state của bản này.
 6. UI giữ luồng chính: xác nhận brief → thương lượng → seller duyệt → Content/media → chọn ảnh và duyệt/bỏ video → áp dụng → night → ngày sau dùng Knowledge đã học. Review thất bại/không xác định phải được seller xác nhận hoặc bỏ video; không vượt kiểm file và version.
 7. Ưu tiên demo shop D trong budget native chung 64. Hết budget thì fallback offline có nhãn thật. Không đánh đồng request model nhận diện thành generation đã chạy hoặc fixture thành bằng chứng live.
@@ -44,6 +46,10 @@ flowchart LR
   K --> DB
   DB --> UI
 ```
+
+## Cập nhật dữ liệu demo từ MinIO
+
+Người dùng đã chọn đổi D sang quạt để bàn từ `marketing-videos/test-assets/desk-fan.jpg`. Ảnh gốc và provenance/checksum đã được lưu trong `assets/products/demo-d-desktop.{jpg,source.json}`. Đã nhập 16 ảnh/video vào ignored `data/runtime/imports/`, manifest giữ nguồn/checksum. Không thay đổi price/cost/rules/stock hay số simulator; chỉ đổi metadata/facts/input sản phẩm. Báo cáo Astra mô tả baseline D handheld trước quyết định này; coder dùng desktop cho D và vẫn giữ service hỗ trợ cả hai loại. Ảnh/video sinh sẵn có nhãn cache/imported, không phải generation live của bản local.
 
 ## Thứ giữ lại và giới hạn demo
 

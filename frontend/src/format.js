@@ -11,7 +11,7 @@ export function mediaURL(value,base=globalThis.location?.href || 'http://localho
   }catch{return '';}
 }
 export function pageURL(name,preview){const url=new URL(name,baseURL);url.searchParams.set('preview',preview?'1':'0');return url.href;}
-export const modeLabel=mode=>({live:'Trực tiếp',replay:'Phát lại bản chạy thật',offline:'Luật cố định'}[mode] || 'Chưa xác định');
+export const modeLabel=mode=>({live:'Trực tiếp',replay:'Phát lại',offline:'Luật cố định'}[mode] || 'Chưa xác định');
 export const categoryLabel=category=>({quat_mini:'Quạt mini'}[category] || category || 'Chưa có danh mục');
 export function colorsFor(shop){const attr=(shop.attributes || []).find(text=>/màu\s*:/iu.test(text));return attr?attr.split(':').slice(1).join(':').split(/[,;|]/).map(text=>text.trim()).filter(Boolean):[];}
 export function changedFields(shop,original){return [['title','Tiêu đề'],['description','Mô tả'],['images','Ảnh sản phẩm'],['video','Video'],['active_voucher_pct','Voucher']].filter(([key])=>JSON.stringify(shop[key])!==JSON.stringify(original[key])).map(([key,label])=>({key,label}));}

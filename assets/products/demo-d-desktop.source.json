@@ -1,0 +1,16 @@
+{
+  "source": "user_supplied_remote_test_asset",
+  "bucket": "marketing-videos",
+  "object_key": "test-assets/desk-fan.jpg",
+  "sha256": "f15b1eb1c6006c408476112f6e8f1cf863b3d5d6794e6a15c19e55310225d25e",
+  "size_bytes": 83668,
+  "dimensions": [
+    1024,
+    1024
+  ],
+  "product_kind": "desktop_fan",
+  "approved_demo_shop": "D",
+  "is_simulated": true,
+  "provider_verified": false,
+  "note_vi": "User chọn làm sản phẩm demo; số kinh doanh vẫn là mô phỏng. Không suy USB/pin từ ảnh."
+}

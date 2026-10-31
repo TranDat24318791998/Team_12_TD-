@@ -7,6 +7,13 @@ from growth_data.harness import HttpHarness
 from growth_data.storage import one
 
 
+def test_brief_confirmation_is_persisted_before_work(client,run):
+    body={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+    response=client.post('/api/brief/confirm',json=body,headers={'Idempotency-Key':'brief','X-Request-ID':'brief'})
+    assert response.status_code==200 and response.json()['brief']['confirmed']
+    assert client.get('/api/state').json()['brief']==response.json()['brief']
+
+
 def test_agent_catalog_queries_and_knowledge_upload_read_revoke(client,service,run):
     h=HttpHarness(client,service.issue_token)
     p=h.token(run,"platform_agent");shop=h.token(run,"shop_agent","D")
@@ -16,8 +23,8 @@ def test_agent_catalog_queries_and_knowledge_upload_read_revoke(client,service,r
     assert len(h.get(base+"/market/observations?limit=100",p))==14
     assert h.get(base+"/shops/D/costs?as_of_day=1",shop)["unit_cost_vnd"]==115000
     product=h.get(base+"/shops/D/products",p)[0]
-    assert product["facts"]["battery_capacity_mah"]==2000
-    assert len(product["facts"]["colors"])==3
+    assert product["facts"]["product_kind"]=="desktop_fan"
+    assert "battery_capacity_mah" not in product["facts"]
     card=start(client)
     summary=h.get(base+"/market/summary",p)
     assert summary["growth_7d_pct"]==240 and summary["as_of_date"]=="2026-11-01"

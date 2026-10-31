@@ -49,7 +49,7 @@ class BoundTool:
 
 def bind_role_tools(session, role, shop_id, *, turns=(), proposal=None, brief=None,
                     public_check_codes=(), feedback_history=(), card_id=None,
-                    draft_version=1, initial_propose=False, invocation_id=None):
+                    draft_version=1, initial_propose=False, invocation_id=None, platform_memory=None):
     """Values captured here are never accepted from model tool arguments."""
     if role not in ROLE_TOOLS or shop_id not in session.states:
         raise ValueError('invalid role or shop')
@@ -65,13 +65,16 @@ def bind_role_tools(session, role, shop_id, *, turns=(), proposal=None, brief=No
         return PublicContext(day=session.day, shop=state.public.model_copy(deep=True),
             brief=scoped_brief.model_copy(deep=True),
             trend_multiplier=round((1 + trend.get('daily_growth', .12)) ** min(session.day - 1, 6), 6),
-            calendar_notes=[item['name'] for item in session.world.calendar], active_package=active)
+            calendar_notes=[item['name'] for item in session.world.calendar], active_package=active,
+            references=session.memory.source.reference_documents(role='platform',shop_id=shop_id,day=session.day) if getattr(session.memory,'source',None) else [])
 
     def private_context(_):
         return ShopContext(private=state.private.model_copy(deep=True), rules_version=session.rules_version)
 
     def memory(_):
         if role == 'platform':
+            if platform_memory is not None:
+                return platform_memory.model_copy(deep=True)
             return session.memory.platform_view(shop_id, state.public.category, invocation_id=invocation_id)
         return session.memory.shop_view(shop_id, invocation_id=invocation_id)
 
@@ -142,7 +145,8 @@ def bind_role_tools(session, role, shop_id, *, turns=(), proposal=None, brief=No
         return ContentContext(shop_id=shop_id, title=state.public.title, description=state.public.description,
             attributes=state.public.attributes, images=state.public.images, fact_source_id=f'seed:shop:{shop_id}',
             memory=session.memory.content_view(shop_id, invocation_id=invocation_id), feedback_history=list(feedback_history),
-            card_id=selected_card_id, brief_version=scoped_brief.version, draft_version=draft_version)
+            card_id=selected_card_id, brief_version=scoped_brief.version, draft_version=draft_version,
+            references=session.memory.source.reference_documents(role='content',shop_id=shop_id,day=session.day) if getattr(session.memory,'source',None) else [])
 
     from app.domain.models.learning import LearningEvidence, PlatformMemoryView, ShopMemoryView
     memory_schema = PlatformMemoryView if role == 'platform' else ShopMemoryView

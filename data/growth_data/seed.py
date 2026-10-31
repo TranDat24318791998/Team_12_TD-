@@ -12,6 +12,9 @@ from .storage import insert, now, timestamps
 TITLE = "Quạt mini cầm tay sạc usb loại tốt giá rẻ"
 DESCRIPTION = "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu."
 ATTRIBUTES = ["3 tốc độ gió", "sạc USB", "pin 2000mAh", "3 màu: Trắng, Hồng, Xanh mint"]
+DESKTOP_TITLE = 'Quạt để bàn màu trắng'
+DESKTOP_DESCRIPTION = 'Quạt để bàn màu trắng, cánh màu xanh nhạt, có đế và núm điều chỉnh.'
+DESKTOP_ATTRIBUTES = ['quạt để bàn', 'thân màu trắng', 'cánh màu xanh nhạt', 'có đế', 'có núm điều chỉnh']
 
 
 def world():
@@ -24,9 +27,10 @@ def world():
         ("E","Mát Lạnh Shop","anh Phúc",99000,60000,350,.50,2,2200,50000,5,15000),
     ]
     for i,(sid,name,owner,price,cost,stock,q,rank,impr,cap,voucher,profit) in enumerate(rows,1):
+        title,description,attributes=(DESKTOP_TITLE,DESKTOP_DESCRIPTION,DESKTOP_ATTRIBUTES) if sid=='D' else (TITLE,DESCRIPTION,ATTRIBUTES)
         shops[sid] = {"product_id":f"SP00{i}","public":dict(shop_id=sid,name=name,category="quat_mini",price=price,
             stock=stock,listing_quality=q,search_rank_page=rank,rating=4.6,base_impressions=impr,
-            title=TITLE,description=DESCRIPTION,attributes=ATTRIBUTES,images=[],video=None,active_voucher_pct=0),
+            title=title,description=description,attributes=attributes,images=[],video=None,active_voucher_pct=0),
             "private":{"owner_name":owner,"unit_cost":cost,"rules":dict(allow_ads=sid!="B",ads_daily_max=cap,
                 voucher_max_pct=voucher,min_profit_per_unit=profit,max_breakeven_roas=6.5,
                 require_stop_condition=True,content_style_notes=[])},
@@ -57,7 +61,7 @@ def prepare(root):
         "content_standards_demo":("content_policy","Tiêu chuẩn nội dung", "Tiêu đề tối đa 120 ký tự; mô tả tối đa 5.000 ký tự. Không bịa thương hiệu, bảo hành, độ ồn hoặc thời lượng pin. Ảnh giữ hình dáng sản phẩm, không chữ/logo. Ba bản nội dung tổng cộng; người bán chọn và duyệt trước xuất bản."),
     }
     for sid,shop in world()["shops"].items():
-        sources[f'product_{shop["product_id"]}']=("product",shop["public"]["name"],DESCRIPTION+"\n\n"+"\n".join(ATTRIBUTES)+"\n\nThương hiệu, bảo hành, kích thước, độ ồn và thời gian chạy pin: chưa xác minh.")
+        sources[f'product_{shop["product_id"]}']=("product",shop["public"]["name"],shop['public']['description']+"\n\n"+"\n".join(shop['public']['attributes'])+"\n\nThương hiệu, bảo hành, kích thước, độ ồn và thông số kỹ thuật: chưa xác minh.")
     manifest = {"scenario_version":"demo-v1","schema_version":1,"simulator_version":"market-v1","seed":42,
                 "history_days":14,"simulation_days":7,"synthetic":True,"proof_of_learning":False,"files":{}}
     for name,(kind,title,text) in sources.items():
@@ -82,28 +86,38 @@ def seed_shared(c, root):
     for code,params in (("MIN_STOCK",{"value":30}),("ADS_MIN_DAILY",{"value":10000}),("MAX_ROUNDS",{"value":3})):
         c.execute("INSERT OR IGNORE INTO platform_rules VALUES (?,?,?,?,?,?,?,?)",("demo-policy-v1",code,code,json.dumps(params),"block","2026-10-18",None,1))
     for path in sorted((Path(root)/"knowledge").glob("*.md")):
+        kind=next(line.split(': ',1)[1] for line in path.read_text(encoding='utf-8').splitlines() if line.startswith('document_type: '))
         c.execute("INSERT OR IGNORE INTO knowledge_documents VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(
-            path.stem,1,"product" if path.stem.startswith("product_") else path.stem,path.stem,"shared",None,None,
+            path.stem,1,kind,path.stem,"shared",None,None,
             str(path.relative_to(root)),None,None,"ready","2026-10-18",None,1,None,None,hashlib.sha256(path.read_bytes()).hexdigest(),"knowledge-v1",now()))
+        c.execute("UPDATE knowledge_documents SET type=?,checksum=? WHERE document_id=? AND document_version=1 AND source_object_key=?",(kind,hashlib.sha256(path.read_bytes()).hexdigest(),path.stem,str(path.relative_to(root))))
 
 
-def seed_run(c, run_id, root, seed):
+def seed_run(c, run_id, root, seed, product_image_path=None):
     from .storage import uid
     for sid,shop in world()["shops"].items():
         p,priv=shop["public"],shop["private"]
         pid=shop["product_id"]
         insert(c,"shops",run_id=run_id,shop_id=sid,name=p["name"],category=p["category"],description="Shop giả lập",status="active",**timestamps())
-        insert(c,"products",run_id=run_id,product_id=pid,shop_id=sid,name="Quạt mini cầm tay",list_price_vnd=p["price"],
-               facts_json={"colors":["Trắng","Hồng","Xanh mint"],"battery_capacity_mah":2000,"speed_levels":3,"included_items":[],"verified_claims":[{"claim_id":str(i),"text_vi":v,"source_reference":"seed:demo-v1"} for i,v in enumerate(ATTRIBUTES)]},listing_quality=p["listing_quality"],search_rank_page=p["search_rank_page"],rating=4.6,base_impressions=p["base_impressions"],active_content_id=None,status="active",**timestamps())
+        facts={'product_kind':'desktop_fan' if sid=='D' else 'handheld_fan','verified_claims':[{'claim_id':str(i),'text_vi':v,'source_reference':'source-image:desktop-fan' if sid=='D' else 'seed:demo-v1'} for i,v in enumerate(p['attributes'])]}
+        if sid!='D': facts.update(colors=['Trắng','Hồng','Xanh mint'],battery_capacity_mah=2000,speed_levels=3,included_items=[])
+        insert(c,"products",run_id=run_id,product_id=pid,shop_id=sid,name="Quạt để bàn" if sid=='D' else "Quạt mini cầm tay",list_price_vnd=p["price"],
+               facts_json=facts,listing_quality=p["listing_quality"],search_rank_page=p["search_rank_page"],rating=4.6,base_impressions=p["base_impressions"],active_content_id=None,status="active",**timestamps())
         insert(c,"product_costs",run_id=run_id,product_id=pid,cost_version=1,unit_cost_vnd=priv["unit_cost"],other_unit_cost_vnd=0,effective_day=-13,created_at=now())
         insert(c,"inventory",run_id=run_id,product_id=pid,available_units=p["stock"],**timestamps())
         r=priv["rules"]
         insert(c,"shop_rules",run_id=run_id,shop_id=sid,rules_version=1,allow_ads=r["allow_ads"],ads_cap_daily_vnd=r["ads_daily_max"],ads_cap_package_vnd=None,voucher_max_pct=r["voucher_max_pct"],min_profit_per_unit_vnd=r["min_profit_per_unit"],max_breakeven_roas=6.5,require_stop_condition=True,minimum_campaign_stock=30,content_style_notes_json=[],effective_day=-13,confirmed_by="seed_admin",confirmed_at=now(),confirmation_decision_id=None)
         path=Path(root)/"originals"/f"{sid}-placeholder.png"
+        source='generated_geometric_placeholder_not_product_photo';mime='image/png';width=height=64
+        if sid=='D' and product_image_path:
+            raw=Path(product_image_path).read_bytes()
+            if not raw.startswith(b'\xff\xd8\xff') or len(raw)>10*1024*1024: raise ValueError('Invalid desktop product image')
+            path=Path(root)/'originals'/run_id/'desktop-product.jpg';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+            source='local_import:sha256:'+hashlib.sha256(raw).hexdigest();mime='image/jpeg';width=height=None
         aid=uid("asset")
-        insert(c,"assets",run_id=run_id,asset_id=aid,shop_id=sid,product_id=pid,kind="image",object_key=str(path.relative_to(root)),mime_type="image/png",size_bytes=path.stat().st_size,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),width=64,height=64,duration_seconds=None,origin="supplied",source_reference="generated_geometric_placeholder_not_product_photo",visibility="published",upload_status="ready",upload_owner="seed_admin",created_at=now())
+        insert(c,"assets",run_id=run_id,asset_id=aid,shop_id=sid,product_id=pid,kind="image",object_key=str(path.relative_to(root)),mime_type=mime,size_bytes=path.stat().st_size,sha256=hashlib.sha256(path.read_bytes()).hexdigest(),width=width,height=height,duration_seconds=None,origin="supplied",source_reference=source,visibility="published",upload_status="ready",upload_owner="seed_admin",created_at=now())
         cid=uid("content")
-        insert(c,"content_versions",run_id=run_id,content_id=cid,product_id=pid,content_version=1,parent_content_id=None,title=TITLE,description=DESCRIPTION,cover_options_json=[],video_job_json={},feedback_history_json=[],style_notes_json=[],cover_asset_id=aid,video_asset_id=None,quality_gain=0,published_day=-13,validation_json=["Nguồn giả lập, ảnh placeholder"],status="published",**timestamps())
+        insert(c,"content_versions",run_id=run_id,content_id=cid,product_id=pid,content_version=1,parent_content_id=None,title=p['title'],description=p['description'],cover_options_json=[],video_job_json={},feedback_history_json=[],style_notes_json=[],cover_asset_id=aid,video_asset_id=None,quality_gain=0,published_day=-13,validation_json=['Nguồn ảnh: '+source],status="published",**timestamps())
         c.execute("UPDATE products SET active_content_id=? WHERE run_id=? AND product_id=?",(cid,run_id,pid))
         insert(c,"shop_runtime",run_id=run_id,shop_id=sid,cooldown_until_day=0,seller_renegotiations=0,active_negotiation_id=None,pending_card_id=None,**timestamps())
         for day in range(-13,1):
