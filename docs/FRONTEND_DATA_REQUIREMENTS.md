@@ -2,6 +2,8 @@
 
 Cập nhật 31/10/2026. Đây là yêu cầu dữ liệu để backend/data agent ghép [giao diện tương tác](FRONTEND_REQUIREMENTS.md). Mô hình lưu trữ và API chuẩn tiếp tục theo [data design v1.1](../data/growth_agents_data_api_design.md); tài liệu này mô tả grain, các quan hệ và projection frontend cần, không tạo schema/database thứ hai.
 
+Phần cần làm tiếp cho nút ngày 7 nằm ở **mục 13**. Kho SQLite mẫu ở mục 12 là bản trình chiếu hiện tại, chưa đáp ứng yêu cầu truy vấn động các record nghiệp vụ.
+
 ## 1. Nguồn sự thật và ranh giới trách nhiệm
 
 ```text
@@ -150,4 +152,57 @@ Kiểm tra tối thiểu:
 7. LLM/provider thất bại có nguồn fallback và kết quả thật; không tự gọi paid API khi replay thiếu cache.
 8. Ngày cuối next_day=null/complete; không sinh ngày 8, không lặp settlement/learning.
 
-Các thay đổi schema/DTO/enum chưa có trong CONTRACT phải được data/backend owner đưa vào hợp đồng và fixture chung trước khi bật, kèm test phân quyền và transaction. Frontend hiện không tạo database, migration, tracking endpoint hay provider job thật.
+Các thay đổi schema/DTO/enum chưa có trong CONTRACT phải được data/backend owner đưa vào hợp đồng và fixture chung trước khi bật, kèm test phân quyền và transaction. Frontend nghiệp vụ không kết nối database trực tiếp hay tạo provider job thật; kho mẫu trình chiếu local riêng được mô tả ở mục 12.
+
+## 11. Data cho hai hội thoại không học / có học
+
+`TODO(contract):` Projection `ProofReport.comparison_days` được mô tả chính xác tại [frontend requirements, mục 7](FRONTEND_REQUIREMENTS.md). Frontend đã dùng tên field này và không thêm endpoint. Data owner cần đáp ứng các quan hệ sau trước khi bật dữ liệu thật:
+
+| Grain | Quan hệ / bất biến |
+| --- | --- |
+| Comparison group | Hai run được evaluation service gắn cùng scenario/seed, giới hạn và lịch yêu cầu seller; một run memory off, một run memory on. Hai run thuộc phạm vi được người đang xem phép truy cập. |
+| Comparison day | Unique `(comparison_group_id,shop_id,product_id,day,request_version)`; trả một row/day của sản phẩm demo trong facade. `day` nằm trong horizon của report. |
+| Common request | Có ID/version và text chung; tham chiếu được input tương ứng trong cả hai run. Không so hai yêu cầu khác nhau chỉ vì cùng ngày hoặc từ khóa. |
+| Branch message | `(run_id,day,message_id)` + event_seq/turn/proposal ID thực; xuất đúng thứ tự đối thoại. Không nối sự kiện của on sang off. |
+| Memory evidence | Run on + source_day < display day + source event seq/version + scope được đọc + memory-read evidence ở lượt hiện tại. Dẫn fact đã lưu, không dẫn suy luận nội bộ hoặc chính output đang muốn chứng minh. |
+| Outcome summary | Gắn decision/apply/content/forecast/metric evidence đúng kỳ. “Đã dùng sở thích cũ” không có nghĩa đã được seller duyệt hoặc đã apply. |
+
+Ngày 1 không có learned evidence từ các ngày mô phỏng trước. Hard rules và dữ liệu sản phẩm hiện tại vẫn được cấp cho cả hai run. Sau các ngày đầu, kết quả/tồn kho có thể khác do quyết định trước đó; cần giữ input snapshots để giải thích khác biệt, không sửa lịch sử để hai nhánh trông giống nhau. Lời yêu cầu dùng trong row so sánh phải là cùng phiên bản ở cả hai nhánh.
+
+Nhánh off không đọc learned preferences/history/calibration/lessons từ ngày trước. Nhánh on chỉ đọc dữ liệu đã commit và được phân quyền trước lượt trả lời. Trọng tài/Platform Agent không được hưởng quyền đọc seller-private chỉ vì endpoint đối chứng thuộc seller. Chỉ render message/summary đã được chuẩn hóa, không dump model prompt hoặc chain-of-thought.
+
+Data service nên dựng projection từ immutable recorded transcripts + approved evaluation metadata, không gọi LLM để tạo lại lời hội thoại khi `GET /api/proof` hoặc khi chuyển ngày. Một row thiếu branch, lẫn run, duplicate day, control arm có memory evidence hoặc dẫn nguồn từ tương lai phải bị phát hiện; React loại các row như vậy và không lấp bằng fixture.
+
+`id` và causal refs phải ổn định khi export/reload. Nếu cần trích gọn transcript để trình chiếu, lưu selection/version và event refs; không bịa lượt seller hay bỏ câu phủ định làm đổi ý nghĩa. `result_vi`/`takeaway_vi` có thể trung tính hoặc cho biết chưa đủ bằng chứng, không bắt buộc nhánh on thắng. Chỉ số toàn phiên giữ nguyên grain và cách tính trong ProofReport, không suy ra lợi nhuận hoặc causal lift từ số bubble.
+
+Test bổ sung: cùng request ở cả hai khung; ngày 1 chưa có learned evidence; source_day đúng quá khứ; không trộn run/shop/product; off evidence rỗng; sparse days/legacy report hiện thiếu dữ liệu; đổi ngày chỉ đọc projection, không tạo run/chi phí/decision mới; transcript/source metadata tồn tại sau restart.
+
+## 12. Database mẫu cho nút nhảy ngày 7
+
+Đã triển khai kho mẫu trình chiếu riêng `runs/preview/samples.sqlite3`, Git bỏ qua. `scripts/preview_server.py` seed từ `frontend/fixtures/day7.json` khi khởi động và đọc SQLite trên mỗi `GET /api/demo/day7`, trả `Cache-Control: no-store`. Fixture có thể tái tạo bằng `node frontend/scripts/seed-day7.mjs`. Không lấy từ hoặc ghi vào database run nghiệp vụ của `data/growth_data`.
+
+Response trực tiếp: `{schema_version:1, source:{kind:"sqlite_sample",label_vi,seed:42}, state:StateView, events:Event[], proof:ProofReport}`. `state.day=7`, `state.step="complete"`, `last_night.day=7`, có đủ 7 `night_summary`; events cùng run, seq duy nhất/tăng dần. `proof.days=7`, `comparison_days` có đủ ngày 1–7, `proof.sample_source` giữ nhãn nguồn. Assets chỉ là URL `/img/...` công khai.
+
+SQLite lưu `sample_versions(checksum PRIMARY KEY,payload_json,saved_at)` và `active_samples(name PRIMARY KEY,checksum)`. Checksum SHA-256 theo JSON chuẩn hóa; nhập mẫu và đổi con trỏ active trong cùng transaction. Khởi động lại cùng fixture không tạo bản sao; đổi fixture tạo version mới. Endpoint chỉ đọc mẫu công khai, không có quyền ghi quyết định/chi phí hay truy cập seed private. Static chỉ phục vụ 5 trang và css/js/img, không mount data/, runs/, source hoặc fixture trực tiếp.
+
+Đây là dữ liệu giả có chủ đích cho giám khảo xem một tuần trong một lần bấm. Hai hội thoại/chỉ số là minh họa biên soạn sẵn; causal refs trong báo cáo mẫu không phải bằng chứng từ một lần chạy học thật. Backend/data cần giữ dấu nguồn này khi export hoặc ghép hệ thống, không trộn vào bảng evaluation của run thật.
+
+## 13. Database cần hoàn tất: dataset 7 ngày truy vấn được
+
+**Trạng thái: yêu cầu bàn giao, chưa triển khai.** Data owner chuẩn bị bộ dữ liệu giả 7 ngày hoặc run mô phỏng đã ghi đầy đủ, lưu theo model nghiệp vụ hiện hành. Không chỉ lưu một blob JSON hoàn chỉnh rồi xem đó là đã nối dữ liệu động. Các record cần có:
+
+| Nhóm record | Điều kiện để frontend đọc đúng |
+| --- | --- |
+| Dataset/run/comparison group | Định danh, seed, horizon, shop/product, nguồn dữ liệu, trạng thái hoàn tất và revision; xác định rõ hai run on/off. |
+| Ngày và kết quả | Có đủ ngày 1–7; settlement/metrics/night summary gắn đúng run/ngày/shop; tổng kết cuối là ngày 7, không có ngày 8. |
+| Hội thoại và sự kiện | Transcript có ID/thứ tự và liên kết sự kiện; đối thoại từng nhánh lấy từ record của đúng run, không từ mảng hardcode ở frontend. |
+| Phản hồi và bộ nhớ | Preference/lesson/history/calibration có nguồn và phiên bản; memory-used chỉ dẫn dữ liệu của ngày trước theo mục 11. |
+| Sản phẩm và quyết định | Listing gốc/current, proposal/card, decision/apply/content/assets nối đúng phiên bản và truy nguyên được. |
+
+Seed minh họa phải là bước nhập dữ liệu tường minh, có version/idempotency; restart server không tự ghi đè hoặc chuyển con trỏ về fixture cũ. Bộ giả seed sẵn giữ nhãn minh họa; dữ liệu đo từ simulator/agent giữ provenance tương ứng. Không suy ra hiệu quả học từ các câu trả lời biên soạn sẵn.
+
+Backend đọc projection nhất quán của một run/revision; có thể materialize report để tăng tốc nhưng phải biết nguồn record, revision và thời điểm cần tạo lại. Frontend không giữ bản report authoritative trong sessionStorage. Dataset đang trình chiếu được chọn rõ ràng; không mặc định lấy run mới nhất của seller khác hoặc trộn dữ liệu nhiều revision.
+
+`TODO(contract):` Chốt metadata dataset/revision, cơ chế chọn cặp run và response thiếu dữ liệu với backend trước khi mở rộng facade. Các record học và transcript chưa có ở module data cần được owner agent/memory ghi vào persistence, không để frontend sinh thay.
+
+Kiểm tra nghiệm thu: hai dataset cho hai nội dung khác nhau trên UI mà không build lại frontend; import lại không nhân đôi record; restart giữ dataset/revision; đủ bảy ngày và foreign keys hợp lệ; đổi dataset không sửa run cũ; quyền seller/run được giữ; không trộn seeded illustration với measured report; không tự dựng chat khi thiếu record. Kết quả kiểm tra cần chỉ ra run/dataset nào và nguồn record nào được dùng.

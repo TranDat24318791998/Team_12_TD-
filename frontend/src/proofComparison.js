@@ -12,8 +12,10 @@ export function comparisonDays(report){
     && [row.off,row.on].every(branch=>Array.isArray(branch.messages))
     && Array.isArray(row.on.memory_used) && row.on.memory_used.every(source=>source && source.run_id===report.run_on && Number.isInteger(source.source_day) && source.source_day>=1 && source.source_day<row.day && Number.isInteger(source.event_seq) && source.event_seq>0 && text(source.text_vi))
   ).sort((a,b)=>a.day-b.day).map(row=>({...row,
-    off:{...row.off,messages:validMessages(row.off.messages)},
-    on:{...row.on,messages:validMessages(row.on.messages)},
+    situation_vi:text(row.situation_vi)?row.situation_vi:'',
+    takeaway_vi:text(row.takeaway_vi)?row.takeaway_vi:'',
+    off:{...row.off,result_vi:text(row.off.result_vi)?row.off.result_vi:'',messages:validMessages(row.off.messages)},
+    on:{...row.on,result_vi:text(row.on.result_vi)?row.on.result_vi:'',messages:validMessages(row.on.messages)},
   }));
 }
 

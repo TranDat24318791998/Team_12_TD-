@@ -8,6 +8,8 @@ Frontend hiện có khối **Hai agent cùng tìm gói phù hợp**, hướng ch
 
 Các route nghiệp vụ và graph backend trong checkout còn là khung. Preview trong trình duyệt minh họa cả telemetry và trọng tài; đây không phải bằng chứng hai agent thật đã chạy. Frontend không tự chuyển sang preview khi API lỗi.
 
+Yêu cầu bàn giao mới nhất: mở đầu tại trang shop (mục 8); chuyển nút ngày 7 sang dữ liệu động từ các record database (mục 9). Mục 8 mô tả bộ mẫu đang chạy; mục 9 là phần tích hợp còn phải làm, không đánh dấu hoàn thành chỉ vì đã có SQLite.
+
 **Phần A** bên dưới dùng hợp đồng hiện hành. **Phần B** là mở rộng tích hợp mục tiêu mà React đã có khả năng đọc; thiếu dữ liệu thì hiện trạng thái chưa có, không giả lập xử lý. Không sửa `CONTRACT.md` hoặc `/api/v1` trong đợt giao diện này.
 
 `TODO(contract):` Backend/data owner thống nhất và bổ sung `agent_activity`, `referee_review`, cùng snapshot tùy chọn trước khi đưa telemetry/trọng tài vào seller facade thật. Đây là tên và hình dạng frontend đang hỗ trợ; không tự đổi tên khi ghép backend.
@@ -146,7 +148,83 @@ Thiếu event trọng tài phải hiện “Chưa có đánh giá trọng tài�
 - Giữ 7 ngày và 3 attempt nội dung như config hiện hành; không lấy mốc 6 ngày cũ trong workbook làm mặc định mới.
 - IntentBrief/goal/version, defer và tracking funnel trong workbook là phần mở rộng chưa có form/API seller hoàn chỉnh. Không tuyên bố chúng đã chạy chỉ vì có đánh giá trọng tài minh họa.
 
-## 7. Checklist ghép backend
+## 7. Hai khung chat đối chứng theo ngày
+
+Màn `proof.html` hiện ưu tiên hội thoại **Không học từ lịch sử / Có học từ lịch sử**, chọn ngày 1–7 và dẫn nguồn bộ nhớ. Mặc định chọn ngày 2 để thấy tác động của phản hồi ngày trước; ngày 1 phải có cùng điểm xuất phát. Luồng agent chỉ một hàng nhỏ; chỉ số và nguồn báo cáo mở qua “Chi tiết chỉ số và nguồn dữ liệu”. Trên màn Demo, luồng agent cũng gọn một hàng; bảng so sánh điều khoản và checks được gấp mặc định. Desktop dùng cuộn bên trong từng khung, không đẩy thẻ quyết định và hậu trường xuống dưới sơ đồ lớn.
+
+Thanh process của màn Demo cao tối đa 64px ở viewport 1366×768; hiển thị Agent sàn → Agent shop → Kiểm tra → Chủ shop duyệt theo state/events thật. “Chi tiết” mở lớp nổi có vùng cuộn riêng, không thu nhỏ hai khung bên dưới. Chat giữ nguyên chiều cao nội dung của thẻ, cuộn được tới nút “Đồng ý” và “Dùng bản này”; ô nhập luôn nằm ngoài vùng cuộn. Chat và nhật ký đều hỗ trợ chuột/bàn phím. Thay đổi bố cục này không yêu cầu thêm field hoặc endpoint backend.
+
+`TODO(contract):` Bổ sung `comparison_days?: ComparisonDay[]` vào response trực tiếp của `GET /api/proof`. Không tạo thêm POST và không phát sinh LLM call khi người xem chọn ngày. React đã đọc cấu trúc sau; report cũ không có field này vẫn hiện chỉ số và hai khung “chưa có hội thoại”, không tự ghép đoạn chat mẫu.
+
+```json
+{
+  "day": 2,
+  "request_vi": "Làm ảnh bìa mới cho mẫu quạt này giúp chị nhé.",
+  "situation_vi": "Ghi nhớ phong cách ảnh",
+  "takeaway_vi": "Bên có học tham khảo góp ý về nền sáng của ngày trước.",
+  "off": {
+    "run_id": "run_off_42",
+    "messages": [
+      {"id": "off-turn-12", "actor": "shop_agent", "text_vi": "Chị muốn ảnh theo phong cách nào?", "event_seq": 12},
+      {"id": "off-turn-13", "actor": "seller", "text_vi": "Nền sáng như hôm qua nhé.", "event_seq": 13}
+    ],
+    "result_vi": "Chủ shop cần nhắc lại phong cách",
+    "memory_used": []
+  },
+  "on": {
+    "run_id": "run_on_42",
+    "messages": [
+      {"id": "on-turn-14", "actor": "shop_agent", "text_vi": "Em tham khảo góp ý nền sáng lần trước để soạn bản nháp mới.", "event_seq": 14}
+    ],
+    "result_vi": "Dùng góp ý cũ khi đề xuất bản nháp",
+    "memory_used": [
+      {"run_id": "run_on_42", "source_day": 1, "event_seq": 8, "text_vi": "Góp ý ảnh nền sáng"}
+    ]
+  }
+}
+```
+
+- `ComparisonDay.day` là integer 1..ProofReport.days, unique; `off.run_id`/`on.run_id` phải khớp `report.run_off`/`report.run_on` và là hai run khác nhau. Mỗi branch có `messages` và `memory_used` là array.
+- `request_vi` là lời yêu cầu chung, hiển thị thành bubble đầu của cả hai khung. `messages` là các lượt tiếp theo theo thứ tự, không chép lại bubble chung. `id` unique trong branch/day; `actor=seller|shop_agent|platform_agent|system`; `text_vi` là trích đoạn được phép hiển thị; `event_seq` truy nguyên về event bất biến của đúng branch.
+- `memory_used` của nhánh off luôn `[]`. Nhánh on chỉ dẫn nguồn cùng run, với `1 <= source_day < day`, seq dương và tóm tắt an toàn. Không lấy góp ý hiện tại hoặc tương lai làm bằng chứng đã học từ quá khứ.
+- `result_vi`, `situation_vi`, `takeaway_vi` phải dựa trên bằng chứng. Không ép nhánh on luôn tốt hơn; cùng phản hồi, chưa đủ dữ liệu hoặc bộ nhớ chưa giúp ích đều là kết quả hợp lệ.
+- Luật cứng, quyền riêng tư, validators và seller approval vẫn bật ở cả hai nhánh. Không minh họa nhánh off “quên luật” để làm nhánh on trông tốt hơn. Sự khác biệt là quyền đọc dữ liệu/bài học lịch sử.
+- Ưu tiên 2–4 lượt ngắn và có ngữ cảnh cho mỗi branch để trình chiếu. Hội thoại dài được cuộn trong khung; tuyệt đối không cắt câu làm đổi nghĩa. Giữ khả năng kiểm tra toàn bộ transcript từ dữ liệu nguồn/JSON export.
+
+## 8. Nhảy tới ngày 7 bằng dữ liệu mẫu
+
+Điểm bắt đầu khi trình chiếu là **trang shop** ở `/?preview=1` hoặc `index.html?preview=1`. Người xem thấy sản phẩm và bảng điều khiển trước; chọn “Bắt đầu demo”/“Tiếp tục demo” mới vào `demo.html` có chat và hậu trường. Link bàn giao mặc định dùng trang shop.
+
+Nút **Nhảy tới ngày 7** trên thanh phía trên màn Demo/Shop chỉ xuất hiện ở nguồn preview. Một lần bấm đọc `GET /api/demo/day7` cùng origin, nhận toàn bộ snapshot mẫu đã lưu trong SQLite, cập nhật phiên trình chiếu rồi mở `proof.html?day=7&preview=1`. Đây là API riêng của `scripts/preview_server.py`; không thay 9 API seller hoặc runtime hai ngày ở DEMO_CONTRACT.
+
+- Khi nạp, nút hiện “Đang nạp 7 ngày…” và khóa các thao tác ghi khác. Chỉ chuyển màn sau khi nhận đủ snapshot hợp lệ.
+- Snapshot có state ngày 7/complete, tổng kết cuối ngày 7, đầy đủ sự kiện ngày 1–7, hai hội thoại mỗi ngày và báo cáo mẫu. Không chỉ đổi con số ngày trên UI.
+- Màn kết quả chọn sẵn ngày 7 và hiện “Đã nạp 7 ngày từ database · Dữ liệu mẫu”. Người xem vẫn chọn được ngày 1–6, xem nhật ký hoặc chạy lại từ ngày 1.
+- Không gửi accept/apply/night cho các thẻ đang chơi và không gọi provider. Thao tác chỉ thay phiên preview bằng bộ mẫu trình chiếu. Preview cũ được lưu ở khóa sessionStorage `growth-agents.react-preview.v3.before-day7` trước lần thay đầu tiên.
+- Reload giữ snapshot đã nạp; bấm lặp không nối trùng events. Database lỗi/thiếu tổng kết phải báo lỗi và giữ nguyên phiên hiện tại; không tự dùng JSON/bộ mẫu JS thay cho phản hồi database.
+- Phạm vi hiện tại: snapshot trong SQLite được seed từ kịch bản biên soạn sẵn, chưa phải projection từ lịch sử chạy agent trong database nghiệp vụ. Reload/đổi ngày đọc snapshot sessionStorage; bấm “Nhảy tới ngày 7” lần nữa mới đọc database lại. Backend tích hợp dữ liệu động cần dựng state/events/comparison từ các record đã lưu của đúng run thay vì dùng fixture này.
+- Backend muốn cung cấp nút này trong môi trường tích hợp cần mount route đọc mẫu riêng trước static, với nhãn nguồn mẫu bắt buộc. Không dùng snapshot này làm báo cáo thực nghiệm của phiên API/live.
+- `previewComparison.js` chứa kịch bản minh họa viết sẵn, cùng nhãn dữ liệu mẫu. Backend thật chỉ trả transcript được ghi từ run đối chứng, không tái dùng fixture này làm bằng chứng.
+
+Xem thêm grain và kiểm tra nguồn dữ liệu ở mục 11 của [data requirements](FRONTEND_DATA_REQUIREMENTS.md).
+
+## 9. Backend cần hoàn tất: ngày 7 đọc dữ liệu động
+
+**Trạng thái: chưa triển khai tích hợp.** Bộ mẫu ở mục 8 vẫn được dựng từ `preview.js`/`previewComparison.js` rồi nhập JSON vào SQLite. Mục tiêu là `database records → backend projection → React`, với nội dung phụ thuộc dataset/run được chọn. Dữ liệu giả có thể được seed trước trong DB để trình chiếu; tính động không đồng nghĩa bắt buộc gọi agent/provider thật khi bấm nút.
+
+Trách nhiệm backend:
+
+1. Chọn đúng dataset/run hoặc comparison group đã đủ 7 ngày, có quyền đọc cho người xem. Lần bấm chỉ tải kết quả đã lưu, không gửi 7 quyết định thay seller và không tự gọi provider.
+2. Dựng StateView, events, tổng kết ngày 7 và ProofReport từ record của dataset đó. Nội dung hai chat phải đến từ transcript đã lưu, số liệu đến từ kết quả lưu trữ/tính toán nghiệp vụ; không import kịch bản JS hoặc trả cố định `day7.json`.
+3. Giữ nguồn dữ liệu rõ ràng: bộ giả seed sẵn là minh họa; run được simulator/agent thực thi là kết quả của lần chạy mô phỏng. Không gắn nhãn kết quả học thật cho hội thoại biên soạn.
+4. Reload ở chế độ tích hợp phải đọc API để khôi phục đúng run; sessionStorage chỉ lưu lựa chọn/cursor nếu cần, không là nguồn nội dung authoritative. Bản dữ liệu mới phải được nhận khi người xem yêu cầu tải lại, theo revision hoặc run mới do backend quản lý.
+5. Thiếu record/ngày/transcript phải báo thiếu dữ liệu và giữ lựa chọn hiện tại; không lấp bằng mẫu frontend. Chuyển sang dataset ngày 7 không sửa/xóa phiên đang chạy hoặc tạo thêm campaign/chi phí.
+
+`TODO(contract):` Backend/data/frontend owner chốt cơ chế chọn dataset/run ngày 7 và metadata nguồn/revision trước khi bật ở `?preview=0`. Route `GET /api/demo/day7` hiện chỉ là route kho mẫu local; không coi đây là API nghiệp vụ đã thống nhất. Giữ các DTO seller hiện hành khi có thể, mở rộng có phiên bản nếu cần. Runtime demo hai ngày trong DEMO_CONTRACT và trình chiếu đối chứng bảy ngày phải được phân biệt rõ.
+
+Nghiệm thu bắt buộc: tạo hai dataset DB có hội thoại/chỉ số khác nhau, chọn từng dataset thì UI phản ánh đúng mà không build lại JS; khởi động lại server giữ dữ liệu đã nhập; reload không dùng snapshot frontend cũ; đủ bảy tổng kết và đúng run ở hai nhánh; thiếu ngày không tự dựng nội dung; bấm lặp không ghi thêm quyết định/settlement; không gọi API trả phí. Xem [data requirements mục 13](FRONTEND_DATA_REQUIREMENTS.md).
+
+## 10. Checklist ghép backend
 
 - [ ] 9 endpoint đúng facade; JSON không có envelope v1.
 - [ ] Sau start, GET đọc được từng event trước khi graph kết thúc.

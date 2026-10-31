@@ -48,6 +48,8 @@ git check-ignore .env
 
 ## Frontend React
 
+**Mở đầu buổi demo tại trang shop:** http://127.0.0.1:8765/?preview=1. Từ đó chọn “Bắt đầu demo” để vào chat/hậu trường, hoặc “Nhảy tới ngày 7” để nạp bộ mẫu trình chiếu. Không dùng `demo.html` làm link mở đầu.
+
 Bundle đã được tạo tại `frontend/js/app.js`; FastAPI hiện phục vụ `frontend/` tại `/`. Mở http://localhost:8000/?preview=1 để thử giao diện cam với dữ liệu mẫu, hoặc `?preview=0` để gọi 9 API của backend. Bản xem trước không gọi API trả phí và không phải bằng chứng thực nghiệm.
 
 Để sửa và build lại giao diện, dùng Node 20 trở lên:
@@ -59,7 +61,7 @@ npm run build
 npm test
 ```
 
-`npm run dev` theo dõi source và build lại; trình duyệt vẫn mở qua FastAPI. Để xem riêng frontend khi chưa cài backend, chạy `python3 -m http.server 8000 --directory frontend` tại gốc repo, rồi mở `/?preview=1`.
+`npm run dev` theo dõi source và build lại; trình duyệt vẫn mở qua FastAPI. Để xem riêng frontend kèm nút **Nhảy tới ngày 7**, chạy `python3 scripts/preview_server.py --port 8765` tại gốc repo, rồi mở http://127.0.0.1:8765/?preview=1. Server nạp fixture minh họa vào SQLite ở `runs/preview/samples.sqlite3`; mỗi lần bấm nút đọc database rồi mở hai chat tại ngày 7. Không cần nhập/duyệt thủ công 7 lượt. Đây là bộ mẫu trình chiếu, không phải kết quả thực nghiệm. Lệnh `http.server` thông thường chỉ phục vụ tệp, không hỗ trợ nút đọc database này.
 
 Xem [bàn giao React và ghép dữ liệu](docs/FRONTEND_HANDOFF.md). Giao diện theo [thiết kế dữ liệu v1.1](data/growth_agents_data_api_design.md): 7 ngày, `complete`, `next_day=null` ở ngày cuối và Idempotency-Key cho thao tác ghi. Các endpoint `/api/v1` có envelope do backend adapter xử lý; frontend tiếp tục dùng 9 endpoint `/api/*` dành cho seller.
 
@@ -68,6 +70,8 @@ Xem [bàn giao React và ghép dữ liệu](docs/FRONTEND_HANDOFF.md). Giao di�
 Agent backend đọc [yêu cầu tích hợp giao diện](docs/FRONTEND_REQUIREMENTS.md) trước khi nối workflow/API: mapping state/events sang sơ đồ hai agent, payload telemetry/trọng tài, polling và checklist nghiệm thu. Khối tương tác mới nằm ở `frontend/src/components/AgentActivity.jsx`, projection ở `frontend/src/activity.js`.
 
 Agent data đọc [yêu cầu về data](docs/FRONTEND_DATA_REQUIREMENTS.md): grain và identity, quan hệ đề xuất–duyệt–áp dụng, phiên bản, cursor, quyền public/private, nguồn số liệu và transaction. Các mở rộng chưa có trong hợp đồng được ghi `TODO(contract)`; backend thật cần thống nhất trước khi bật. Bản `?preview=1` đã minh họa luồng; bản `?preview=0` chờ các API nghiệp vụ.
+
+Màn `proof.html?preview=1` so sánh hai khung chat không học/có học từ lịch sử, chọn ngày 1–7 và chỉ rõ nguồn bộ nhớ từ ngày trước. Mặc định mở ngày 2; ngày 1 có cùng điểm xuất phát. Luồng agent chỉ một hàng, chỉ số mở trong phần chi tiết. Backend đọc [frontend requirements mục 7](docs/FRONTEND_REQUIREMENTS.md) và [data requirements mục 11](docs/FRONTEND_DATA_REQUIREMENTS.md) để cung cấp `ProofReport.comparison_days` từ transcript đã lưu.
 
 ## Tài liệu và phân công
 

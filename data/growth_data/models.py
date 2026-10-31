@@ -41,6 +41,11 @@ class RunCreate(Strict):
     mode: Literal["offline", "replay", "live"] = "offline"
     memory_enabled: bool = True
     simulation_days: Literal[6, 7] = 7
+    execution_profile: Literal["reference", "external"] = "reference"
+    content_mode: Literal["local", "worker"] | None = None
+    learning_mode: Literal["skip", "external"] | None = None
+    driver_config: dict[str, str] = Field(default_factory=dict)
+    data_source: Literal["simulation","fixture","replay"] = "simulation"
 
 
 class Version(Strict):
@@ -122,6 +127,7 @@ class ContentCreate(Strict):
     input_asset_ids: list[str] = Field(default_factory=list)
     feedback_vi: str | None = Field(default=None, max_length=2000)
     expected_current_attempt: int | None = Field(default=None, ge=1, le=3)
+    retry_scope: Literal["images", "text", "all"] = "images"
 
 
 class ContentResult(Strict):
@@ -131,6 +137,12 @@ class ContentResult(Strict):
     content_candidates: dict | None = None
     fallback_used: bool = False
     error_code: str | None = None
+
+    @model_validator(mode="after")
+    def candidate_shape(self):
+        if self.content_candidates is not None:
+            WorkerCandidate.model_validate(self.content_candidates)
+        return self
 
 
 class Publish(Strict):
@@ -144,6 +156,8 @@ class UploadCreate(Strict):
     mime_type: Literal["image/png", "image/jpeg", "image/webp", "video/mp4", "text/markdown", "application/pdf"]
     size_bytes: int = Field(gt=0, le=50 * 1024 * 1024)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    job_id: str | None = None
+    purpose: Literal["product_media", "learning_report", "knowledge_source", "replay_recording"] = "product_media"
 
 
 class CompleteUpload(Strict):
@@ -165,14 +179,27 @@ class KnowledgeCreate(Strict):
     collection_scope: Literal["shared", "shop_private"]
     owner_run_id: str | None = None
     owner_shop_id: str | None = None
-    source_object_key: str
-    checksum: str
+    source_object_key: str | None = None
+    source_asset_id: str | None = None
+    source_run_id: str | None = None
+    checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
     knowledge_release: str = "knowledge-v1"
     effective_from: str
     effective_to: str | None = None
     is_simulated: bool = True
     source_url: str | None = None
     source_collected_at: str | None = None
+
+    @model_validator(mode="after")
+    def source_and_dates(self):
+        from datetime import date
+        start=date.fromisoformat(self.effective_from)
+        if self.effective_to and date.fromisoformat(self.effective_to)<start:raise ValueError("Khoảng hiệu lực không hợp lệ")
+        if bool(self.source_asset_id)==bool(self.source_object_key):raise ValueError("Chọn đúng một nguồn document")
+        if self.source_asset_id and not self.source_run_id:raise ValueError("Cần source_run_id")
+        if self.collection_scope=="shared" and (self.owner_run_id or self.owner_shop_id):raise ValueError("Shared không có private owner")
+        if self.collection_scope=="shop_private" and not (self.owner_run_id and self.owner_shop_id):raise ValueError("Private cần owner")
+        return self
 
 
 class CalibrationSummary(Strict):
@@ -216,13 +243,166 @@ class NightSummary(Strict):
 class LearningResult(Strict):
     day: int = Field(ge=1, le=7)
     settlement_cursor: int = Field(ge=0)
-    status: Literal["completed", "failed"]
-    night_summary: NightSummary
+    status: Literal["running", "completed", "failed"]
+    night_summary: NightSummary | None = None
     memory_report_asset_id: str | None = None
     error_code: str | None = None
+    shop_id: str = "D"
+    expected_version: int = Field(default=1, ge=1)
+    receipt_id: str | None = None
+    lesson_scores: dict[str, int] = Field(default_factory=dict)
 
 
 class Settle(Strict):
     day: int = Field(ge=1, le=7)
     expected_inventory_version: int = Field(ge=1)
     input_snapshot_hash: str | None = None
+
+
+class OperationResult(Version):
+    status: Literal["running", "succeeded", "failed"]
+    error_code: str | None = None
+    trace_url: str | None = Field(default=None,max_length=2000)
+    trace_shop_id: Literal["D"] | None = None
+
+
+class LearningControl(Version):
+    reason_vi: str = Field(min_length=1, max_length=500)
+
+
+class Restore(Strict):
+    expected_active_content_id: str
+    expected_content_version: int = Field(ge=1)
+
+
+class LegacyRestore(Restore):
+    target_content_id: str
+
+
+class ComparisonCreate(RunCreate):
+    pass
+
+
+class ComparisonAttach(Strict):
+    run_on: str
+    run_off: str
+
+
+class ExternalEvent(Strict):
+    external_id: str = Field(min_length=1, max_length=200)
+    type: Literal["opportunity", "memory_read", "memory_write", "referee_review", "agent_telemetry"]
+    shop_id: str
+    day: int = Field(ge=1, le=7)
+    entity_id: str | None = None
+    text_vi: str = Field(default="", max_length=2000)
+    data: dict
+
+    @model_validator(mode="after")
+    def payload(self):
+        payloads={"opportunity":OpportunityEvent,"memory_read":MemoryReadEvent,"memory_write":MemoryWriteEvent,"referee_review":RefereeEvent,"agent_telemetry":TelemetryEvent}
+        self.data=payloads[self.type].model_validate(self.data).model_dump(exclude_unset=True)
+        return self
+
+
+class ExcludedShop(Strict):
+    shop_id: str
+    reason_codes: list[str]
+
+
+class OpportunityEvent(Strict):
+    chosen: list[str]
+    excluded: list[ExcludedShop] = Field(default_factory=list)
+    keyword: str
+    growth_7d_pct: float | None = None
+
+
+class MemoryReadEvent(Strict):
+    who: Literal["platform", "shop"]
+    items: list[str]
+    memory_revision: str | int | None = None
+
+
+class MemoryWriteEvent(Strict):
+    compartment: Literal["history", "preferences", "calibration", "lessons"]
+    receipt_id: str
+    memory_revision: str | int | None = None
+
+
+class RefereeEvent(Strict):
+    negotiation_id: str
+    round: int = Field(ge=1,le=3)
+    action: Literal["continue","refocus","ask_human","stop"]
+    reason_vi: str = ""
+    evidence_refs: list[int] = Field(default_factory=list)
+    unresolved_terms: list[str] = Field(default_factory=list)
+    next_actor: Literal["platform_agent","shop_agent","seller"] | None = None
+    focused_question: str | None = None
+
+
+class TelemetryEvent(Strict):
+    negotiation_id: str
+    task_id: str
+    round: int = Field(ge=1,le=3)
+    phase: Literal["proposal","validation","response","referee"]
+    status: Literal["running","done","failed","stopped"]
+    label_vi: str
+
+
+class LegacyDecision(Strict):
+    card_id: str
+    action: Literal["accept","edit","reject","negotiate"]
+    note_vi: str = Field(default="",max_length=2000)
+    edited_package: Package | None = None
+    rule_answer: bool | None = None
+
+
+class WorkerImage(Strict):
+    option: Literal["A","B","C"]
+    status: Literal["done","cached"]
+    asset_id: str
+    path: str | None = None
+    prompt: str = Field(default="",max_length=4000)
+
+
+class WorkerVideo(Strict):
+    status: Literal["pending","running","done","failed","cached"]
+    asset_id: str | None = None
+    path: str | None = None
+    job_id: str | None = None
+    prompt: str = Field(default="",max_length=4000)
+    error: str | None = Field(default=None,max_length=1000)
+
+    @model_validator(mode="after")
+    def ready_asset(self):
+        if self.status in {"done","cached"} and not self.asset_id:
+            raise ValueError("Video ready cần asset_id")
+        return self
+
+
+class WorkerCandidate(Strict):
+    title: str = Field(min_length=1,max_length=120)
+    description: str = Field(min_length=1,max_length=5000)
+    images: list[WorkerImage] = Field(min_length=3,max_length=3)
+    video: WorkerVideo
+    content_id: str | None = None
+    content_version: int | None = None
+    feedback_history: list[str] = Field(default_factory=list)
+    style_notes: list[str] = Field(default_factory=list)
+    checks: list[str] = Field(default_factory=list)
+
+
+class RecordingCall(Strict):
+    call_id: str
+    request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    response_asset_id: str
+
+
+class RecordingManifest(Strict):
+    version: Literal[1]
+    run_id: str
+    source: Literal["fixture","provider_recording"]
+    complete: Literal[True]
+    events_through: int = Field(ge=0)
+    model: str = Field(min_length=1,max_length=100)
+    prompt_version: str = Field(min_length=1,max_length=100)
+    calls: list[RecordingCall] = Field(min_length=1,max_length=1000)

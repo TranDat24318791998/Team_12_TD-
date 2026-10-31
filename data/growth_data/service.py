@@ -1,7 +1,7 @@
 """Authorized business queries and atomic commands for the local Data API."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -15,6 +15,8 @@ from .simulation import aggregate, business_date, channel_metrics, forecast, tre
 from .storage import Store, dumps, fingerprint, insert, many, now, one, timestamps, uid
 from .errors import Fault, require
 from .media import MediaMixin
+from .integration import IntegrationMixin
+from .comparisons import ComparisonMixin
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ WRITERS = {"orchestrator","simulator","monitor","content_worker","learning_worke
 PRIVATE = {"shop_agent","seller","simulated_seller","orchestrator","simulator","learning_worker","evaluator","data_admin"}
 
 
-class DataService(MediaMixin):
+class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
     def __init__(self, home, *, content_mode="local", learning_mode="skip",calibration_provider=None):
         require(content_mode in {"local","worker"} and learning_mode in {"skip","external"},"CONFIG_INVALID","Profile local không hợp lệ",422)
         self.content_mode=content_mode
@@ -71,7 +73,8 @@ class DataService(MediaMixin):
 
     def run(self,c,p,r):
         run=one(c,"SELECT * FROM runs WHERE run_id=?",(r,))
-        require(run is not None and (p.session_id==run["session_id"] or "*" in p.allowed_run_ids or r in p.allowed_run_ids),"NOT_FOUND","Không tìm thấy đối tượng",404)
+        grant=one(c,"SELECT run_id FROM run_grants WHERE run_id=? AND principal_id=?",(r,p.principal_id))
+        require(run is not None and (p.session_id==run["session_id"] or "*" in p.allowed_run_ids or r in p.allowed_run_ids or grant),"NOT_FOUND","Không tìm thấy đối tượng",404)
         return run
 
     def scope(self,c,p,r,s=None,roles=None):
@@ -116,10 +119,11 @@ class DataService(MediaMixin):
     def evaluation(self,c,r,s,pkg):
         prod=self.product(c,r,s)
         inv=self.entity(c,"inventory",r,"product_id",prod["product_id"])
-        cost=one(c,"SELECT * FROM product_costs WHERE run_id=? AND product_id=? ORDER BY cost_version DESC LIMIT 1",(r,prod["product_id"]))
+        cost=self.current_cost(c,r,s)
         rules,rv=self.rules(c,r,s)
-        result=check(pkg,prod["list_price_vnd"],cost["unit_cost_vnd"],rules,inv["available_units"])
-        return result,dict(rules_version=rv,cost_version=cost["cost_version"],inventory_version=inv["version"],fee_policy_version="demo-fees-v1")
+        fees,policy=self.fee_config(c,r)
+        result=check(pkg,prod["list_price_vnd"],cost["unit_cost_vnd"]+cost["other_unit_cost_vnd"],rules,inv["available_units"],fees)
+        return result,dict(rules_version=rv,cost_version=cost["cost_version"],inventory_version=inv["version"],fee_policy_version=policy)
 
     def event(self,c,r,day,kind,role,s=None,payload=None,visibility="shared",text="Đã cập nhật trạng thái",eid=""):
         seq=c.execute("SELECT COALESCE(MAX(seq),0)+1 FROM events WHERE run_id=?",(r,)).fetchone()[0]
@@ -142,30 +146,37 @@ class DataService(MediaMixin):
                    status="completed",operation_id=None,lease_until=None,response_status=200,response_json=result,created_at=now(),updated_at=now())
             return result
 
-    def create_run(self,c,p,body):
+    def create_run(self,c,p,body,select=True):
         require(p.role in {"seller","orchestrator","data_admin","evaluator"},"FORBIDDEN","Không được tạo run",403)
         b=M.RunCreate.model_validate(body)
         require(b.scenario_version=="demo-v1","SCENARIO_UNKNOWN","Dataset chưa cài",422)
-        require(b.mode!="live","PROVIDER_NOT_CONFIGURED","Mốc local chưa nối provider live; dùng offline hoặc replay",503)
+        require(b.mode!="live" or b.execution_profile=="external","PROVIDER_NOT_CONFIGURED","Live cần external worker; Data API không tự gọi model",503)
+        require(set(b.driver_config)<={"agent_version","model","prompt_version","seller_policy"},"CONFIG_INVALID","Driver config chỉ chứa version/model, không chứa credentials",422)
         sid=p.session_id or uid("service_session")
         c.execute("INSERT OR IGNORE INTO sessions VALUES (?,?)",(sid,now()))
         rid=uid("run")
-        insert(c,"runs",run_id=rid,session_id=sid,scenario_version=b.scenario_version,schema_version=1,simulator_version="market-v1",seed=b.seed,
-               mode=b.mode,memory_enabled=b.memory_enabled,history_days=14,simulation_days=b.simulation_days,start_date="2026-11-01",current_day=1,phase="ready",source_run_id=None,**timestamps())
+        config={"driver":b.driver_config,"execution_profile":b.execution_profile,"content_mode":b.content_mode or self.content_mode,"learning_mode":b.learning_mode or self.learning_mode,"source":b.data_source}
+        insert(c,"runs",run_id=rid,session_id=sid,scenario_version=b.scenario_version,schema_version=2,simulator_version="market-v2",seed=b.seed,
+               mode=b.mode,memory_enabled=b.memory_enabled,history_days=14,simulation_days=b.simulation_days,start_date="2026-11-01",current_day=1,phase="ready",source_run_id=None,
+               execution_profile=b.execution_profile,content_mode=config["content_mode"],learning_mode=config["learning_mode"],initial_snapshot_hash=fingerprint(world()),config_json=config,created_by=p.principal_id,**timestamps())
+        insert(c,"run_grants",run_id=rid,principal_id=p.principal_id)
+        if select:
+            c.execute("INSERT INTO active_runs VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET run_id=excluded.run_id",(sid,rid))
         seed_run(c,rid,self.objects,b.seed)
         return {"run_id":rid,"day":1,"phase":"ready","mode":b.mode,"simulation_days":b.simulation_days,"version":1}
 
     def safe_run(self,row):
-        return {k:row[k] for k in ("run_id","current_day","simulation_days","phase","mode","memory_enabled","version")}
+        return {**{k:row[k] for k in ("run_id","current_day","simulation_days","phase","mode","memory_enabled","version","execution_profile","content_mode","learning_mode")},"data_source":row["config"].get("source","simulation")}
 
     def context(self,c,p,r,s):
         run=self.scope(c,p,r,s,{"platform_agent","shop_agent","seller","simulated_seller","orchestrator","data_admin"})
         public=self.public(c,r,s)
         runtime=self.entity(c,"shop_runtime",r,"shop_id",s)
         active=one(c,"SELECT campaign_id FROM campaigns WHERE run_id=? AND shop_id=? AND status='active'",(r,s))
-        result={"run_id":r,"day":run["current_day"],"shop":public,
-                "eligibility":{"eligible":public["stock"]>=30 and not active and run["current_day"]>=runtime["cooldown_until_day"],"reason_codes":[]},
-                "policies":self.policies(c),"market_summary":self.market_summary(c,r,run),
+        product=self.product(c,r,s)
+        result={"run_id":r,"day":run["current_day"],"shop":public,"product_id":product["product_id"],"shop_version":runtime["version"],"active_content_id":product["active_content_id"],
+                "eligibility":self.eligibility(c,r,s),
+                "policies":self.policies(c,r),"market_summary":self.market_summary(c,r,run),
                 "recent_metrics":self.metric_rows(c,p,r,s),"shared_history":self.history(c,p,r,s)}
         if p.role!="platform_agent":
             rules,version=self.rules(c,r,s)
@@ -177,16 +188,19 @@ class DataService(MediaMixin):
                           pending_rule_questions=many(c,"SELECT * FROM rule_questions WHERE run_id=? AND shop_id=? AND status='pending'",(r,s)))
         return result
 
-    def policies(self,c):
-        return {"fees":many(c,"SELECT * FROM fee_rules WHERE policy_version='demo-fees-v1'"),"platform":many(c,"SELECT * FROM platform_rules WHERE policy_version='demo-policy-v1'")}
+    def policies(self,c,r=None):
+        policy=one(c,"SELECT * FROM run_policies WHERE run_id=?",(r,)) if r else None
+        return {"fees":many(c,"SELECT * FROM fee_rules WHERE policy_version=?",(policy["fee_policy_version"] if policy else "demo-fees-v1",)),"platform":many(c,"SELECT * FROM platform_rules WHERE policy_version=?",(policy["platform_policy_version"] if policy else "demo-policy-v1",))}
 
     def market_summary(self,c,r,run):
-        row=one(c,"SELECT * FROM market_daily WHERE run_id=? ORDER BY date DESC LIMIT 1",(r,))
-        return {"keyword":"quạt mini cầm tay","growth_7d_pct":240,"as_of_date":row["date"],"benchmark_cpc_vnd":1800}
+        row=one(c,"SELECT * FROM market_daily WHERE run_id=? AND date<=? ORDER BY date DESC LIMIT 1",(r,business_date(run["current_day"])))
+        past=one(c,"SELECT * FROM market_daily WHERE run_id=? AND date<=? ORDER BY date DESC LIMIT 1",(r,business_date((date.fromisoformat(row["date"])-date.fromisoformat(business_date(1))).days+1-7)))
+        growth=100*(row["search_volume"]/past["search_volume"]-1) if past and past["search_volume"] else None
+        return {"keyword":row["keyword"],"growth_7d_pct":round(growth,2) if growth is not None else None,"as_of_date":row["date"],"benchmark_cpc_vnd":row["benchmark_cpc_vnd"]}
 
     def metric_rows(self,c,p,r,s):
-        self.scope(c,p,r,s,{"platform_agent"}|PRIVATE)
-        rows=many(c,"SELECT * FROM daily_metrics WHERE run_id=? AND shop_id=? ORDER BY date,channel",(r,s))
+        run=self.scope(c,p,r,s,{"platform_agent"}|PRIVATE)
+        rows=many(c,"SELECT * FROM daily_metrics WHERE run_id=? AND shop_id=? AND day<=? ORDER BY date,channel",(r,s,run["current_day"]))
         allowed={"run_id","product_id","date","day","shop_id","channel","impressions","clicks","orders","units","net_revenue_vnd","ad_spend_vnd","realized_roas","source"}
         return [{k:v for k,v in row.items() if p.role!="platform_agent" or k in allowed} for row in rows]
 
@@ -222,6 +236,7 @@ class DataService(MediaMixin):
     def new_negotiation(self,c,p,r,s,body):
         run=self.scope(c,p,r,s,{"orchestrator","data_admin"})
         b=M.NegotiationCreate.model_validate(body)
+        require(run["phase"] not in {"ready","settling","learning","day_closed","complete"} and not one(c,"SELECT settlement_id FROM day_settlements WHERE run_id=? AND shop_id=? AND day=?",(r,s,b.day)),"DAY_CLOSED","Không thương lượng sau evidence boundary")
         state=self.entity(c,"shop_runtime",r,"shop_id",s)
         require(b.day==run["current_day"] and b.expected_shop_version==state["version"])
         require(b.day>=state["cooldown_until_day"],"COOLDOWN","Shop đang trong thời gian chờ")
@@ -241,6 +256,7 @@ class DataService(MediaMixin):
     def create_proposal(self,c,p,r,s,body):
         run=self.scope(c,p,r,s,{"platform_agent","shop_agent"})
         b=M.ProposalCreate.model_validate(body)
+        require(run["phase"] not in {"ready","settling","learning","day_closed","complete"},"DAY_CLOSED","Không thêm proposal sau evidence boundary")
         neg=self.entity(c,"negotiations",r,"negotiation_id",b.negotiation_id)
         require(neg["shop_id"]==s and neg["status"]=="running" and neg["day"]==run["current_day"])
         require(neg["expected_next_role"]==p.role,"TURN_ORDER","Chưa đến lượt agent này")
@@ -258,8 +274,8 @@ class DataService(MediaMixin):
         rounds=neg["platform_rounds"]+(p.role=="platform_agent")
         require(rounds<=3,"MAX_ROUNDS","Đã đủ ba lượt sàn")
         rules,rv=self.rules(c,r,s)
-        cost=world()["shops"][s]["private"]["unit_cost"]
-        shared=redact(b.shared_reason,prod["list_price_vnd"],cost,rules)
+        cost=self.current_cost(c,r,s)["unit_cost_vnd"]
+        shared=self.safe_text(c,r,b.shared_reason)
         pid=uid("prop")
         result,versions=self.evaluation(c,r,s,pkg) if pkg else ({"passed":False,"violations":[]}, {})
         insert(c,"proposals",run_id=r,proposal_id=pid,negotiation_id=b.negotiation_id,shop_id=s,product_id=b.product_id,parent_proposal_id=b.parent_proposal_id,
@@ -278,8 +294,8 @@ class DataService(MediaMixin):
         status="agreed" if accepted else "failed" if failed else "running"
         if accepted and result["unprofitable"]: status="warning_only"
         c.execute("UPDATE negotiations SET platform_rounds=?,status=?,final_proposal_id=?,expected_next_role=?,updated_at=? WHERE run_id=? AND negotiation_id=?",(rounds,status,pid if accepted else None,"shop_agent" if p.role=="platform_agent" else "platform_agent",now(),r,b.negotiation_id))
-        self.event(c,r,run["current_day"],"platform_turn" if p.role=="platform_agent" else "shop_turn",p.role,s,{"proposal_id":pid,"package":pkg,"stance":b.stance},text=shared or "Agent gửi đề xuất",eid=pid)
-        self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"proposal_id":pid,"passed":result["passed"],"checks":result["violations"]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
+        self.event(c,r,run["current_day"],"platform_turn" if p.role=="platform_agent" else "shop_turn",p.role,s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"parent_proposal_id":b.parent_proposal_id,"round":rounds,"package":pkg,"stance":b.stance,"action":b.stance,"message_vi":shared},text=shared or "Agent gửi đề xuất",eid=pid)
+        self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":code.replace('_',' ').lower()} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
         return self.shared_proposal(c,p,r,self.entity(c,"proposals",r,"proposal_id",pid))
 
     def persist_copy(self,c,table,row,**changes):
@@ -316,6 +332,8 @@ class DataService(MediaMixin):
         target=self.entity(c,table,r,key,b.target_id)
         s=target.get("shop_id") or self.entity(c,"products",r,"product_id",target["product_id"])["shop_id"]
         run=self.scope(c,p,r,s,{"seller","simulated_seller"})
+        if p.role=="seller" and run["execution_profile"]=="external":
+            require(not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND status IN ('queued','running') AND (kind='start_day' OR kind LIKE 'renegotiate:%')",(r,)),"BUSY","Đang chờ orchestrator hoàn tất tác vụ")
         require(b.target_version==target.get("version",1))
         require(not one(c,"SELECT * FROM decisions WHERE run_id=? AND target_type=? AND target_id=? AND target_version=?",(r,b.target_type,b.target_id,b.target_version)),"ALREADY_DECIDED","Đối tượng đã được quyết định")
         if b.target_type=="proposal":
@@ -339,7 +357,7 @@ class DataService(MediaMixin):
         did=uid("decision")
         rules,_=self.rules(c,r,s)
         prod=self.product(c,r,s)
-        shared=redact(b.feedback_shared or "",prod["list_price_vnd"],world()["shops"][s]["private"]["unit_cost"],rules)
+        shared=self.safe_text(c,r,b.feedback_shared or "")
         insert(c,"decisions",run_id=r,decision_id=did,shop_id=s,target_type=b.target_type,target_id=target[key],target_version=target.get("version",1),action=b.action,
                edited_package_json=b.edited_package.model_dump() if b.edited_package else None,cover_option=b.cover_option,rule_answer=b.rule_answer,
                actor_type=p.role,actor_id=p.principal_id,feedback_private=b.feedback_private,feedback_shared=shared,created_at=now())
@@ -350,6 +368,8 @@ class DataService(MediaMixin):
             if b.rule_answer: self.confirm_rule(c,r,s,target,did,p.principal_id)
         elif b.target_type=="content" and b.action!="approve":
             c.execute("UPDATE content_versions SET status='rejected',version=version+1 WHERE run_id=? AND content_id=?",(r,target[key]))
+            c.execute("UPDATE proposals SET status='rejected',version=version+1 WHERE run_id=? AND proposal_id IN (SELECT proposal_id FROM content_jobs WHERE run_id=? AND product_id=?) AND status='accepted'",(r,r,target["product_id"]))
+            if s=="D":c.execute("UPDATE runs SET phase='negotiating',version=version+1 WHERE run_id=?",(r,))
         elif b.target_type=="proposal":
             c.execute("UPDATE proposals SET status=?,version=version+1,updated_at=? WHERE run_id=? AND proposal_id=?",("accepted" if b.action=="approve" else "rejected",now(),r,target[key]))
             c.execute("UPDATE cards SET status='resolved',version=version+1 WHERE run_id=? AND proposal_id=? AND status='pending'",(r,b.target_id))
@@ -357,6 +377,8 @@ class DataService(MediaMixin):
                 c.execute("UPDATE shop_runtime SET cooldown_until_day=? WHERE run_id=? AND shop_id=?",(run["current_day"]+3,r,s))
             if b.edited_package:
                 c.execute("UPDATE proposals SET status='superseded' WHERE run_id=? AND proposal_id=?",(r,b.target_id))
+            if s=="D":
+                c.execute("UPDATE runs SET phase=?,version=version+1 WHERE run_id=?",("content_review" if b.action=="approve" and target["package"]["content_refresh"] else "negotiating",r))
         if b.target_type=="rule_question":
             c.execute("UPDATE cards SET status='resolved' WHERE run_id=? AND question_id=? AND kind='question'",(r,target[key]))
         self.event(c,r,run["current_day"],"seller_decision",p.role,s,{"decision_id":did,"action":b.action,"edited":b.edited_package is not None,"feedback_shared":shared},text="Người bán đã đưa ra quyết định")
@@ -425,6 +447,9 @@ class DataService(MediaMixin):
             return previous
         decision=self.entity(c,"decisions",r,"decision_id",b.approval_decision_id)
         require(decision["target_type"]=="proposal" and decision["target_id"]==b.proposal_id and decision["action"]=="approve" and prop["status"]=="accepted","APPROVAL_REQUIRED","Cần duyệt đúng đề xuất")
+        if prop["package"]["content_refresh"]:
+            published=one(c,"SELECT cv.content_id FROM content_jobs j JOIN content_versions cv ON cv.run_id=j.run_id AND cv.content_id IN (SELECT value FROM json_each(j.output_content_ids_json)) WHERE j.run_id=? AND j.proposal_id=? AND cv.status='published'",(r,b.proposal_id))
+            require(published,"CONTENT_APPROVAL_REQUIRED","Phải duyệt và áp dụng nội dung trước khi kích hoạt gói")
         ev,versions=self.evaluation(c,r,prop["shop_id"],prop["package"])
         require(ev["passed"],"CHECK_FAILED","Gói vi phạm luật hiện hành",422)
         require(versions["rules_version"]==b.expected_rules_version and versions["inventory_version"]==b.expected_inventory_version)
@@ -434,7 +459,11 @@ class DataService(MediaMixin):
         insert(c,"campaigns",run_id=r,campaign_id=cid,shop_id=prop["shop_id"],product_id=prop["product_id"],proposal_id=b.proposal_id,approval_decision_id=b.approval_decision_id,
                package_snapshot_json=pkg,start_day=run["current_day"],end_day=run["current_day"]+pkg["duration_days"]-1,approved_total_vnd=pkg["ads_daily_budget"]*pkg["duration_days"],spent_vnd=0,low_roas_streak=0,status="active",ads_status="running" if pkg["ads_daily_budget"] else "disabled",ads_stop_reason=None,**timestamps())
         c.execute("UPDATE proposals SET status='applied',version=version+1 WHERE run_id=? AND proposal_id=?",(r,b.proposal_id))
+        applied=self.entity(c,"proposals",r,"proposal_id",b.proposal_id)
+        self.snapshot_forecast(c,r,prop["shop_id"],applied,run["current_day"])
         self.event(c,r,run["current_day"],"auto_action","orchestrator",prop["shop_id"],{"campaign_id":cid,"action":"apply_package"},text="Áp dụng đúng gói người bán đã duyệt")
+        self.event(c,r,run["current_day"],"package_applied","orchestrator",prop["shop_id"],{"campaign_id":cid,"proposal_id":b.proposal_id,"decision_id":b.approval_decision_id,"negotiation_id":prop["negotiation_id"]},text="Gói đã được kích hoạt sau approval")
+        if prop["shop_id"]=="D":c.execute("UPDATE runs SET phase='negotiating',version=version+1 WHERE run_id=?",(r,))
         return self.entity(c,"campaigns",r,"campaign_id",cid)
 
     def settle(self,c,p,r,s,body):
@@ -446,6 +475,7 @@ class DataService(MediaMixin):
             return old
         require(b.day==run["current_day"] and run["phase"] not in {"ready","complete"},"DAY_NOT_STARTED","Chưa bắt đầu ngày")
         require(not one(c,"SELECT * FROM cards WHERE run_id=? AND shop_id=? AND status='pending'",(r,s)),"PENDING_CARD","Cần người bán xử lý thẻ")
+        require(not one(c,"SELECT proposal_id FROM proposals WHERE run_id=? AND shop_id=? AND status='accepted'",(r,s)),"PENDING_APPLY","Gói đã duyệt còn chờ nội dung/kích hoạt")
         require(not one(c,"SELECT cv.content_id FROM content_versions cv JOIN products p ON p.run_id=cv.run_id AND p.product_id=cv.product_id WHERE cv.run_id=? AND p.shop_id=? AND cv.status IN ('draft','validated')",(r,s)),"PENDING_CONTENT","Nội dung chưa được duyệt hoặc từ chối")
         prod=self.product(c,r,s);inv=self.entity(c,"inventory",r,"product_id",prod["product_id"])
         require(inv["version"]==b.expected_inventory_version)
@@ -460,21 +490,23 @@ class DataService(MediaMixin):
             if campaign["ads_status"]=="running":
                 low=inv["available_units"]<30
                 past=many(c,"SELECT day,SUM(orders) n FROM daily_metrics WHERE run_id=? AND shop_id=? AND day>0 AND day<? GROUP BY day ORDER BY day DESC LIMIT 3",(r,s,b.day))
-                low=low or (len(past)==3 and inv["available_units"]<sum(v["n"] for v in past))
+                low=low or (bool(past) and inv["available_units"]<3*sum(v["n"] for v in past)/len(past))
                 valid=self.evaluation(c,r,s,pkg)[0]["passed"]
                 if low or not valid:
                     c.execute("UPDATE campaigns SET ads_status='paused',ads_stop_reason=?,version=version+1 WHERE run_id=? AND campaign_id=?",("LOW_STOCK" if low else "RULE_TIGHTENED",r,campaign["campaign_id"]))
                     self.event(c,r,b.day,"auto_action","monitor",s,{"action":"pause_ads"},text="Điều kiện tồn kho hoặc luật yêu cầu dừng ads")
                 else: budget=min(pkg["ads_daily_budget"],campaign["approved_total_vnd"]-campaign["spent_vnd"])
         q=min(.95,prod["listing_quality"]+(content["quality_gain"] if content["published_day"] is not None and b.day>content["published_day"] else 0))
-        cost=world()["shops"][s]["private"]["unit_cost"]
-        rows=channel_metrics(self.public(c,r,s),cost,seed=run["seed"],day=b.day,stock=inv["available_units"],quality=q,voucher=voucher,budget=budget)
+        cost_record=self.current_cost(c,r,s,b.day)
+        cost=cost_record["unit_cost_vnd"]+cost_record["other_unit_cost_vnd"]
+        fees,fee_version=self.fee_config(c,r)
+        rows=channel_metrics(self.public(c,r,s),cost,seed=run["seed"],day=b.day,stock=inv["available_units"],quality=q,voucher=voucher,budget=budget,fees=fees)
         settlement=uid("settlement")
         insert(c,"day_settlements",run_id=r,settlement_id=settlement,shop_id=s,day=b.day,input_snapshot_hash=digest,status="committed",created_at=now())
         for row in rows:
             insert(c,"daily_metrics",run_id=r,product_id=prod["product_id"],date=business_date(b.day),day=b.day,shop_id=s,
                    campaign_id=campaign["campaign_id"] if campaign and row["channel"]=="paid" else None,content_id=content["content_id"],
-                   fee_policy_version="demo-fees-v1",cost_version=1,settlement_id=settlement,source="simulated",created_at=now(),**row)
+                   fee_policy_version=fee_version,cost_version=cost_record["cost_version"],settlement_id=settlement,source="simulated",created_at=now(),**row)
         total=aggregate(rows,s,b.day)
         c.execute("UPDATE inventory SET available_units=available_units-?,version=version+1,updated_at=? WHERE run_id=? AND product_id=?",(total["orders"],now(),r,prod["product_id"]))
         if campaign:
@@ -483,7 +515,7 @@ class DataService(MediaMixin):
             paused=streak>=campaign["package_snapshot"]["stop_after_days"]
             finished=b.day>=campaign["end_day"]
             c.execute("UPDATE campaigns SET spent_vnd=spent_vnd+?,low_roas_streak=?,ads_status=CASE WHEN ? THEN 'ended' WHEN ? THEN 'paused' ELSE ads_status END,status=CASE WHEN ? THEN 'completed' ELSE status END,ads_stop_reason=CASE WHEN ? THEN 'LOW_ROAS' ELSE ads_stop_reason END,version=version+1 WHERE run_id=? AND campaign_id=?",(paid["ad_spend_vnd"],streak,finished,paused,finished,paused,r,campaign["campaign_id"]))
-            if paused: self.event(c,r,b.day,"auto_action","monitor",s,{"action":"pause_ads","effective_day":b.day+1},text="ROAS thấp đủ số ngày, dừng trước chi ngày tiếp")
+            if paused and campaign["ads_status"]=="running": self.event(c,r,b.day,"auto_action","monitor",s,{"action":"pause_ads","effective_day":b.day+1},text="ROAS thấp đủ số ngày, dừng trước chi ngày tiếp")
         # Financial result is private; the separate platform event excludes contribution/fees.
         self.event(c,r,b.day,"market_result","simulator",s,{"metrics":total},visibility="shop_private",text="Đã chốt kết quả thị trường")
         safe={k:v for k,v in total.items() if k not in {"profit_after_fees","fees"}}
@@ -502,8 +534,14 @@ class DataService(MediaMixin):
         if kind=="start_day":
             require(run["phase"]=="ready")
             c.execute("UPDATE runs SET phase='negotiating' WHERE run_id=?",(r,))
-            insert(c,"market_daily",run_id=r,date=business_date(b.expected_day),keyword="quạt mini cầm tay",search_volume=round(10000*trend(b.expected_day)),qualified_listing_count=5,benchmark_cpc_vnd=1800,benchmark_ctr_bps=250,benchmark_cvr_bps=500,observed_at=business_date(b.expected_day)+"T00:00:00+07:00")
+            insert(c,"market_daily",run_id=r,date=business_date(b.expected_day),keyword="quạt mini cầm tay",search_volume=round(34000*trend(b.expected_day)),qualified_listing_count=5,benchmark_cpc_vnd=1800,benchmark_ctr_bps=250,benchmark_cvr_bps=500,observed_at=business_date(b.expected_day)+"T00:00:00+07:00")
             self.event(c,r,b.expected_day,"day_start","orchestrator",payload={"day":b.expected_day,"driver":"offline_reference"},text="Bắt đầu ngày; chính sách tham chiếu local")
+            if run["execution_profile"]=="external":
+                c.execute("UPDATE operations SET status='queued',lease_until=NULL WHERE run_id=? AND operation_id=?",(r,opid))
+                c.execute("UPDATE runs SET version=version+1,updated_at=? WHERE run_id=?",(now(),r))
+                return self.entity(c,"operations",r,"operation_id",opid)
+            selected=[sid for sid in "ABCDE" if self.eligibility(c,r,sid)["eligible"]]
+            self.event(c,r,b.expected_day,"opportunity","orchestrator",payload={"keyword":"quạt mini cầm tay","growth_7d_pct":self.market_summary(c,r,run)["growth_7d_pct"],"chosen":selected,"excluded":[{"shop_id":sid,"reason_codes":self.eligibility(c,r,sid)["reason_codes"]} for sid in "ABCDE" if sid not in selected]},text="Code đối chiếu trend, tồn kho, listing và trạng thái gói")
             for sid in "ABCDE":
                 active=one(c,"SELECT * FROM campaigns WHERE run_id=? AND shop_id=? AND status='active'",(r,sid))
                 q=one(c,"SELECT * FROM rule_questions WHERE run_id=? AND shop_id=? AND status='pending' ORDER BY created_at LIMIT 1",(r,sid))
@@ -512,7 +550,7 @@ class DataService(MediaMixin):
                         self.make_card(c,r,sid,b.expected_day,question=q)
                         if sid!="D": self.auto_card(c,r,sid)
                     continue
-                if self.public(c,r,sid)["stock"]<30: continue
+                if not self.eligibility(c,r,sid)["eligible"]: continue
                 state=self.entity(c,"shop_runtime",r,"shop_id",sid)
                 if b.expected_day<state["cooldown_until_day"]: continue
                 self.reference_offer(c,internal,r,sid)
@@ -522,6 +560,7 @@ class DataService(MediaMixin):
         elif kind=="close_day":
             require(run["phase"] not in {"ready","complete"})
             require(not one(c,"SELECT * FROM cards WHERE run_id=? AND status='pending'",(r,)),"PENDING_CARD","Cần xử lý thẻ trước khi kết thúc ngày")
+            require(not one(c,"SELECT proposal_id FROM proposals WHERE run_id=? AND status='accepted'",(r,)),"PENDING_APPLY","Gói đã duyệt còn chờ áp dụng")
             require(not one(c,"SELECT * FROM content_versions WHERE run_id=? AND status IN ('draft','validated')",(r,)),"PENDING_CONTENT","Cần áp dụng hoặc từ chối bản nội dung")
             c.execute("UPDATE runs SET phase='settling' WHERE run_id=?",(r,))
             for sid in "ABCDE":
@@ -530,8 +569,8 @@ class DataService(MediaMixin):
             cursor=self.event(c,r,run["current_day"],"day_closed","orchestrator",visibility="internal",text="Đủ năm settlement, bàn giao học")
             summary={"day":run["current_day"],"history_updates":[],"pref_candidates":[],"calibration":{"factor":1.0,"points":0,"mape_today":None},"lesson_ops":[],"rejected_ops":0,"memory_md_path":""}
             # Local reference deliberately has no learning algorithm; never reports success.
-            external=self.learning_mode=="external" and bool(run["memory_enabled"])
-            insert(c,"learning_handoffs",run_id=r,day=run["current_day"],settlement_cursor=cursor,status="pending" if external else "skipped",night_summary_json=None if external else summary,memory_report_asset_id=None,error_code=None if external else "LEARNING_NOT_CONNECTED" if run["memory_enabled"] else "MEMORY_OFF",created_at=now(),updated_at=now())
+            external=run["learning_mode"]=="external" and bool(run["memory_enabled"])
+            insert(c,"learning_handoffs",run_id=r,day=run["current_day"],settlement_cursor=cursor,status="pending" if external else "skipped",night_summary_json=None if external else summary,memory_report_asset_id=None,error_code=None if external else "LEARNING_NOT_CONNECTED" if run["memory_enabled"] else "MEMORY_OFF",lease_until=self.expires(60) if external else None,created_at=now(),updated_at=now())
             c.execute("UPDATE runs SET phase=? WHERE run_id=?",("learning" if external else "day_closed",r))
         elif kind=="advance_day":
             require(run["phase"]=="day_closed")
@@ -553,11 +592,11 @@ class DataService(MediaMixin):
         product=self.product(c,r,s);public=self.public(c,r,s);rules,_=self.rules(c,r,s)
         default={"content_refresh":True,"ads_daily_budget":70000,"voucher_pct":10,"stop_roas_below":4.0,"stop_after_days":2,"duration_days":3}
         first=self.create_proposal(c,platform,r,s,dict(product_id=product["product_id"],negotiation_id=neg["negotiation_id"],package=default,stance="propose"))
-        safe=safe_package(public["price"],world()["shops"][s]["private"]["unit_cost"],rules,public["stock"])
+        safe=safe_package(public["price"],self.current_cost(c,r,s)["unit_cost_vnd"],rules,public["stock"],fees=self.fee_config(c,r)[0])
         if owner_note:
             import re
             value=re.search(r"(\d+)\s*%",owner_note)
-            if value:safe=safe_package(public["price"],world()["shops"][s]["private"]["unit_cost"],rules,public["stock"],{**safe,"voucher_pct":min(safe["voucher_pct"],int(value[1]))})
+            if value:safe=safe_package(public["price"],self.current_cost(c,r,s)["unit_cost_vnd"],rules,public["stock"],{**safe,"voucher_pct":min(safe["voucher_pct"],int(value[1]))},fees=self.fee_config(c,r)[0])
         counter=self.create_proposal(c,shop,r,s,dict(product_id=product["product_id"],negotiation_id=neg["negotiation_id"],parent_proposal_id=first["proposal_id"],package=safe,stance="propose"))
         accepted=self.create_proposal(c,platform,r,s,dict(product_id=product["product_id"],negotiation_id=neg["negotiation_id"],parent_proposal_id=counter["proposal_id"],package=safe,stance="accept"))
         self.present(c,p,r,accepted["proposal_id"],accepted["version"])
@@ -576,28 +615,34 @@ class DataService(MediaMixin):
         internal=Principal("offline_driver","orchestrator",None,(r,),(s,))
         current=self.entity(c,"proposals",r,"proposal_id",decision["target_id"])
         _,versions=self.evaluation(c,r,s,current["package"])
-        self.apply(c,internal,r,dict(proposal_id=current["proposal_id"],approval_decision_id=decision["decision_id"],expected_inventory_version=versions["inventory_version"],expected_rules_version=versions["rules_version"]))
         if current["package"]["content_refresh"]:
             job=self.content_create(c,internal,r,s,dict(proposal_id=current["proposal_id"],product_id=current["product_id"]),force_local=True)
             content=self.entity(c,"content_versions",r,"content_id",job["output_content_ids"][0])
             d=self.decision(c,p,r,dict(target_type="content",target_id=content["content_id"],target_version=content["version"],action="approve",cover_option="B"))
             self.publish(c,internal,r,content["content_id"],dict(approval_decision_id=d["decision_id"],expected_active_content_id=self.product(c,r,s)["active_content_id"]))
+        else:
+            self.apply(c,internal,r,dict(proposal_id=current["proposal_id"],approval_decision_id=decision["decision_id"],expected_inventory_version=versions["inventory_version"],expected_rules_version=versions["rules_version"]))
 
     def recover(self):
         """Expire leases without resubmitting paid jobs or inventing learning success."""
-        recovered={"content_jobs":0,"learning_handoffs":0}
+        recovered={"content_jobs":0,"learning_handoffs":0,"operations":0}
         with self.store.connect(write=True) as c:
             for job in many(c,"SELECT * FROM content_jobs WHERE status IN ('queued','running') AND lease_until IS NOT NULL AND lease_until<?",(now(),)):
                 p=Principal("lease_recovery","content_worker",None,(job["run_id"],),(job["shop_id"],),(job["job_id"],))
                 self.content_result(c,p,job["run_id"],job["job_id"],dict(expected_job_version=job["version"],status="timed_out",provider_job_id=job["provider_job_id"],fallback_used=True,error_code="WORKER_LEASE_EXPIRED"))
                 recovered["content_jobs"]+=1
-            cutoff=(datetime.now(timezone.utc)-timedelta(seconds=60)).isoformat()
-            for h in many(c,"SELECT * FROM learning_handoffs WHERE status IN ('pending','running') AND created_at<?",(cutoff,)):
-                summary={"day":h["day"],"history_updates":[],"pref_candidates":[],"calibration":{"factor":1.0,"points":0,"mape_today":None},"lesson_ops":[],"rejected_ops":0,"memory_md_path":""}
-                c.execute("UPDATE learning_handoffs SET status='skipped',night_summary_json=?,error_code='LEARNING_TIMEOUT',updated_at=? WHERE run_id=? AND day=?",(dumps(summary),now(),h["run_id"],h["day"]))
-                c.execute("UPDATE runs SET phase='day_closed' WHERE run_id=? AND phase='learning'",(h["run_id"],))
+            for h in many(c,"SELECT * FROM learning_handoffs WHERE status IN ('pending','running') AND lease_until IS NOT NULL AND lease_until<?",(now(),)):
+                c.execute("UPDATE learning_handoffs SET status='failed',error_code='LEARNING_TIMEOUT',lease_until=NULL,version=version+1,updated_at=? WHERE run_id=? AND day=?",(now(),h["run_id"],h["day"]))
                 self.event(c,h["run_id"],h["day"],"operation_failed","orchestrator",visibility="internal",payload={"error_code":"LEARNING_TIMEOUT","partial_writes_unknown":True},text="Học quá thời hạn; không tuyên bố học thành công")
                 recovered["learning_handoffs"]+=1
+                self.finish_night_tx(c,h["run_id"],h["day"])
+            for op in many(c,"SELECT * FROM operations WHERE status='running' AND lease_until IS NOT NULL AND lease_until<?",(now(),)):
+                c.execute("UPDATE operations SET status='failed',error_code='LEASE_EXPIRED_RESULT_UNKNOWN',lease_until=NULL,version=version+1 WHERE run_id=? AND operation_id=?",(op["run_id"],op["operation_id"]))
+                recovered["operations"]+=1
+            for h in many(c,"SELECT * FROM learning_handoffs WHERE auto_advance=1 AND status IN ('completed','skipped')"):
+                self.finish_night_tx(c,h["run_id"],h["day"])
+            groups=[x["group_id"] for x in many(c,"SELECT * FROM comparison_groups WHERE status IN ('queued','running')")]
+        for gid in groups:self.drive_comparison(gid)
         return recovered
 
     def pause(self,c,p,r,cid,version,reason):

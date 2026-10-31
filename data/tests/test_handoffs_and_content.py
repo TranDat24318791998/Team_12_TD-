@@ -57,7 +57,10 @@ def test_external_learning_blocks_advance_and_accepts_result(tmp_path):
         summary={"day":1,"history_updates":["Đã xử lý kết quả"],"pref_candidates":[],"calibration":{"factor":1,"points":0,"mape_today":None},"lesson_ops":[],"rejected_ops":0,"memory_md_path":"../../sensitive"}
         result=client.post(f"/internal/v1/runs/{r}/learning-results",json={"day":1,"settlement_cursor":data["settlement_cursor"],"status":"completed","night_summary":summary},headers=headers(learning,"result"))
         assert result.status_code==200,result.text
-        with s.store.connect() as c:assert one(c,"SELECT * FROM learning_handoffs WHERE run_id=?",(r,))["night_summary"]["memory_md_path"]==""
+        with s.store.connect() as c:
+            report=one(c,"SELECT * FROM learning_handoffs WHERE run_id=?",(r,))["night_summary"]["memory_md_path"]
+        assert report.startswith(f"/api/v1/runs/{r}/assets/") and "sensitive" not in report
+        assert client.get(report).status_code==200
         current=client.get(f"/api/v1/runs/{r}",headers=headers(token)).json()["data"]
         assert client.post(f"/api/v1/runs/{r}/days/advance",json={"expected_day":1,"expected_version":current["version"]},headers=headers(token,"advance")).status_code==202
 

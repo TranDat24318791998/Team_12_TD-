@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kiểm tra màn đối chứng hai chat</title>
+<style>body{font:14px/1.7 system-ui;margin:20px;color:#45392f}button{padding:12px 18px;cursor:pointer}pre{white-space:pre-wrap;max-width:1000px}iframe{display:block;border:1px solid #ddd;flex-shrink:0}.pass{color:#26704e}.fail{color:#a52820}</style></head><body>
+<h1>Kiểm tra hai chat và bố cục trình chiếu</h1><button id="run">Chạy kiểm tra trình chiếu</button><pre id="log" role="log"></pre><iframe id="app" title="Màn hình trình chiếu đang kiểm tra" width="1366" height="768"></iframe>
+<script>
+const frame=document.querySelector('#app'),log=document.querySelector('#log'),run=document.querySelector('#run');
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),doc=()=>frame.contentDocument,win=()=>frame.contentWindow,find=selector=>doc()?.querySelector(selector);
+let count=0;
+function check(value,label){if(!value)throw new Error(label);count++;log.textContent+='✓ '+label+'\n';}
+async function until(fn){const end=Date.now()+18000;while(Date.now()<end){if(fn())return;await pause(60);}throw new Error('Hết thời gian chờ giao diện');}
+async function size(width,height){frame.width=width;frame.height=height;frame.style.width=width+'px';frame.style.height=height+'px';await pause(120);}
+const rect=selector=>find(selector).getBoundingClientRect();
+function fit(){check(doc().documentElement.scrollWidth<=win().innerWidth+1,'Không cuộn ngang ở '+win().innerWidth+'px');}
+function withinView(selector){const box=rect(selector);return box.top>=0 && box.bottom<=win().innerHeight+1;}
+run.onclick=async()=>{
+  count=0;run.disabled=true;log.textContent='Đang chạy…\n';log.className='';
+  try{
+    await size(1366,768);frame.src='../frontend/proof.html?preview=1';await until(()=>find('[data-comparison-day="2"]'));await pause(150);
+    check(win().innerWidth===1366 && win().innerHeight===768,'Viewport laptop đúng 1366 × 768');fit();
+    check(Math.abs(rect('[data-learning="on"]').top-rect('[data-learning="off"]').top)<2,'Hai khung chat đặt cạnh nhau');
+    check(withinView('.learning-comparison') && withinView('.proof-actions'),'Hai chat và nút thao tác nằm trong một màn hình');
+    check(rect('.proof-agent-flow').height<48,'Luồng agent gọn trong một hàng');
+    check(doc().documentElement.scrollHeight<=769,'Màn đối chứng mặc định không cần cuộn trang');
+    check([...doc().querySelectorAll('.learning-chat-messages')].every(el=>el.scrollHeight<=el.clientHeight+1),'Đọc trọn hội thoại ngày 2 trên laptop');
+    const requests=[...doc().querySelectorAll('.compare-message.from-seller:first-child p')].map(el=>el.textContent);
+    check(requests.length===2 && requests[0]===requests[1],'Hai bên nhận đúng cùng một yêu cầu');
+    find('[data-proof-day="1"]').click();await until(()=>find('[data-comparison-day="1"]'));
+    check(find('[data-learning="on"] .learning-chat-messages').textContent===find('[data-learning="off"] .learning-chat-messages').textContent,'Ngày 1 chưa có lịch sử: hai hội thoại như nhau');
+    check(find('[data-learning="on"]').textContent.includes('Chưa có lịch sử'),'Ngày 1 không gán lợi thế bộ nhớ giả');
+    find('[data-proof-day="7"]').click();await until(()=>find('[data-comparison-day="7"]'));
+    check(find('[data-learning="on"] .memory-evidence').textContent.includes('Ngày 6'),'Ngày 7 dẫn nguồn phản hồi từ ngày trước');
+    find('[data-proof-day="2"]').click();await until(()=>find('[data-comparison-day="2"]'));
+    find('.proof-report-details summary').click();await pause(80);check(find('.proof-report-details').open && doc().querySelectorAll('.proof-card').length===4,'Mở được các chỉ số đối chứng đầy đủ');find('.proof-report-details summary').click();
+    await size(667,765);fit();check(Math.abs(rect('[data-learning="on"]').top-rect('[data-learning="off"]').top)<2,'Tab preview 667px vẫn thấy hai chat cạnh nhau');check(withinView('.learning-comparison'),'Cả hai khung nằm trong vùng nhìn ở 667px');
+    await size(390,844);fit();check(rect('[data-learning="on"]').top>rect('[data-learning="off"]').bottom,'Điện thoại xếp chat thành một cột');
+    await size(1366,768);frame.src='../frontend/index.html?preview=1';await until(()=>find('[data-start]'));find('[data-start]').click();await until(()=>find('[data-decision="accept"]'));await pause(100);
+    fit();check(rect('.compact-activity').height<155,'Minh họa luồng agent dưới 155px');check(!find('.activity-details').open,'Chi tiết điều khoản được gấp mặc định');
+    check(withinView('.demo-grid') && withinView('.compact-activity'),'Chat người bán, hậu trường và luồng agent cùng một màn hình');
+    // End on the comparison, ready for visual inspection and a screenshot.
+    frame.src='../frontend/proof.html?preview=1';await until(()=>find('[data-comparison-day="2"]'));
+    log.className='pass';log.textContent+='\nHOÀN TẤT: '+count+' kiểm tra trình chiếu đạt.\n';
+  }catch(error){log.className='fail';log.textContent+='\nLỖI: '+error.message+'\n';}
+  finally{run.disabled=false;}
+};
+</script></body></html>

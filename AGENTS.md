@@ -29,6 +29,7 @@ Toàn bộ shop, thị trường và người bán là dữ liệu giả lập. 
 - Frontend: React 19 trong `frontend/src/`, CSS trong `frontend/css/`; `npm run build` dùng esbuild tạo `frontend/js/app.js`, FastAPI phục vụ tại `/`. Đổi sang React theo yêu cầu người dùng; xem `docs/FRONTEND_HANDOFF.md`.
 - Thiết kế dữ liệu hiện hành: `data/growth_agents_data_api_design.md` v1.1. Frontend giữ 9 API seller, dùng 7 ngày và trạng thái `complete` theo mục 10.
 - Khi ghép backend/data với giao diện, đọc `docs/FRONTEND_REQUIREMENTS.md` và `docs/FRONTEND_DATA_REQUIREMENTS.md`: payload React đang hỗ trợ, phân quyền, event cursor, phiên bản và yêu cầu persistence. Các mở rộng ghi `TODO(contract)` cần được chốt vào hợp đồng trước khi bật trên API thật.
+- Màn bằng chứng có hai hội thoại theo ngày, dùng mở rộng tùy chọn `ProofReport.comparison_days` (frontend requirements mục 7, data requirements mục 11). Transcript thật phải đúng hai run, cùng yêu cầu, nguồn bộ nhớ từ ngày trước; không dùng fixture preview làm bằng chứng thực nghiệm.
 - Tuỳ chọn: Langfuse để trace.
 - Ghim version trong `requirements.txt` ngay sau khi cài được bản chạy.
 

@@ -33,19 +33,34 @@ def decode(row):
 
 
 class Store:
+    migrations_path = Path(__file__).with_name("migrations")
     def __init__(self, path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as c:
             c.execute("PRAGMA journal_mode=WAL")
+            migrations = sorted(self.migrations_path.glob("[0-9]*.sql"))
+            if [int(path.name.split('_',1)[0]) for path in migrations] != list(range(1,len(migrations)+1)):
+                raise ValueError("Migration phải liên tiếp từ 001")
+            c.execute("BEGIN IMMEDIATE")
             version = c.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > len(migrations):
                 raise ValueError("Schema mới hơn service; không tự hạ version")
-            if version == 0:
-                sql = Path(__file__).with_name("migrations").joinpath("001_initial.sql").read_text()
-                c.executescript("BEGIN IMMEDIATE;\n" + sql)
-                c.execute("INSERT INTO schema_migrations VALUES(1,?)", (now(),))
-                c.execute("PRAGMA user_version=1")
+            # executescript commits an existing transaction. Execute complete SQL
+            # statements individually so DDL + migration receipts roll back together.
+            for index, path in enumerate(migrations, 1):
+                if index <= version:
+                    continue
+                statement = ""
+                for line in path.read_text().splitlines(keepends=True):
+                    statement += line
+                    if sqlite3.complete_statement(statement):
+                        c.execute(statement)
+                        statement = ""
+                if statement.strip():
+                    raise ValueError(f"Migration SQL chưa hoàn chỉnh: {path.name}")
+                c.execute("INSERT INTO schema_migrations VALUES(?,?)", (index, now()))
+                c.execute(f"PRAGMA user_version={index}")
 
     @contextmanager
     def connect(self, write=False):

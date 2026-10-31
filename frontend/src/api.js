@@ -20,7 +20,7 @@ export function commandFinished(before,after,path){
   return commandTarget(before,path)!==commandTarget(after,path);
 }
 export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=globalThis.sessionStorage,now=Date.now,assetRoot}={}){
-  const sample=preview?createPreviewAPI({storage,now,assetRoot}):null;
+  const sample=preview?createPreviewAPI({storage,now,assetRoot,fetchImpl}):null;
   const intents=new Map();
   async function request(path,{body,signal,target='',...options}={}){
     const method=(options.method || 'GET').toUpperCase();
@@ -34,7 +34,7 @@ export function createClient({preview=false,fetchImpl=globalThis.fetch,storage=g
       if(!intent){intent={key:newKey(),body:serialized};intents.set(fingerprint,intent);}
     }
     const headers={Accept:'application/json',...(body?{'Content-Type':'application/json'}:{}),...options.headers,...(mutating?{'Idempotency-Key':intent.key,'X-Request-ID':newKey()}:{})};
-    if(sample){try{const result=await sample.request(path,{...options,headers,body});if(mutating)intents.delete(fingerprint);return result;}catch(error){if(mutating)intents.delete(fingerprint);throw error;}}
+    if(sample){try{const result=await sample.request(path,{...options,headers,body,signal});if(mutating)intents.delete(fingerprint);return result;}catch(error){if(mutating)intents.delete(fingerprint);throw error;}}
     const controller=new AbortController();const abort=()=>controller.abort();
     if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
     const timeout=setTimeout(abort,path==='/api/night'?70000:20000);
