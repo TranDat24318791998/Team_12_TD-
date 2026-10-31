@@ -20,52 +20,50 @@ Toàn bộ shop, thị trường và người bán là dữ liệu giả lập. 
 - Python 3.11, FastAPI + uvicorn, Pydantic v2, httpx, pytest.
 - LangGraph (StateGraph, Send, interrupt, InMemorySaver, store), langchain-openai (`ChatOpenAI`).
 - SQLite qua module chuẩn `sqlite3`.
-- Frontend: HTML, CSS, JavaScript thuần trong `static/`, không có bước build.
+- Frontend: HTML, CSS, JavaScript thuần trong `frontend/`, không có bước build.
 - Tuỳ chọn: Langfuse để trace.
 - Ghim version trong `requirements.txt` ngay sau khi cài được bản chạy.
 
 ## Cấu trúc thư mục
 
-```
+Kiến trúc chi tiết và quy tắc import: `docs/ARCHITECTURE.md`.
+
+```text
 app/
-  main.py            FastAPI app, phục vụ static/ và media/
-  api.py             các route /api/* (docs/CONTRACT.md)
-  config.py          Settings đọc .env + hằng số nghiệp vụ
-  schemas.py         mọi model Pydantic dùng chung
-  session.py         Session: trạng thái một lần chạy demo
-  sessions.py        SessionManager: mỗi trình duyệt một phiên (cookie sid)
-  storage.py         store cho bộ nhớ (LangGraph store hoặc SQLite)
-  data.py            đọc data/seed.json → World
-  validators.py      luật bằng code, phí sàn, hoà vốn, leak_guard
-  llm.py             gọi OpenAI có cấu trúc, cache, fallback offline
-  prompts.py         prompt tiếng Việt cho các agent
-  agents.py          quyết định của agent sàn và agent shop (LLM + luật offline)
-  negotiation.py     subgraph thương lượng (LangGraph)
-  day.py             day graph: theo dõi → chọn shop → thương lượng → thẻ → chờ người bán → áp dụng
-  market.py          giả lập thị trường, dự báo, người bán giả lập
-  memory.py          MemoryGateway trên LangGraph store
-  eventlog.py        nhật ký sự kiện SQLite
-  night.py           học ban đêm
-  simulation.py      chạy nhiều ngày không cần giao diện (cho bằng chứng)
-  content/
-    text.py          viết lại tiêu đề, mô tả
-    images.py        3 ảnh bìa
-    video_muse.py    gọi Muse qua useapi.net
-    service.py       điều phối nội dung, job chạy nền, cache
-  tracing.py         Langfuse (tuỳ chọn)
-data/seed.json       5 shop, trend, lịch, phí, người bán giả lập
-assets/products/     ảnh gốc của sản phẩm
-static/              index.html, demo.html, updated.html, night.html, proof.html, css/, js/
-media/               ảnh, video sinh ra (không commit, trừ media/replay/)
-replay/              cache LLM và dữ liệu phát lại đã ghi
-contracts/           JSON mẫu cho từng API (frontend dùng khi backend chưa xong)
-scripts/             check_keys.py, check_llm.py, run_sim.py, record_replay.py, smoke_e2e.py, md_to_pdf.py, list_licenses.py
-tests/               test + tests/fakes.py (LLM, ảnh, video giả)
-docs/                CONTRACT.md, SEED_DATA.md, DESIGN.md, DEPLOY.md, CODEX_LOG.md, CODEX_USAGE.md
-submission/          WRITEUP.md, DECLARATIONS.md, VIDEO_SCRIPT.md và 2 file PDF nộp bài
-runs/                database của từng lần chạy (không commit)
-tasks/               mỗi task một file
+  main.py               create_app(): lắp FastAPI, router và frontend
+  core/                 settings.py (môi trường), paths.py (đường dẫn)
+  api/                  schemas.py, dependencies.py, mock.py, router.py
+    routes/             health.py, sessions.py, days.py, events.py, content.py, proof.py
+  domain/               policies.py, finance.py, validators.py, privacy.py, formatting.py
+    models/             shops, packages, negotiation, cards, content, learning, metrics, events
+  runtime/              session.py, manager.py, day.py
+  negotiation/          agents.py, prompts.py, graph.py
+  content/              text.py, images.py, video.py, prompts.py, service.py
+  memory/               gateway.py, night.py, prompts.py
+  simulation/           world.py, market.py, runner.py
+  infrastructure/       llm.py, images.py, muse.py, eventlog.py, store.py, tracing.py
+frontend/               HTML/CSS/JS thuần, được phục vụ tại /
+data/                   seed.json (dữ liệu nguồn)
+assets/products/        ảnh sản phẩm gốc
+contracts/              JSON mẫu của API
+replay/                 cache LLM và báo cáo đối chứng đã ghi
+media/                  media sinh ra; chỉ media/replay/ được commit
+runs/                   database và báo cáo mỗi run, Git bỏ qua
+scripts/                lệnh kiểm tra, mô phỏng, ghi replay và xuất bài nộp
+tests/unit/             test thuần theo package
+tests/integration/      test ghép API, workflow và storage
+tests/fakes/            fake client dùng chung, chia file theo nhà cung cấp
+docs/                   đặc tả, kiến trúc, nhật ký; reference/ giữ PDF kế hoạch gốc
+tasks/                  32 task đã cập nhật đường dẫn theo cấu trúc này
+submission/             bài viết, khai báo và video script
 ```
+
+- `domain` chỉ chứa model, hằng số và quy tắc thuần; không import API, runtime, client ngoài hay đọc biến môi trường.
+- `core` chỉ nạp cấu hình và đường dẫn; hằng số nghiệp vụ ở `domain/policies.py`.
+- Route gọi workflow/service; client HTTP, store và tracing ở `infrastructure`.
+- Prompt thuộc tính năng sử dụng nó: `negotiation/prompts.py`, `content/prompts.py`, `memory/prompts.py`.
+- Model nghiệp vụ chia theo nhóm trong `domain/models/`; `StateView` và payload HTTP ở `api/schemas.py`, tái sử dụng domain model.
+- Giữ `__init__.py` nhẹ; import trực tiếp module cần dùng, không re-export toàn bộ ứng dụng.
 
 ## Lệnh
 
@@ -98,8 +96,8 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 
 ## Nguyên tắc bắt buộc
 
-1. **Phân quyền dữ liệu.** Agent sàn không bao giờ thấy giá vốn, lãi tối thiểu, lãi mỗi đơn hay ROAS hoà vốn chính xác. Mọi chữ đi từ phía shop sang phía sàn phải qua `validators.leak_guard`.
-2. **Số do code tính.** Lãi, phí, hoà vốn, dự báo, ROAS chỉ tính trong `validators.py` và `market.py`. LLM chỉ đọc kết quả, không tự tính.
+1. **Phân quyền dữ liệu.** Agent sàn không bao giờ thấy giá vốn, lãi tối thiểu, lãi mỗi đơn hay ROAS hoà vốn chính xác. Mọi chữ đi từ phía shop sang phía sàn phải qua `app.domain.privacy.leak_guard`.
+2. **Số do code tính.** Lãi, phí, hoà vốn, dự báo, ROAS chỉ tính trong `app/domain/finance.py` và `app/simulation/market.py`. LLM chỉ đọc kết quả, không tự tính.
 3. **Code là chốt chặn cuối.** Mọi gói đi qua validators trước khi tới người bán; LLM sai thì code kéo gói về trong luật.
 4. **Tự động hoá chỉ được dừng hoặc giảm chi**, không bao giờ tăng chi.
 5. **Nhật ký sự kiện là nguồn sự thật.** Mỗi việc đáng kể ghi một sự kiện; bộ nhớ là dữ liệu dẫn xuất.
@@ -111,9 +109,9 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 
 ## Cách làm một task
 
-1. Đọc file task trong `tasks/`, rồi `docs/CONTRACT.md`; đọc `docs/SEED_DATA.md` hoặc `docs/DESIGN.md` nếu task nhắc tới.
+1. Đọc `docs/ARCHITECTURE.md`, file task trong `tasks/`, rồi `docs/CONTRACT.md`; đọc `docs/SEED_DATA.md` hoặc `docs/DESIGN.md` nếu task nhắc tới.
 2. Chỉ tạo hoặc sửa các file trong mục **Output** của task. Nếu thấy phải đổi hợp đồng chung, dừng lại, ghi `TODO(contract): …` và báo, không tự đổi.
-3. Phần nào phụ thuộc module chưa có thì viết bản giả nhỏ trong `tests/fakes.py` hoặc dùng JSON trong `contracts/`, đúng hình dạng hợp đồng.
+3. Phần nào phụ thuộc module chưa có thì viết bản giả nhỏ trong `tests/fakes/` hoặc dùng JSON trong `contracts/`, đúng hình dạng hợp đồng.
 4. Viết test cho từng điều trong **Tiêu chí xong**, chạy `pytest -q`, báo lệnh đã chạy và kết quả.
 5. Commit nhỏ, message bắt đầu bằng mã task: `[1.3] validators: lãi sau phí và hoà vốn`.
 6. Thêm một dòng vào `docs/CODEX_LOG.md`: giờ, mã task, việc đã làm, test đã chạy, chỗ người phải sửa tay (nếu có). File này dùng để viết mục "Codex được dùng thế nào" trong bài nộp.

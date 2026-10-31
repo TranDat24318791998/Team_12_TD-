@@ -13,7 +13,7 @@ Bản thiết kế gốc là 6 artboard trên canvas "Màn hình demo Growth Age
 
 ## 2. Màu và chữ
 
-Khai báo trong `static/css/app.css` dưới dạng biến CSS.
+Khai báo trong `frontend/css/app.css` dưới dạng biến CSS.
 
 | Biến | Giá trị | Dùng cho |
 | --- | --- | --- |

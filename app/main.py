@@ -3,16 +3,19 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.config import PROJECT_ROOT
+from app.api.router import router as api_router
+from app.api.routes.health import router as health_router
+from app.core.paths import FRONTEND_DIR, MEDIA_DIR
 
-app = FastAPI(title="Growth Agents · sàn·demo")
+def create_app() -> FastAPI:
+    """Lắp các router và tài nguyên của một ứng dụng độc lập."""
+    application = FastAPI(title="Growth Agents · sàn·demo")
+    application.include_router(health_router)
+    application.include_router(api_router)
+    # Static / phải đứng cuối để không che các route HTTP.
+    application.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+    application.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
+    return application
 
 
-@app.get("/health")
-def health() -> dict[str, bool]:
-    return {"ok": True}
-
-
-# Đăng ký API trước mount / để các route không bị trang tĩnh che khuất.
-app.mount("/media", StaticFiles(directory=PROJECT_ROOT / "media"), name="media")
-app.mount("/", StaticFiles(directory=PROJECT_ROOT / "static", html=True), name="static")
+app = create_app()

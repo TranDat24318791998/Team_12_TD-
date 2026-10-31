@@ -1,6 +1,6 @@
 # Dữ liệu mẫu và hằng số
 
-Mọi con số ở đây là **giả định cho demo**, không phải số liệu thật của sàn nào. Task 2.1 chuyển file này thành `data/seed.json`; các task khác đọc từ `data/seed.json` hoặc `app/config.py`, không gõ lại số.
+Mọi con số ở đây là **giả định cho demo**, không phải số liệu thật của sàn nào. Task 2.1 chuyển file này thành `data/seed.json`; các task khác đọc từ `data/seed.json` hoặc `app/domain/policies.py`, không gõ lại số.
 
 ## 1. Năm shop cùng ngành quạt mini
 
@@ -47,7 +47,7 @@ Các shop khác chỉ cần tiêu đề và mô tả ngắn cùng kiểu, không
 - Ngày 1 mô phỏng = 2026-11-01. Sự kiện lịch: 11.11 ngày 2026-11-11; nhắc khi còn ≤ 5 ngày.
 - Giả định phí sàn: phí cố định 8%, phí xử lý giao dịch 5%, thuế hộ kinh doanh 1,5% (cả ba tính trên giá sau voucher của shop) và 3.000đ mỗi đơn.
 
-Công thức (code trong `validators.py`):
+Công thức (code trong `app/domain/finance.py`):
 
 ```
 gia_sau_voucher = gia * (100 - voucher) / 100

@@ -4,7 +4,22 @@ Cả team chốt file này lúc 10:30 ngày thi. Sau đó chỉ đổi khi cả 
 
 Quy ước: tiền là số nguyên VND; phần trăm là số nguyên (`voucher_pct = 3` nghĩa là 3%); ROAS là số thực; ngày mô phỏng bắt đầu từ 1.
 
-## 1. Model dữ liệu (`app/schemas.py`)
+## 1. Model dữ liệu (`app/domain/models/`)
+
+Model chia theo file; đường dẫn đầy đủ và hướng phụ thuộc ở `docs/ARCHITECTURE.md`:
+
+| Module | Model |
+| --- | --- |
+| `shops.py` | ShopPublic, ShopRules, ShopPrivate, SellerPersona, FeeConfig |
+| `packages.py` | Package, ActivePackage |
+| `negotiation.py` | PlatformTurn, ShopTurn, Violation, NegotiationResult |
+| `cards.py` | RuleQuestion, Card, SellerDecision |
+| `content.py` | CoverImage, VideoJob, ContentDraft; ContentText của task 4.2 |
+| `learning.py` | Calibration, LessonOp, NightSummary |
+| `metrics.py` | Forecast, DayMetrics, ProofMetric, ProofReport |
+| `events.py` | Event |
+
+`StateView` và request/response HTTP đặt ở `app/api/schemas.py`, tái sử dụng các model này. `vnd` và `dec` nằm trong `app/domain/formatting.py`.
 
 ### Shop
 
@@ -80,7 +95,9 @@ Mỗi dòng ở khung hậu trường là một sự kiện. `text_vi` là câu 
 | `memory_write` | `memory` | 2.5 | `{compartment, summary_vi}` |
 | `night_summary` | `memory` | 2.5 | `{summary: NightSummary}` |
 
-## 3. API (`app/api.py`)
+## 3. API (`app/api/routes/`)
+
+`app/api/router.py` ghép router dưới `/api`. Chia file: `sessions.py` (reset/state), `days.py` (day/start, decision, night), `events.py`, `content.py` (retry/apply), `proof.py`. `/health` nằm riêng ở `health.py`. Mock scenario ở `app/api/mock.py`, lấy phiên qua `app/api/dependencies.py`.
 
 Mọi API trả JSON. Lỗi trả `{"error": {"code", "message_vi"}}` với mã HTTP phù hợp. JSON mẫu của từng API nằm ở `contracts/<tên>.json`.
 
@@ -102,25 +119,37 @@ Mọi API trả JSON. Lỗi trả `{"error": {"code", "message_vi"}}` với mã 
 
 `step` là một trong: `idle` → `negotiating` → `awaiting_decision` → `content_review` → `day_done` → `night_done`. Giao diện dựa vào `step` để biết hiện nút nào.
 
-File tĩnh: `/` → `static/index.html`; `/media/...` → thư mục `media/`.
+File tĩnh: `/` → `frontend/index.html`; `/media/...` → thư mục `media/`.
 
 ## 4. Giao diện giữa các module Python
 
-Ai viết module nào giữ đúng chữ ký dưới đây; bên trong tự do.
+Ai viết module nào giữ đúng chữ ký dưới đây; bên trong tự do. Các alias trong bảng chữ ký tương ứng với import sau (đường dẫn cập nhật theo yêu cầu tổ chức codebase ngày 31/10/2026):
+
+```python
+from app.simulation import world as data, market, runner as simulation
+from app.runtime import session, day
+from app.domain import finance, validators, privacy
+from app.infrastructure import llm, eventlog
+from app.negotiation import agents, graph as negotiation
+from app.memory import gateway as memory, night
+from app.content import service as content_service
+```
+
+URL, JSON và chữ ký hàm được giữ nguyên; phần đổi là vị trí module.
 
 ```
 data.load_world(path="data/seed.json") -> World          # World: shops (public, private, persona), trend, calendar, fees
 session.Session.new(settings, memory_enabled=True) -> Session
-validators.profit_per_unit(shop, priv, voucher_pct, fees) -> int
-validators.breakeven_roas(shop, priv, voucher_pct, fees) -> float     # inf nếu lãi <= 0
-validators.stop_threshold(breakeven) -> float                         # làm tròn lên bội số 0.5
-validators.max_voucher_for(shop, priv, ads_enabled, fees) -> int
-validators.loss_warning(shop, priv, fees) -> str | None
+finance.profit_per_unit(shop, priv, voucher_pct, fees) -> int
+finance.breakeven_roas(shop, priv, voucher_pct, fees) -> float     # inf nếu lãi <= 0
+finance.stop_threshold(breakeven) -> float                         # làm tròn lên bội số 0.5
+finance.max_voucher_for(shop, priv, ads_enabled, fees) -> int
+finance.loss_warning(shop, priv, fees) -> str | None
 validators.platform_side_check(pkg, shop) -> list[Violation]
 validators.shop_side_check(pkg, shop, priv, fees) -> list[Violation]
 validators.clamp_to_platform(pkg, shop, package_days) -> Package | None
 validators.clamp_to_rules(pkg, shop, priv, fees) -> Package | None
-validators.leak_guard(text, shop, priv, fees) -> tuple[str, bool]
+privacy.leak_guard(text, shop, priv, fees) -> tuple[str, bool]
 llm.LLMClient(settings).structured(schema, system, user, *, run_name) -> tuple[obj | None, str | None]
 agents.decide_platform(session, shop_id, turns, memory_view) -> PlatformTurn
 agents.decide_shop(session, shop_id, proposal, memory_view, owner_note) -> ShopTurn
@@ -136,13 +165,13 @@ memory.MemoryGateway(store, enabled).shop_view(shop_id) -> dict
 eventlog.EventLog(db_path).add(run_id, day, type, actor, shop_id, text_vi, data) -> Event
 eventlog.EventLog(db_path).since(run_id, after_seq) -> list[Event]
 night.run_night(session, day) -> NightSummary
-content.service.ContentService(session).start(shop_id) -> ContentDraft
-content.service.ContentService(session).retry(shop_id, feedback_vi) -> ContentDraft
-content.service.ContentService(session).apply(shop_id, cover_option) -> ShopPublic
+content_service.ContentService(session).start(shop_id) -> ContentDraft
+content_service.ContentService(session).retry(shop_id, feedback_vi) -> ContentDraft
+content_service.ContentService(session).apply(shop_id, cover_option) -> ShopPublic
 simulation.run(settings, days, memory_enabled, seed) -> RunResult
 simulation.compare(run_on, run_off) -> ProofReport
 ```
 
-`Session` (`app/session.py`) giữ: `run_id`, `settings`, `world`, `states: dict[shop_id, ShopState]`, `day`, `step`, `interactive: bool` (True khi giám khảo bấm, False khi `simulation.run`), `memory`, `log`, `llm`, `content`, `pending_card`, `last_night`, `live_calls_left`. `ShopState` giữ: `public`, `private`, `persona`, `active: ActivePackage | None`, `cooldown_until`, `metrics: dict[int, DayMetrics]`.
+`Session` (`app/runtime/session.py`) giữ: `run_id`, `settings`, `world`, `states: dict[shop_id, ShopState]`, `day`, `step`, `interactive: bool` (True khi giám khảo bấm, False khi `simulation.run`), `memory`, `log`, `llm`, `content`, `pending_card`, `last_night`, `live_calls_left`. `ShopState` giữ: `public`, `private`, `persona`, `active: ActivePackage | None`, `cooldown_until`, `metrics: dict[int, DayMetrics]`.
 
 Giám khảo chỉ điều khiển shop `DEMO_SHOP` (mặc định D). Các shop khác do `SellerSimulator` quyết định tự động.

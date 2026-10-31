@@ -1,6 +1,6 @@
 # Bộ task cho Codex · Growth Agents
 
-Bộ file này chia dự án thành 32 task, mỗi task một file, để 4 người giao cho Codex làm song song trong ngày thi (31/10/2026, 10:00–17:00). Đây là tài liệu kế hoạch, không có code.
+Bộ file này chia dự án thành 32 task, mỗi task một file, để 4 người giao cho Codex làm song song trong ngày thi (31/10/2026, 10:00–17:00). Đây là bảng kế hoạch; trạng thái code hiện tại nằm trong README và CODEX_LOG. Các file task đã cập nhật đường dẫn theo `docs/ARCHITECTURE.md`.
 
 ## Cách dùng
 

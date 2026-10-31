@@ -1,37 +1,18 @@
-"""Kiểm tra khung web và cấu hình trước khi nối các module nghiệp vụ."""
+"""Kiểm thử cấu hình độc lập với HTTP và API trả phí."""
 
 import json
 
 import pytest
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.config import PROJECT_ROOT, Settings
-from app.main import app
+from app.core.paths import PROJECT_ROOT
+from app.core.settings import Settings
 
 
 @pytest.fixture(autouse=True)
 def isolated_env(monkeypatch):
     for name in Settings.model_fields:
         monkeypatch.delenv(name.upper(), raising=False)
-
-
-def test_health_and_static_page():
-    with TestClient(app) as client:
-        response = client.get("/health")
-        assert response.status_code == 200
-        assert response.json() == {"ok": True}
-        page = client.get("/")
-        assert page.status_code == 200
-        assert "sàn·demo đang dựng" in page.text
-
-
-def test_static_serving_does_not_depend_on_working_directory(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    with TestClient(app) as client:
-        assert client.get("/").status_code == 200
-        assert client.get("/media/replay/.gitkeep").status_code == 200
-        assert client.get("/media/missing.mp4").status_code == 404
 
 
 def test_empty_example_loads_defaults():

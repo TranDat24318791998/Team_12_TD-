@@ -4,7 +4,25 @@ Dự án cho SEAxOpenAI Hackathon: hai agent đại diện sàn và shop thươn
 
 ## Trạng thái
 
-Đã dựng khung dự án theo task 1.1: cấu hình, FastAPI, trang tĩnh và kiểm tra sức khoẻ. Các module nghiệp vụ hiện là khung, chưa có luồng demo hoàn chỉnh.
+Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, app factory, `/health` và frontend tĩnh chạy được; agent, thị trường và bộ nhớ hiện là khung để triển khai theo từng task.
+
+## Cấu trúc codebase
+
+| Khu vực | Trách nhiệm |
+| --- | --- |
+| `app/api/` | Router theo tài nguyên, HTTP schema và dependency |
+| `app/domain/` | Model chia theo nghiệp vụ, công thức tiền, validators và privacy |
+| `app/runtime/` | Session, SessionManager và workflow một ngày |
+| `app/negotiation/` | Hai agent, prompt và graph thương lượng |
+| `app/content/` | Tạo, góp ý và áp dụng nội dung |
+| `app/memory/` | Quyền đọc bộ nhớ, học ban đêm và prompt riêng |
+| `app/simulation/` | Seed world, thị trường và chạy đối chứng |
+| `app/infrastructure/` | Client LLM/ảnh/Muse, SQLite/store và tracing |
+| `app/core/` | Biến môi trường và đường dẫn |
+| `frontend/` | HTML/CSS/JS thuần |
+| `tests/unit/`, `tests/integration/` | Kiểm thử theo package và luồng ghép nối |
+
+Xem [kiến trúc chi tiết](docs/ARCHITECTURE.md) để biết hướng import, chủ sở hữu module và model.
 
 ## Cài đặt và chạy
 
@@ -34,7 +52,7 @@ git check-ignore .env
 - [Kiến trúc codebase](docs/ARCHITECTURE.md): cây thư mục, trách nhiệm module và hướng phụ thuộc.
 - [Danh sách task](docs/TASKS.md): 32 task và mốc ghép nối của 4 thành viên.
 - [Hợp đồng chung](docs/CONTRACT.md), [dữ liệu mẫu](docs/SEED_DATA.md), [thiết kế](docs/DESIGN.md).
-- `app/`: backend; `static/`: giao diện; `tests/`: kiểm thử.
+- `app/`: backend; `frontend/`: giao diện; `tests/`: kiểm thử.
 - `data/`, `assets/products/`, `contracts/`: dữ liệu, ảnh gốc và JSON mẫu.
 - `replay/`, `media/replay/`: bản phát lại được đưa vào Git; `runs/` và media sinh mới chỉ lưu cục bộ.
 - [Nhật ký Codex](docs/CODEX_LOG.md): việc thực hiện và kết quả kiểm thử.

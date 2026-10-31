@@ -1,108 +1,147 @@
-# Cấu trúc codebase Growth Agents
+# Kiến trúc codebase Growth Agents
 
-Cấu trúc dành cho một ứng dụng FastAPI, một frontend tĩnh và bốn mảng phát triển. Giữ tên module và chữ ký trong `CONTRACT.md` để các task có thể ghép trực tiếp.
+Ứng dụng chạy trong một tiến trình FastAPI. Backend chia theo tính năng; model và luật thuần dùng chung nằm trong domain. Frontend là HTML/CSS/JS thuần, giao tiếp qua HTTP. Lệnh chạy giữ nguyên: `uvicorn app.main:app --reload`.
 
-## Cây thư mục
+## Cấu trúc chính
 
 ```text
-Team_12_TD-/
-├── AGENTS.md                 Quy tắc làm việc và các nguyên tắc bắt buộc
-├── README.md                 Cài đặt, chạy và trạng thái triển khai
-├── requirements.txt          Phiên bản thư viện đã kiểm thử
-├── .env.example              Tên biến môi trường, không có khoá
-├── .gitignore
-├── app/
-│   ├── __init__.py
-│   ├── main.py               Tạo FastAPI, gắn API và static/media
-│   ├── api.py                HTTP request/response và lỗi API
-│   ├── config.py             Settings, đường dẫn, hằng số nghiệp vụ
-│   ├── schemas.py            Model dữ liệu chung
-│   ├── session.py            Session và ShopState
-│   ├── sessions.py           SessionManager, cookie sid và khoá mỗi phiên
-│   ├── data.py               Nạp thế giới mô phỏng từ seed.json
-│   ├── validators.py         Tính lãi/hoà vốn, luật và lọc dữ liệu riêng
-│   ├── llm.py                Structured output, cache, quota, fallback
-│   ├── prompts.py            Prompt và đầu vào đã lọc của agent
-│   ├── agents.py             Quyết định LLM và luật offline
-│   ├── negotiation.py        Subgraph thương lượng
-│   ├── day.py                Graph một ngày, thẻ và người bán duyệt
-│   ├── market.py             Thị trường, dự báo, SellerSimulator
-│   ├── storage.py            Store bộ nhớ
-│   ├── eventlog.py           Nhật ký SQLite
-│   ├── memory.py             MemoryGateway và phân quyền
-│   ├── night.py              Học từ sự kiện sau mỗi ngày
-│   ├── simulation.py         Chạy nhiều ngày, so sánh bật/tắt bộ nhớ
-│   ├── tracing.py            Langfuse tuỳ chọn
-│   └── content/
-│       ├── __init__.py
-│       ├── text.py           Tiêu đề và mô tả
-│       ├── images.py         Ba phương án ảnh bìa
-│       ├── video_muse.py     Client Muse, job và cache video
-│       └── service.py        Bản nháp, retry, apply và job nền
-├── static/
-│   ├── index.html            Trang khởi đầu; hiện là trang tạm
-│   ├── css/                  CSS dùng chung
-│   └── js/                   JavaScript dùng chung và theo từng màn
-├── assets/products/          Ảnh sản phẩm gốc
-├── data/                     Dữ liệu seed đầu vào
-├── contracts/                JSON mẫu khớp schema/API
-├── replay/                   Cache LLM và bằng chứng đã ghi
-├── media/
-│   └── replay/               Media phát lại được commit
-├── runs/                     Database và báo cáo từng run, Git bỏ qua
-├── scripts/                  Lệnh kiểm tra, mô phỏng và ghi replay
-├── tests/                    Test offline, không gọi dịch vụ trả phí
-├── docs/                     Hợp đồng, thiết kế, dữ liệu, kiến trúc, nhật ký
-├── tasks/                    32 task với phạm vi output và tiêu chí xong
-└── submission/               Bài viết, khai báo và kịch bản nộp bài
+app/
+├── main.py                 create_app(): lắp router, lifespan và static
+├── core/
+│   ├── settings.py         Biến môi trường và hạn mức dịch vụ
+│   └── paths.py            Đường dẫn tuyệt đối theo vị trí repo
+├── api/
+│   ├── router.py           Ghép các router dưới /api
+│   ├── dependencies.py     Lấy SessionManager/phiên từ request và app.state
+│   ├── schemas.py          StateView, request/response HTTP
+│   ├── mock.py             Kịch bản mock theo phiên, dùng contracts/
+│   └── routes/             health, sessions, days, events, content, proof
+├── domain/
+│   ├── models/             Model chia theo nhóm nghiệp vụ
+│   ├── policies.py         Hằng số của kịch bản mô phỏng
+│   ├── finance.py          Phí, lãi, hoà vốn, voucher tối đa
+│   ├── validators.py       Kiểm tra và clamp gói
+│   ├── privacy.py          leak_guard cho dữ liệu gửi sang agent sàn
+│   └── formatting.py       vnd(), dec()
+├── runtime/
+│   ├── session.py          Session, ShopState: dữ liệu của mỗi run
+│   ├── manager.py          SessionManager: tạo phiên và nối service
+│   └── day.py              Workflow một ngày, interrupt và quyết định người bán
+├── negotiation/
+│   ├── agents.py           Quyết định của agent sàn/shop và luật offline
+│   ├── prompts.py          Chỉ prompt thương lượng và input đã lọc
+│   └── graph.py            Subgraph thương lượng, ghi sự kiện từng lượt
+├── content/
+│   ├── service.py          start/retry/apply, phiên bản và job nền
+│   ├── text.py             Viết chữ và kiểm tra thông số
+│   ├── images.py           Điều phối ba phương án ảnh và cache
+│   ├── video.py            Điều phối video, polling và cache
+│   └── prompts.py          Prompt chữ, ảnh, video
+├── memory/
+│   ├── gateway.py          Phân quyền và thao tác bộ nhớ
+│   ├── night.py            Học từ nhật ký sau mỗi ngày
+│   └── prompts.py          Prompt sở thích và bài học chiến lược
+├── simulation/
+│   ├── world.py            Nạp seed.json, trend và lịch
+│   ├── market.py           Dự báo, kết quả thị trường, SellerSimulator
+│   └── runner.py           Chạy headless nhiều ngày, so sánh hai run
+└── infrastructure/
+    ├── llm.py              LLMClient, structured output, retry và cache
+    ├── images.py           Client nhà cung cấp ảnh
+    ├── muse.py             MuseClient và MuseError, chi tiết HTTP
+    ├── eventlog.py         Nhật ký SQLite
+    ├── store.py            Store cho bộ nhớ
+    └── tracing.py          Langfuse tuỳ chọn
+
+frontend/                   index.html, css/, js/; các màn sau tạo theo task
+assets/products/            Ảnh nguồn
+data/                       seed.json
+contracts/                  JSON mock đúng hợp đồng HTTP
+replay/                     Cache LLM, proof.json và thông tin bản ghi
+media/replay/               Media phát lại được commit
+media/<run_id>/             Media sinh trong phiên, Git bỏ qua
+runs/<run_id>/              Database và báo cáo theo run, Git bỏ qua
+scripts/                    CLI mỏng, gọi module backend
+submission/                 Bài viết và tài liệu nộp bài
+docs/                       Đặc tả và kiến trúc hiện hành
+docs/reference/             PDF kế hoạch gốc, giữ làm tài liệu tham khảo
+tasks/                      Phạm vi output và tiêu chí hoàn thành
+tests/
+├── unit/<package>/         Settings, domain, agent/service với fake client
+├── integration/<feature>/  API, workflow nhiều module, storage thật tạm thời
+└── fakes/                  Fake client chia file theo nhà cung cấp
 ```
 
-Các file nghiệp vụ hiện có docstring mô tả trách nhiệm. `data/`, `contracts/` và `replay/` chưa có dữ liệu giả lập; các màn `demo.html`, `updated.html`, `night.html`, `proof.html` được tạo ở task frontend tương ứng.
+## Model thuộc về đâu
 
-## Ranh giới giữa các phần
-
-| Phần | Trách nhiệm | Phụ thuộc chính |
-| --- | --- | --- |
-| `main.py`, `api.py` | Khởi động ứng dụng, đổi dữ liệu HTTP thành model, gọi nghiệp vụ | `sessions`, `schemas`, `day`, `night`, `content.service` |
-| `session.py`, `sessions.py` | Sở hữu trạng thái và tài nguyên theo phiên; khởi tạo các service khi nối API thật | `config`, `data`, `storage`, `eventlog`, `llm`, `memory`, `content.service` |
-| `day`, `negotiation`, `night`, `simulation` | Điều phối công việc, không chứa chi tiết HTTP của nhà cung cấp | Agent, validators, market, memory và content |
-| `validators`, `market` | Tính toán tiền, dự báo và kết quả bằng code | Schema và cấu hình |
-| `agents`, `prompts` | Chuẩn bị đầu vào đúng quyền, tạo quyết định và fallback | `llm`, `validators`, dữ liệu đã lọc |
-| `llm`, `content.images`, `content.video_muse` | Bao API bên ngoài, timeout, cache và xử lý lỗi | Client HTTP/SDK được truyền vào để thay bằng fake |
-| `eventlog`, `storage`, `memory` | Sự kiện bền vững, lưu bộ nhớ và kiểm soát ai đọc được gì | SQLite/store, schema |
-| `static` | Hiển thị, gọi API, theo dõi state và events | Hợp đồng JSON |
-
-Quy ước khi triển khai tiếp:
-
-1. Model dùng qua nhiều module đặt ở `schemas.py`; không định nghĩa nhiều bản cùng một model. `FeeConfig` tạm nằm ở `config.py` trong khung 1.1 và sẽ chuyển sang `schemas.py` ở task 1.2; config giữ các giá trị mặc định.
-2. `main.py` là nơi lắp ứng dụng. Module nghiệp vụ không import ngược `main.py` hoặc `api.py`; dùng `TYPE_CHECKING` cho type hint nếu cần tránh import vòng.
-3. Route chỉ xử lý giao thức HTTP và chuyển việc cho service. Công thức tài chính ở `validators.py`/`market.py`, tránh tính lại trong frontend hoặc prompt.
-4. Không giữ trạng thái người dùng trong biến toàn cục của router. Phiên thật được tạo qua `SessionManager`, có khoá và tài nguyên riêng.
-5. Agent sàn nhận dữ liệu công khai và `memory.platform_view`; không truyền cả `Session`, `ShopPrivate` hoặc nhật ký thô vào prompt. Mọi lời từ shop gửi sang sàn qua `leak_guard`.
-6. Nhật ký là nguồn sự thật; bộ nhớ là dữ liệu dẫn xuất. `contracts/` dành cho mock API; `replay/` dành cho dữ liệu phát lại, phải ghi rõ nguồn.
-7. I/O nhà cung cấp được thay bằng fake trong test. Không gọi dịch vụ trả phí khi import module hoặc chạy test.
-8. Đăng ký `/api/*`, `/health`, `/media` trước khi mount static tại `/`.
-
-## Phân công theo kế hoạch
-
-| Người | Module chính |
+| File | Model |
 | --- | --- |
-| TV1 | `config`, `schemas`, `session`, `validators`, `llm`, `prompts`, `agents`, `negotiation`, `day`, `tracing` |
-| TV2 | `data`, `eventlog`, `storage`, `market`, `memory`, `night`, `simulation` |
-| TV3 | `main`, `api`, `sessions`, `static`, cấu hình deploy |
-| TV4 | `content`, công cụ kiểm tra dịch vụ, tài liệu và bài nộp |
+| `domain/models/shops.py` | ShopPublic, ShopPrivate, ShopRules, SellerPersona, FeeConfig |
+| `domain/models/packages.py` | Package, ActivePackage |
+| `domain/models/negotiation.py` | PlatformTurn, ShopTurn, Violation, NegotiationResult |
+| `domain/models/cards.py` | RuleQuestion, Card, SellerDecision |
+| `domain/models/content.py` | ContentText, CoverImage, VideoJob, ContentDraft |
+| `domain/models/learning.py` | Calibration, LessonOp, NightSummary |
+| `domain/models/metrics.py` | Forecast, DayMetrics, ProofMetric, ProofReport |
+| `domain/models/events.py` | Event |
+| `api/schemas.py` | StateView và các request/response HTTP, dùng lại domain model |
+| `runtime/session.py` | Session, ShopState |
+| `simulation/world.py`, `simulation/runner.py` | World, RunResult |
 
-Các file dùng chung như `schemas.py`, `prompts.py` và `api.py` cần phối hợp theo từng task. Chi tiết chữ ký và payload lấy từ `CONTRACT.md`.
+Các đường dẫn trong bảng tính từ `app/`. Import từ module định nghĩa trực tiếp, ví dụ `from app.domain.models.shops import FeeConfig`. Không sao chép model sang từng tính năng; không gom re-export mọi model vào `__init__.py`.
 
-## Trạng thái khởi tạo
+## Hướng phụ thuộc
 
-Khung hiện chạy `/health`, trang tĩnh và media. Cấu hình đọc `.env`, biến môi trường và tham số trực tiếp; không có khoá thì resolve về offline theo task 1.1. Các module còn lại chưa triển khai hành vi.
+| Phần | Được gọi/import | Giới hạn |
+| --- | --- | --- |
+| `domain` | Standard library, Pydantic, module khác trong domain | Không đọc .env, gọi HTTP/SQLite hoặc import tầng bên ngoài |
+| `core` | Standard library, dotenv, Pydantic, domain model cấu hình | Không import API, runtime hay client dịch vụ |
+| `infrastructure` | core, domain và SDK/driver | Không import workflow hay router |
+| `negotiation`, `content`, `memory.gateway` | domain, core, client được truyền vào; facade bộ nhớ/dự báo khi cần | Không import FastAPI, request hay main |
+| `simulation.world`, `simulation.market` | domain, core; I/O seed cục bộ ở world | Không import runner hoặc workflow ngày |
+| `runtime.day` | negotiation.graph, content.service, memory.gateway, simulation.market | Không import simulation.runner |
+| `memory.night` | memory.gateway, simulation.market, client LLM, domain | Không import workflow ngày hay simulation.runner |
+| `simulation.runner` | runtime.day, memory.night, simulation.market | Chỉ điều phối headless, không được market gọi ngược |
+| `api` | schema, runtime/service | Không chứa công thức tài chính hay lời gọi provider trực tiếp |
+| `main`, `runtime.manager` | Các thành phần cần lắp ứng dụng/phiên | Chỉ ở đây nối các concrete service với nhau |
 
-Trước khi ghép luồng thật, cần chốt các khác biệt đã thấy trong tài liệu; phần setup chưa sửa hợp đồng:
+Giữ `runtime.session` là nơi định nghĩa trạng thái; việc gắn LLM, memory, eventlog và content diễn ra trong `runtime.manager`. Dùng `TYPE_CHECKING` cho type hint tham chiếu Session nếu cần để tránh import vòng. Không tạo client mạng khi import module.
 
-- `TODO(contract)`: trạng thái sau `/api/night`: `night_done` trong hợp đồng hay `idle` theo task 3.5, và thời điểm tăng ngày.
-- `TODO(contract)`: `/api/content/retry` trả ảnh ngay hay trả `running` để polling; service task 4.5 mô tả cách thứ hai.
-- `TODO(contract)`: thống nhất câu chữ về số lần làm lại; model và task 4.5 giới hạn ba phiên bản tổng cộng.
-- `TODO(contract)`: task 1.1 resolve `replay` không có OpenAI key thành `offline`, trong khi chế độ replay cần đọc cache mà không gọi API.
+## Tách đường đi HTTP và nghiệp vụ
 
-Thứ tự làm tiếp: schema và JSON mẫu (1.2), dữ liệu seed (2.1), rồi validators (1.3) và API mock (3.2).
+- `api/routes/sessions.py`: `/api/reset`, `/api/state`.
+- `api/routes/days.py`: `/api/day/start`, `/api/decision`, `/api/night`.
+- `api/routes/events.py`: `/api/events`.
+- `api/routes/content.py`: `/api/content/retry`, `/api/content/apply`.
+- `api/routes/proof.py`: `/api/proof`.
+- `api/routes/health.py`: `/health`, độc lập với phiên và dịch vụ ngoài.
+
+Route lấy phiên qua dependency, kiểm tra payload rồi gọi workflow/service. `SessionManager` sẽ được khởi tạo trong lifespan và gắn vào `app.state`; các yêu cầu cùng sid dùng chung khoá của phiên. Mock API cũng có state riêng theo sid. Các router dùng chung nhưng không giữ state của người dùng.
+
+Thứ tự lắp ở `create_app()`: health → API → media → frontend tại `/`. Vì vậy static không che các endpoint. Quy tắc URL và JSON nằm trong `CONTRACT.md`.
+
+## Phân chia công việc
+
+| Người | Khu vực sở hữu chính |
+| --- | --- |
+| TV1 | domain, runtime/session + day, negotiation, infrastructure/llm + tracing |
+| TV2 | simulation, memory, infrastructure/eventlog + store |
+| TV3 | api, runtime/manager, frontend, app/main và deploy |
+| TV4 | content, infrastructure/images + muse, submission và công cụ tài liệu |
+
+Task 1.2 khởi tạo các model dùng chung; các task sau thêm trường đúng hợp đồng và phối hợp với người sở hữu model liên quan. Mỗi nhóm có prompt riêng, thay đổi nội dung không cần sửa prompt thương lượng. Các Output trong `tasks/` đã chuyển sang đường dẫn mới.
+
+## Những gì đã chạy
+
+Settings, FeeConfig, policies, app factory, `/health`, frontend và media đã có triển khai. Các router nghiệp vụ mới chỉ có APIRouter rỗng; service, graph và hầu hết model là khung mô tả trách nhiệm. Test hiện chia unit cấu hình và integration HTTP; không gọi API trả phí.
+
+Không duy trì shim tại các đường dẫn phẳng cũ: code nghiệp vụ chưa được triển khai và các tài liệu đang dùng đã cập nhật. PDF trong `docs/reference/` là kế hoạch gốc; đường dẫn triển khai lấy từ tài liệu Markdown hiện hành.
+
+## Điểm hợp đồng cần chốt khi ghép tính năng
+
+Việc chia package giữ nguyên URL, payload và chữ ký hàm nghiệp vụ. Các khác biệt có sẵn dưới đây chưa được thay đổi trong đợt tổ chức code:
+
+- `TODO(contract)`: trạng thái sau `/api/night`: `night_done` hay `idle`, thời điểm tăng ngày.
+- `TODO(contract)`: retry nội dung trả ảnh ngay hay `running` để polling.
+- `TODO(contract)`: ba phiên bản tổng cộng hay ba lần làm lại.
+- `TODO(contract)`: task 1.1 resolve replay thiếu key thành offline, trong khi replay cần dùng cache không cần key.
