@@ -1,0 +1,13 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.2
+python-dotenv==1.2.4
+python-multipart==0.0.32
+openai==3.42.0
+Pillow==13.0.0
+numpy==2.5.4
+imageio-ffmpeg==0.7.0
+minio==7.2.20
+httpx==0.28.1
+pytest==9.2.0
+requests==2.34.2
