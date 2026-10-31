@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+*.db
+*.db-shm
+*.db-wal
+media/*
+!media/replay/
+!media/replay/**
+runs/
+.DS_Store

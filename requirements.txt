@@ -1,0 +1,11 @@
+# Python 3.11; phiên bản đã cài và kiểm tra trên môi trường phát triển.
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.2
+python-dotenv==1.2.4
+httpx==0.28.1
+langgraph==1.2.19
+langchain-openai==1.7.3
+langchain-core==1.7.3
+pytest==9.2.0
+langfuse==5.1.0  # tuỳ chọn
