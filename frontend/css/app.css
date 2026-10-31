@@ -516,6 +516,7 @@
 
 .brand .brand-logo { width: 132px; height: 88px; object-fit: contain; background: white; border-radius: 4px; }
 .demo-top .brand .brand-logo { width: 90px; height: 60px; }
+.shop-strip .shop-logo { width: 96px; height: 64px; object-fit: contain; flex-shrink: 0; background: white; border: 1px solid #eee; border-radius: 4px; }
 @media(max-width:599px) {
   .brand .brand-logo { width: 102px; height: 68px; }
   .demo-top .brand .brand-logo { width: 75px; height: 50px; }

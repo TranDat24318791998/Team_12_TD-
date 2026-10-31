@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 
 from . import models as M
-from .finance import check, financials, redact, safe_package
+from .finance import check, financials, redact, safe_package, violation_message
 from .seed import ATTRIBUTES, world, seed_shared, seed_run
 from .simulation import aggregate, business_date, channel_metrics, forecast, trend
 from .storage import Store, dumps, fingerprint, insert, many, now, one, timestamps, uid
@@ -309,7 +309,7 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         c.execute("UPDATE negotiations SET platform_rounds=?,status=?,final_proposal_id=?,expected_next_role=?,version=version+1,updated_at=? WHERE run_id=? AND negotiation_id=?",(rounds,status,pid if accepted else None,"shop_agent" if p.role=="platform_agent" else "platform_agent",now(),r,b.negotiation_id))
         self.event(c,r,run["current_day"],"platform_turn" if p.role=="platform_agent" else "shop_turn",p.role,s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"parent_proposal_id":b.parent_proposal_id,"turn_id":b.turn_id,"round":rounds,"package":pkg,"stance":b.stance,"action":b.native_action or b.stance,"message_vi":shared},text=shared or "Agent gửi đề xuất",eid=pid)
         if pkg is not None:
-            self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":code.replace('_',' ').lower()} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
+            self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":violation_message(code)} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
         return self.shared_proposal(c,p,r,self.entity(c,"proposals",r,"proposal_id",pid))
 
     def finalize_negotiation(self,c,p,r,nid,body):

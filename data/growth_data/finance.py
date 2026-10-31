@@ -5,6 +5,35 @@ import math
 import re
 
 
+VIOLATION_MESSAGES = {
+    # Keep these labels aligned with the native validator's Vietnamese messages.
+    "VOUCHER_OVER_CAP": "Voucher vượt luật shop.",
+    "ADS_NOT_ALLOWED": "Shop không cho chạy quảng cáo.",
+    "ADS_DISABLED": "Shop không cho chạy quảng cáo.",
+    "ADS_OVER_CAP": "Ngân sách vượt luật shop.",
+    "STOCK_TOO_LOW_FOR_ADS": "Tồn kho chưa đủ để chạy quảng cáo.",
+    "LOW_STOCK": "Tồn kho chưa đủ để chạy quảng cáo.",
+    "PROFIT_BELOW_MIN": "Gói không đạt lãi tối thiểu.",
+    "PROFIT_TOO_LOW": "Gói không đạt lãi tối thiểu.",
+    "LOSS_MAKING": "Gói có thể gây lỗ.",
+    "BREAKEVEN_TOO_HIGH": "Gói vượt ngưỡng hòa vốn.",
+    "STOP_BELOW_BREAKEVEN": "Ngưỡng dừng chưa bảo vệ shop.",
+    "STOP_TOO_LOW": "Ngưỡng dừng chưa bảo vệ shop.",
+    "ADS_BELOW_MINIMUM": "Ngân sách dưới mức tối thiểu.",
+    "STOP_REQUIRED": "Cần ngưỡng dừng quảng cáo.",
+    "STOP_WITHOUT_ADS": "Không cần ngưỡng dừng khi không chạy quảng cáo.",
+    "EMPTY_PACKAGE": "Gói chưa có hoạt động.",
+    "BRIEF_CONTENT_MISMATCH": "Nội dung chưa đúng mục tiêu đã duyệt.",
+    "BRIEF_DURATION_MISMATCH": "Thời hạn chưa đúng mục tiêu đã duyệt.",
+    "BRIEF_ADS_DISABLED": "Mục tiêu đã duyệt không cho phép quảng cáo.",
+    "PUBLIC_ADS_CAP": "Ngân sách vượt mức công khai.",
+}
+
+
+def violation_message(code):
+    return VIOLATION_MESSAGES.get(code, "Gói chưa đáp ứng điều kiện kiểm tra.")
+
+
 def money(value):
     return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 

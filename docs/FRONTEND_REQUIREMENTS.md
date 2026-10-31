@@ -6,13 +6,15 @@ Cập nhật 31/10/2026. Dành cho agent backend, data và frontend khi ghép m�
 
 Frontend hiện có khối **Hai agent cùng tìm gói phù hợp**, hướng chuyển lượt sàn–shop, số vòng/phiên thương lượng, kết quả code kiểm tra, đánh giá trọng tài, bảng điều khoản trước–sau và nhật ký. Nội dung này đọc seller projection của đúng run/ngày/shop, không phải transcript nội bộ của model.
 
-Các route nghiệp vụ và graph backend trong checkout còn là khung. Preview trong trình duyệt minh họa cả telemetry và trọng tài; đây không phải bằng chứng hai agent thật đã chạy. Frontend không tự chuyển sang preview khi API lỗi.
+Route nghiệp vụ hiện dùng Data SQLite và native graph/worker tại `?preview=0`; contract đã nối ở [DEMO_CONTRACT](DEMO_CONTRACT.md). Preview `?preview=1` vẫn minh họa bằng dữ liệu mẫu và không chứng minh agent thật đã chạy. Frontend không tự chuyển sang preview khi API lỗi.
 
-Yêu cầu bàn giao mới nhất: mở đầu tại trang shop (mục 8); chuyển nút ngày 7 sang dữ liệu động từ các record database (mục 9). Mục 8 mô tả bộ mẫu đang chạy; mục 9 là phần tích hợp còn phải làm, không đánh dấu hoàn thành chỉ vì đã có SQLite.
+Luồng tích hợp mở đầu tại trang shop, với mục tiêu D **24 đơn trong 3 ngày** và cap **45.000đ/ngày** lấy từ `state.brief_preset`. UI chỉ hiển thị và xác nhận, không cho sửa; backend kiểm đúng preset. Brief của run cũ đã xác nhận hiển thị theo lịch sử. Logo dùng ảnh ShopPilot AI người dùng cung cấp; tên shop và số kinh doanh không đổi.
+
+Mục 8 mô tả kho mẫu ngày7 của preview. Màn Proof tích hợp có nguồn phiên hiện tại từ Data và nguồn báo cáo simulator đã chạy từ artifact có provenance; phạm vi còn lại của bộ chọn dataset7ngày đầy đủ được nêu tại mục9, không đánh dấu xong chỉ vì có SQLite.
 
 **Phần A** bên dưới dùng hợp đồng hiện hành. **Phần B** là mở rộng tích hợp mục tiêu mà React đã có khả năng đọc; thiếu dữ liệu thì hiện trạng thái chưa có, không giả lập xử lý. Không sửa `CONTRACT.md` hoặc `/api/v1` trong đợt giao diện này.
 
-`TODO(contract):` Backend/data owner thống nhất và bổ sung `agent_activity`, `referee_review`, cùng snapshot tùy chọn trước khi đưa telemetry/trọng tài vào seller facade thật. Đây là tên và hình dạng frontend đang hỗ trợ; không tự đổi tên khi ghép backend.
+`agent_activity` và `referee_review` đã được nối vào seller facade; snapshot `agent_activity` vẫn tùy chọn. Backend giữ nguyên câu hỏi, actor tiếp theo, round và evidence refs của trọng tài sau lọc quyền. `state.mode` là cấu hình; nhãn live/replay/offline thực đọc từ telemetry/receipt của đúng tác vụ. Thiếu source thì hiện chưa có dữ liệu.
 
 ## 2. Phần A: 9 API hiện hành
 
@@ -42,7 +44,7 @@ Mọi event giữ `{seq,run_id,day,ts,type,actor,shop_id,text_vi,data}`. `ts` hi
 | --- | --- | --- |
 | `platform_turn` | `{negotiation_id,round,action,package}` | Ghi nhận lượt đã xong của sàn, mũi tên sang shop, cập nhật gói. |
 | `shop_turn` | `{negotiation_id,round,action,package,private_note_vi?,redacted}` | Ghi nhận phản hồi của shop, mũi tên về sàn; ghi chú riêng chỉ trong seller projection. |
-| `code_check` | `{negotiation_id,ok,checks:[{ok,message_vi}]}` | Hiện kết quả kiểm tra gần nhất và mở chi tiết từng điều kiện. |
+| `code_check` | `{negotiation_id,proposal_id,round,ok,checks:[{code,ok,message_vi}]}` | Hiện kết quả kiểm tra đầy đủ gần nhất; không suy pass/fail từ thẻ hoặc event thiếu boolean. |
 | `card_sent` | `{card}` | Bằng chứng thẻ đã được tạo; UI chờ StateView `awaiting_decision` để hiện đúng thẻ hiện tại. Không tính là seller đã xem/duyệt. |
 | `seller_decision` | `{card_id,action,note_vi,rule_answer}` | Lưu lựa chọn của seller. `negotiate` tách lịch sử cũ và chờ phiên mới. |
 
@@ -146,7 +148,7 @@ Thiếu event trọng tài phải hiện “Chưa có đánh giá trọng tài�
 - Từ chối/no_fit, gói chỉ xác nhận sở thích và gói không làm nội dung phải bỏ qua các bước tương ứng; không tô xanh các bước không chạy.
 - Khi mất mạng, giữ dữ liệu gần nhất, hiện gián đoạn, không chạy tiến trình giả hoặc POST tự động. Nối lại tiếp tục từ cursor, không lặp sự kiện đã nhận.
 - Giữ 7 ngày và 3 attempt nội dung như config hiện hành; không lấy mốc 6 ngày cũ trong workbook làm mặc định mới.
-- IntentBrief/goal/version, defer và tracking funnel trong workbook là phần mở rộng chưa có form/API seller hoàn chỉnh. Không tuyên bố chúng đã chạy chỉ vì có đánh giá trọng tài minh họa.
+- IntentBrief/version đã có bước xác nhận và version gate; demo D dùng preset chỉ đọc. Defer và tracking funnel trong workbook vẫn ngoài luồng hiện hành, không tuyên bố chúng đã chạy chỉ vì có đánh giá trọng tài.
 
 ## 7. Hai khung chat đối chứng theo ngày
 
@@ -154,7 +156,7 @@ Màn `proof.html` hiện ưu tiên hội thoại **Không học từ lịch sử
 
 Thanh process của màn Demo cao tối đa 64px ở viewport 1366×768; hiển thị Agent sàn → Agent shop → Kiểm tra → Chủ shop duyệt theo state/events thật. “Chi tiết” mở lớp nổi có vùng cuộn riêng, không thu nhỏ hai khung bên dưới. Chat giữ nguyên chiều cao nội dung của thẻ, cuộn được tới nút “Đồng ý” và “Dùng bản này”; ô nhập luôn nằm ngoài vùng cuộn. Chat và nhật ký đều hỗ trợ chuột/bàn phím. Thay đổi bố cục này không yêu cầu thêm field hoặc endpoint backend.
 
-`TODO(contract):` Bổ sung `comparison_days?: ComparisonDay[]` vào response trực tiếp của `GET /api/proof`. Không tạo thêm POST và không phát sinh LLM call khi người xem chọn ngày. React đã đọc cấu trúc sau; report cũ không có field này vẫn hiện chỉ số và hai khung “chưa có hội thoại”, không tự ghép đoạn chat mẫu.
+`comparison_days?: ComparisonDay[]` đã được Data projection hỗ trợ. Không tạo thêm POST và không phát sinh LLM call khi người xem chọn ngày. Report không có ngày/hội thoại tương ứng hiện “chưa có hội thoại”, không tự ghép đoạn chat mẫu. Các ví dụ bên dưới minh họa shape, không phải transcript đã đo.
 
 ```json
 {
@@ -195,7 +197,7 @@ Thanh process của màn Demo cao tối đa 64px ở viewport 1366×768; hiển 
 
 Điểm bắt đầu khi trình chiếu là **trang shop** ở `/?preview=1` hoặc `index.html?preview=1`. Người xem thấy sản phẩm và bảng điều khiển trước; chọn “Bắt đầu demo”/“Tiếp tục demo” mới vào `demo.html` có chat và hậu trường. Link bàn giao mặc định dùng trang shop.
 
-Nút **Nhảy tới ngày 7** trên thanh phía trên màn Demo/Shop chỉ xuất hiện ở nguồn preview. Một lần bấm đọc `GET /api/demo/day7` cùng origin, nhận toàn bộ snapshot mẫu đã lưu trong SQLite, cập nhật phiên trình chiếu rồi mở `proof.html?day=7&preview=1`. Đây là API riêng của `scripts/preview_server.py`; không thay 9 API seller hoặc runtime hai ngày ở DEMO_CONTRACT.
+Nút **Nhảy tới ngày 7** trên thanh phía trên màn Demo/Shop chỉ xuất hiện ở nguồn preview. Một lần bấm đọc `GET /api/demo/day7` cùng origin, nhận toàn bộ snapshot mẫu đã lưu trong SQLite, cập nhật phiên trình chiếu rồi mở `proof.html?day=7&preview=1`. Đây là API riêng của `scripts/preview_server.py`; không thay API seller hoặc runtime native7ngày ở DEMO_CONTRACT.
 
 - Khi nạp, nút hiện “Đang nạp 7 ngày…” và khóa các thao tác ghi khác. Chỉ chuyển màn sau khi nhận đủ snapshot hợp lệ.
 - Snapshot có state ngày 7/complete, tổng kết cuối ngày 7, đầy đủ sự kiện ngày 1–7, hai hội thoại mỗi ngày và báo cáo mẫu. Không chỉ đổi con số ngày trên UI.
@@ -210,7 +212,11 @@ Xem thêm grain và kiểm tra nguồn dữ liệu ở mục 11 của [data requ
 
 ## 9. Backend cần hoàn tất: ngày 7 đọc dữ liệu động
 
-**Trạng thái: chưa triển khai tích hợp.** Bộ mẫu ở mục 8 vẫn được dựng từ `preview.js`/`previewComparison.js` rồi nhập JSON vào SQLite. Mục tiêu là `database records → backend projection → React`, với nội dung phụ thuộc dataset/run được chọn. Dữ liệu giả có thể được seed trước trong DB để trình chiếu; tính động không đồng nghĩa bắt buộc gọi agent/provider thật khi bấm nút.
+**Trạng thái: đã nối report và evidence, chưa hoàn tất toàn bộ bộ chọn dataset mô tả dưới đây.** Bộ mẫu ở mục8 vẫn được dựng từ `preview.js`/`previewComparison.js` rồi nhập JSON vào SQLite. Product `GET /api/proof` đọc record của cặp hoàn tất chứa active run, trả comparison_id; sau reset chưa có cặp thì409, không lấy proof cũ. Export `/api/proof/events?comparison_id=...` đọc đúng hai run theo quyền/cutoff, không dùng event buffer của phiên khác.
+
+Nguồn riêng **Báo cáo mô phỏng đã chạy** đọc `/api/proof/demo`: artifact xuất từ Data records của cặp native offline, giữ IDs/hash/brief/provenance và evidence ON/OFF. Reload đọc API lại; thiếu ngày/hội thoại thì báo thiếu. Đây là cách trình chiếu nhanh hiện hành, chưa phải bộ chọn nhiều dataset với đủ state/events/bảy NightSummary. Bảng nghiệm thu đầy đủ bên dưới vẫn là yêu cầu mở rộng, không phải kết quả đã đạt.
+
+Mục tiêu đầy đủ là `database records → backend projection → React`, với nội dung phụ thuộc dataset/run được chọn. Dữ liệu giả có thể được seed trước trong DB để trình chiếu; tính động không đồng nghĩa bắt buộc gọi agent/provider thật khi bấm nút.
 
 Trách nhiệm backend:
 
@@ -220,7 +226,7 @@ Trách nhiệm backend:
 4. Reload ở chế độ tích hợp phải đọc API để khôi phục đúng run; sessionStorage chỉ lưu lựa chọn/cursor nếu cần, không là nguồn nội dung authoritative. Bản dữ liệu mới phải được nhận khi người xem yêu cầu tải lại, theo revision hoặc run mới do backend quản lý.
 5. Thiếu record/ngày/transcript phải báo thiếu dữ liệu và giữ lựa chọn hiện tại; không lấp bằng mẫu frontend. Chuyển sang dataset ngày 7 không sửa/xóa phiên đang chạy hoặc tạo thêm campaign/chi phí.
 
-`TODO(contract):` Backend/data/frontend owner chốt cơ chế chọn dataset/run ngày 7 và metadata nguồn/revision trước khi bật ở `?preview=0`. Route `GET /api/demo/day7` hiện chỉ là route kho mẫu local; không coi đây là API nghiệp vụ đã thống nhất. Giữ các DTO seller hiện hành khi có thể, mở rộng có phiên bản nếu cần. Runtime demo hai ngày trong DEMO_CONTRACT và trình chiếu đối chứng bảy ngày phải được phân biệt rõ.
+`TODO(contract):` Chốt bộ chọn nhiều dataset ngày7 và projection state/NightSummary tương ứng trước khi mở rộng product UI. Route `GET /api/demo/day7` vẫn chỉ là kho mẫu local. Runtime native hiện hỗ trợ1..7ngày; báo cáo đối chứng đã chạy được chọn riêng và không thay đổi active run của seller.
 
 Nghiệm thu bắt buộc: tạo hai dataset DB có hội thoại/chỉ số khác nhau, chọn từng dataset thì UI phản ánh đúng mà không build lại JS; khởi động lại server giữ dữ liệu đã nhập; reload không dùng snapshot frontend cũ; đủ bảy tổng kết và đúng run ở hai nhánh; thiếu ngày không tự dựng nội dung; bấm lặp không ghi thêm quyết định/settlement; không gọi API trả phí. Xem [data requirements mục 13](FRONTEND_DATA_REQUIREMENTS.md).
 

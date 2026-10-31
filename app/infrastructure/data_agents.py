@@ -13,6 +13,7 @@ from app.memory.gateway import MemoryGateway
 from app.runtime.session import Session
 from data.growth_data.service import Principal
 from data.growth_data.errors import require
+from data.growth_data.finance import violation_message
 from data.growth_data.seed import world as data_world
 from data.growth_data.storage import dumps, fingerprint, now, one
 
@@ -74,7 +75,7 @@ class DataEventLog:
                 proposal=s.entity(c,'proposals',run_id,'proposal_id',self.last_proposal)
                 require(proposal['shop_id']==shop_id and proposal['negotiation_id']==self.negotiation_id,'EVIDENCE_INVALID','Kiểm tra không thuộc lượt thương lượng')
                 safe.update(proposal_id=proposal['proposal_id'],round=proposal['round'],ok=bool(data['ok']),
-                    checks=[{'code':code,'ok':False,'message_vi':code.replace('_',' ').lower()} for code in data.get('codes',[])])
+                    checks=[{'code':code,'ok':False,'message_vi':violation_message(code)} for code in data.get('codes',[])])
             if kind=='referee_review':
                 safe['focused_question']=s.safe_text(c,run_id,data['focused_question']) if data.get('focused_question') else None
                 safe['unresolved_terms']=[s.safe_text(c,run_id,term) for term in data.get('unresolved_terms',[])]

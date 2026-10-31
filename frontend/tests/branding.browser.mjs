@@ -28,6 +28,12 @@ try{
     await logo.waitFor();
     const rendered=await logo.evaluate(image=>({complete:image.complete,width:image.naturalWidth,height:image.naturalHeight,fit:getComputedStyle(image).objectFit}));
     assert.deepEqual(rendered,{complete:true,width:1536,height:1024,fit:'contain'});
+    if(path==='index.html'){
+      const shopLogo=page.getByRole('img',{name:'Logo ShopPilot AI'});
+      await shopLogo.waitFor();
+      assert.equal(await shopLogo.getAttribute('src'),await logo.getAttribute('src'));
+      await page.locator('.shop-strip').screenshot({path:join(tmpdir(),'growth-shoppilot-identity.png')});
+    }
     await page.screenshot({path:join(tmpdir(),filename)});
   }
   await page.setViewportSize({width:390,height:844});

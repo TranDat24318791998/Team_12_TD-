@@ -1,5 +1,7 @@
 What this change does: Commit `bd78f8e` thêm lối trình chiếu “Nhảy tới ngày 7”, nạp một fixture công khai qua SQLite riêng và mở hai hội thoại so sánh ở ngày 7. Commit này không triển khai simulator/backend 7 ngày: hội thoại, bộ nhớ và chỉ số trong nguồn preview vẫn là minh họa được biên soạn sẵn, có nhãn. HEAD `65434cb` đã bổ sung luồng API/Data thật qua `075ee58`; phần dưới phân biệt hai thời điểm này.
 
+**Báo cáo này giữ baseline trước sửa.** Bốn finding đã được sửa và kiểm lại trong [UI recheck](COMMIT_3_4_UI_RECHECK.md); hai P1 tìm thêm ở payload native nằm trong [backend review](COMMIT_3_4_BACKEND_REVIEW.md) và cũng đã đóng. Verdict hiện hành đọc ở hai báo cáo đó, không dùng kết luận baseline bên dưới như trạng thái mới nhất.
+
 Review ngày 31/10/2026, phạm vi `bd78f8e^..bd78f8e` và đường gọi hiện tại tại `65434cb`. Đã đọc AGENTS, DEMO_CONTRACT, hai frontend requirements và plan full-integration. Giả định tải demo local: một seller/browser, một native worker. Chỉ review và ghi báo cáo; không sửa source, commit, push hoặc start/advance run LIVE.
 
 **Kết luận hiện tại**

@@ -86,7 +86,8 @@ def test_real_http_bridge_runs_native_content_and_imports_same_attempt_media(tmp
             run, job_id = make_job(client, app.state.service)
             settings = Settings(_env_file=None, media_mode='live', media_api_token=TOKEN,
                 media_api_base_url=f'http://127.0.0.1:{port}', media_poll_seconds=.02,
-                media_draft_timeout_seconds=30, demo_product_image_path=str(source))
+                media_draft_timeout_seconds=30, demo_product_image_path=str(source),
+                demo_logo_image_path=str(ROOT/'frontend/img/shoppilot-ai.png'))
             llm = NativeContent(' cho sản phẩm')
             worker = ContentService(DataContentBridge(app.state.service),settings,llm)
             async def run_worker():
@@ -105,11 +106,17 @@ def test_real_http_bridge_runs_native_content_and_imports_same_attempt_media(tmp
                 assert content['video_job']['review_passed'] is True
                 assert job['provider_state']['video']['media_text_vision_calls_reserved']==3
                 assert job['provider_state']['video']['media_text_vision_calls_completed']==3
+                logo_id=job['provider_state']['inputs']['logo_asset_id']
+                assert logo_id and logo_id!=job['provider_state']['inputs']['source_asset_id']
                 assert all(app.state.service.object_path(app.state.service.entity(c,'assets',run,'asset_id',image['asset_id'])['object_key']).is_file() for image in content['cover_options'])
             with sqlite3.connect(tmp_path/'media/jobs.sqlite3') as db:
                 requests = [json.loads(row[0]) for row in db.execute('SELECT request FROM jobs ORDER BY created')]
+                logo_file = Path(db.execute('SELECT path FROM assets WHERE id=?',(logo_id,)).fetchone()[0])
+            with Image.open(logo_file) as uploaded, Image.open(ROOT/'frontend/img/shoppilot-ai.png') as supplied:
+                assert uploaded.convert('RGB').tobytes()==supplied.convert('RGB').tobytes()
             assert [request.get('job_type','video') for request in requests] == ['image','video','image','image']
             assert all(request['product_kind']=='desktop_fan' for request in requests)
+            assert all(request['logo_asset_id']==logo_id for request in requests if request.get('job_type')=='image')
             assert requests[1]['input_asset_id'] != requests[0]['product_asset_id']
     finally:
         process.terminate()

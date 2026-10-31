@@ -2,7 +2,7 @@
 
 Cập nhật 31/10/2026. Đây là yêu cầu dữ liệu để backend/data agent ghép [giao diện tương tác](FRONTEND_REQUIREMENTS.md). Mô hình lưu trữ và API chuẩn tiếp tục theo [data design v1.1](../data/growth_agents_data_api_design.md); tài liệu này mô tả grain, các quan hệ và projection frontend cần, không tạo schema/database thứ hai.
 
-Phần cần làm tiếp cho nút ngày 7 nằm ở **mục 13**. Kho SQLite mẫu ở mục 12 là bản trình chiếu hiện tại, chưa đáp ứng yêu cầu truy vấn động các record nghiệp vụ.
+Phần còn lại của bộ chọn dataset ngày7 nằm ở **mục13**. Product đã đọc state/events/report từ Data; artifact simulator là nguồn trình chiếu riêng có provenance. Kho SQLite mẫu ở mục12 chỉ phục vụ preview, không phải bằng chứng nối động các record nghiệp vụ.
 
 ## 1. Nguồn sự thật và ranh giới trách nhiệm
 
@@ -48,7 +48,7 @@ Các field bắt buộc theo facade hiện hành; không trả toàn bộ row OR
 | Field | Kiểu / ý nghĩa và nguồn |
 | --- | --- |
 | `run_id`, `day` | string, integer 1–7 từ phiên đã xác thực; day không do browser tăng |
-| `mode`, `memory_enabled` | `live|replay|offline`, boolean; live mô tả lời gọi model, không biến thị trường giả lập thành dữ liệu sàn thật |
+| `mode`, `memory_enabled` | `live|replay|offline`, boolean; mode là cấu hình run, source của từng tác vụ lấy telemetry/receipt, không suy lời gọi live từ cấu hình |
 | `step` | `idle|negotiating|awaiting_decision|content_review|day_done|night_done|complete` |
 | `demo_shop` | ShopPublic hiện tại: tên, SKU hiển thị qua sản phẩm demo, giá, tồn kho, listing, ảnh/video và voucher từ entity đã lưu |
 | `demo_shop_original` | Listing gốc bất biến trong run để so sánh; không bị ghi đè khi apply/retry |
@@ -56,12 +56,14 @@ Các field bắt buộc theo facade hiện hành; không trả toàn bộ row OR
 | `pending_card` | Card pending hiện tại hoặc null; package/forecast/tài chính null khi `kind=question` |
 | `content_draft` | Draft hiện tại hoặc null; `version` facade = attempt 1–3, không phải canonical content_version tăng toàn sản phẩm |
 | `last_night` | NightSummary gần nhất hoặc null; giữ sau chuyển ngày, không dùng nó một mình để xác nhận close đã xong |
+| `brief`, `brief_preset`, `brief_editable` | Brief đã xác nhận hoặc null; preset do Data lưu trong config run. Native D khóa24đơn/3ngày và45.000đ/ngày, cần seller xác nhận, giữ nguyên brief lịch sử |
+| `learning_retry_allowed` | Boolean từ cùng gate với lệnh retry; false khi sai ngày/status hoặc reflection reserved/unknown |
 | `live_calls_left` | Số nguyên >=0; ngân sách lời gọi còn lại thực tế của phiên |
 | `agent_activity` | Mở rộng tùy chọn sau khi thống nhất contract; payload và `updated_seq` ở frontend requirements |
 
-Không suy đoán `pending_card` thuộc negotiation nào bằng cách parse tên card. Backend phải lưu quan hệ thật. Các identity canonical chưa có trong facade được adapter giữ ở server; việc bổ sung `negotiation_id`, `proposal_id`, `proposal_version`, `brief_version` vào Card/Event là additive design cần cập nhật hợp đồng trước khi UI sử dụng để ghi. Hiện UI gửi `card_id`, backend phải từ đó resolve exact immutable version.
+Không suy đoán `pending_card` thuộc negotiation nào bằng cách parse tên card. Backend giữ quan hệ thật. Card/Event hiện trả negotiation_id/proposal_id/proposal_version/brief_version; các lệnh ghi gửi expected versions và exact draft/job/content binding theo DEMO_CONTRACT. Backend kiểm lại identity/version trong transaction.
 
-`TODO(contract):` IntentBrief/version, defer, package_applied receipt projection và view-tracking của workbook chưa có hợp đồng seller hoàn chỉnh. Lưu canonical attribution trong data service; không âm thầm đổi body quyết định hoặc trả intent mẫu như đã được seller xác nhận.
+IntentBrief/version và package/card/content bindings đã có contract. Defer và view-tracking của workbook vẫn ngoài luồng demo hiện hành. Preset không được trả như brief đã xác nhận trước thao tác seller. Night seller projection chuyển History/Preference IDs thành câu tiếng Việt từ receipt/snapshot đã kiểm hash, giữ history_refs/preference_refs để truy nguyên; canonical stored receipt không đổi.
 
 ## 4. Event log, cursor và khôi phục trạng thái
 
@@ -156,7 +158,7 @@ Các thay đổi schema/DTO/enum chưa có trong CONTRACT phải được data/b
 
 ## 11. Data cho hai hội thoại không học / có học
 
-`TODO(contract):` Projection `ProofReport.comparison_days` được mô tả chính xác tại [frontend requirements, mục 7](FRONTEND_REQUIREMENTS.md). Frontend đã dùng tên field này và không thêm endpoint. Data owner cần đáp ứng các quan hệ sau trước khi bật dữ liệu thật:
+Projection `ProofReport.comparison_days` được mô tả tại [frontend requirements, mục7](FRONTEND_REQUIREMENTS.md) và đã được Data dựng từ persisted records. Giữ các quan hệ sau khi mở rộng nguồn dữ liệu:
 
 | Grain | Quan hệ / bất biến |
 | --- | --- |
@@ -189,7 +191,9 @@ SQLite lưu `sample_versions(checksum PRIMARY KEY,payload_json,saved_at)` và `a
 
 ## 13. Database cần hoàn tất: dataset 7 ngày truy vấn được
 
-**Trạng thái: yêu cầu bàn giao, chưa triển khai.** Data owner chuẩn bị bộ dữ liệu giả 7 ngày hoặc run mô phỏng đã ghi đầy đủ, lưu theo model nghiệp vụ hiện hành. Không chỉ lưu một blob JSON hoàn chỉnh rồi xem đó là đã nối dữ liệu động. Các record cần có:
+**Trạng thái: Data native đã lưu records và xuất report/evidence; bộ chọn nhiều dataset với đầy đủ projection dưới đây chưa được nghiệm thu.** `/api/proof` chọn cặp chứa active run, không chọn tùy ý cặp mới nhất trong session. `/api/proof/events` kiểm quyền hai run và trả comparison_id/run IDs/cutoffs cùng seller events. `/api/proof/demo` là materialized artifact xuất từ Data source DB, có schema/hash/source IDs, không import fixture JS. Thiếu hoặc hỏng artifact báo lỗi; thay artifact qua exporter rồi tải API lại, không build JS.
+
+Yêu cầu đầy đủ vẫn gồm bộ dữ liệu7ngày lưu theo model nghiệp vụ, đủ NightSummary và cơ chế chọn dataset/revision. Không chỉ lưu một blob JSON biên soạn sẵn rồi xem đó là đã nối dữ liệu động. Các record cần có:
 
 | Nhóm record | Điều kiện để frontend đọc đúng |
 | --- | --- |

@@ -6,6 +6,8 @@ Ngày 31/10/2026. Bộ này cập nhật phạm vi sau khi Data và media đã �
 
 **Implementation đã nghiệm thu cho demo local.** [Trạng thái cuối](IMPLEMENTATION_STATUS.md) tập hợp chín final reviews, tests, URL chạy, proof artifact và giới hạn live provider. Bảng dưới giữ các review ban đầu làm lịch sử/đầu vào implementation.
 
+Review bổ sung commit `[3.4]` đã sửa và kiểm lại mapping backend → React, nguồn report/log, preset D24đơn/3ngày với cap45.000đ/ngày chỉ đọc, cùng logo ShopPilot AI. Verdict riêng: [backend](COMMIT_3_4_BACKEND_REVIEW.md), [frontend](COMMIT_3_4_UI_RECHECK.md). Đọc status để phân biệt luồng demo đã đạt với bộ chọn nhiều dataset ngày7 chưa nghiệm thu.
+
 | Phần | Review riêng / đầu vào implementation |
 | --- | --- |
 | Data và DB | [DB_REVIEW.md](DB_REVIEW.md) |

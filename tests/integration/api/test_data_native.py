@@ -154,6 +154,8 @@ def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
         events=all_events(client,run)
         checks=[e for e in events if e['type']=='code_check' and e['shop_id']=='D' and e['data'].get('negotiation_id')==card['negotiation_id']]
         failed=next(e for e in checks if e['data']['ok'] is False)
+        assert {'code':'VOUCHER_OVER_CAP','ok':False,'message_vi':'Voucher vượt luật shop.'} in failed['data']['checks']
+        assert {'code':'PROFIT_BELOW_MIN','ok':False,'message_vi':'Gói không đạt lãi tối thiểu.'} in failed['data']['checks']
         assert checks[-1]['data']['ok'] is True and checks[-1]['data']['proposal_id']==card['proposal_id']
         assert isinstance(checks[-1]['data']['round'],int) and isinstance(checks[-1]['data']['checks'],list)
         rendered=render_activity(tmp_path,state,events)

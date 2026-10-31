@@ -26,7 +26,11 @@ test('React product renders a different database product without seed-specific l
   const html=renderToStaticMarkup(<Product shop={shop} onAddCart={noop} onNotice={noop}/>);
   assert.match(html,/299\.000đ/);assert.match(html,/<strong>17<\/strong>/);assert.match(html,/Shop Ánh Dương &lt;b&gt;/);
   assert.match(html,/Đèn bàn USB &amp; đế gỗ/);assert.match(html,/lamp\.jpg/);assert.match(html,/data-color="Đen"/);assert.match(html,/data-color="Nâu"/);
-  assert.doesNotMatch(html,/Nhà Bé Lan|Quạt mini|data-color="Hồng"/);assert.doesNotMatch(html,/<b>/);
+  assert.doesNotMatch(html,/Nhà Bé Lan|Quạt mini|data-color="Hồng"|shoppilot-ai\.png/);assert.doesNotMatch(html,/<b>/);
+});
+test('demo shop identity uses the supplied logo without changing the shop name',()=>{
+  const html=renderToStaticMarkup(<Product shop={{...shop,shop_id:'D'}} onAddCart={noop} onNotice={noop}/>);
+  assert.match(html,/alt="Logo ShopPilot AI"/);assert.match(html,/shoppilot-ai\.png/);assert.match(html,/Shop Ánh Dương &lt;b&gt;/);
 });
 test('missing images and missing color attributes do not invent product variants',()=>{
   const html=renderToStaticMarkup(<Product shop={{...shop,images:[],attributes:['Sạc USB']}} onAddCart={noop} onNotice={noop}/>);
