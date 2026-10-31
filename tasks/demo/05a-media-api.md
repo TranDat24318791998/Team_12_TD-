@@ -1,5 +1,7 @@
 # [D05a] API ảnh/video thật và callback vào bản nháp
 
+**Owner:** member media. Toàn cung cấp ContentContext/tool runner và approval contract; nối adapter này qua ContentService, không chuyển cả provider implementation vào timebox agent/knowledge.
+
 ## Mục tiêu và phụ thuộc
 
 Sau khi seller chấp nhận gói, tạo ba ảnh A/B/C bằng API ảnh và một video bằng API video, cập nhật trạng thái lên UI.

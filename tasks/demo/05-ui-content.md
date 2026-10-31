@@ -1,5 +1,7 @@
 # [D05] Một màn hình demo và vòng duyệt nội dung
 
+**Owner:** member Content/Media/UI; Toàn giao tool runner, ContentContext và approval methods. Đây là lane tích hợp song song, không chiếm lịch code lõi 120 phút của Toàn.
+
 ## Kết quả cần đạt
 
 Người bán shop D đi hết ngày 1 và xem câu hỏi sở thích ngày 2 trên một trang HTML.
@@ -59,16 +61,17 @@ Không giữ lock khi gọi provider/poll/download.
 - Mô tả dùng danh sách các fact trên; không tự thêm thương hiệu, bảo hành, thời lượng pin hoặc độ ồn.
 - `checks` ghi nguồn thuộc tính; nguồn ảnh/video lấy từ kết quả provider hoặc cache thật, không gắn nhãn AI cho placeholder.
 - D01 cung cấp `ContentText(title: str, description: str, checks: list[str])`.
-- `write_text(llm, public, style_notes, feedback_history) -> ContentText` gọi OpenAI qua LLMClient của D02 khi có cấu hình; Content Agent là phần bắt buộc.
+- `write_text(llm, public, style_notes, feedback_history, *, tools, emit) -> ContentText` gọi run_agent(role="content", output_schema=ContentText) từ D02a. Model phải gọi get_content_context rồi finish_content; context trả fact/style đã lọc theo KNOWLEDGE_CONTRACT. Public/style arguments chỉ phục vụ fallback/tương thích caller, không nhét toàn memory thay tool call. Content Agent là phần bắt buộc.
 - Hàm thuần `build_content_text(public, style_notes, feedback_history) -> ContentText` tạo fallback khi thiếu key, timeout, response lỗi hoặc claim ngoài fact whitelist.
-- Test text dùng response OpenAI giả; case claim sai phải rơi về fallback có nhãn, không gọi mạng thật.
+- Test text dùng AIMessage.tool_calls + ToolMessage OpenAI giả, ghi source thật; case claim sai phải rơi về fallback có nhãn, không gọi mạng thật.
 - Không truyền ShopPrivate, Persona, unit_cost hoặc toàn bộ Session vào prompt nội dung.
 
 ### A2. Tạo bản đầu
 
 ```text
 assert approved card belongs to D and references current confirmed brief
-read confirmed rules.content_style_notes through the gateway
+call write_text via content runner; get_content_context reads ContentMemoryView through gateway
+use the same scoped confirmed style for image/video prompts
 build ContentDraft(version=1, images=[A,B,C] running, video=pending, feedback_history=[], style_notes=notes)
 bind draft to card_id and brief_version; store draft before starting workers
 ids = {run_id, card_id, brief_version, draft_version}; callback captures these four values
@@ -221,3 +224,10 @@ Kiểm tra thủ công trong browser ẩn hoặc localhost, không làm gián đ
 Chạy `.venv/bin/python -m pytest -q tests/unit/content tests/integration/api/test_content.py`, sau đó full pytest.
 Bàn giao: file đã sửa, lệnh/kết quả test, ảnh chụp ở thẻ D/draft có video/night, các key/model chưa điền và Muse reference schema còn thiếu nếu có.
 Nếu thiếu thời gian, giữ layout một cột; cắt animation, chart và chat tự do. Giữ pipeline ảnh/video theo yêu cầu người dùng.
+
+
+## Kiểm chứng knowledge từ phần Toàn
+
+Capture request của get_content_context và ToolMessage đưa lại model. Trước seller Yes: style candidate không ở confirmed_style_notes. Sau Yes: record/version mới xuất hiện trong ContentMemoryView; Content invocation mới và prompt ảnh/video chứa style đó. Fake model đọc ToolMessage thật để tạo output; không trả response cuối cố định bất kể knowledge. Test này thuộc core integration và dùng fake media; live media là gate riêng.
+
+Mỗi content invocation tối đa3modelcalls (8s mỗi call); UI busy trong thời gian tạo chữ, sau đó media jobs chạy nền. Không giữ lời hứa live start<1s khi model chưa trả; fake tests vẫn trả nhanh. Chỉ gọi provider sau gate của ContentService, không expose create_video_job/image_edit thành tool model tự chạy.

@@ -48,7 +48,8 @@ git check-ignore .env
 
 ## Tài liệu và phân công
 
-- [Plan demo dưới 2 giờ](docs/IMPLEMENTATION_PLAN.md): phạm vi rút gọn, lịch thực hiện và task chi tiết cho agent code/review; đọc cùng [hợp đồng demo](docs/DEMO_CONTRACT.md).
+- [Plan Agent + Tools + Knowledge dưới 2 giờ](docs/IMPLEMENTATION_PLAN.md): phần Toàn nhận, lịch coder/reviewer, native tool loop và knowledge đủ năm ngăn.
+- [Hợp đồng agent/tool](docs/AGENT_TOOL_KNOWLEDGE.md), [Knowledge](docs/KNOWLEDGE_CONTRACT.md), [mapping 15 adapter/32 mục Excel](docs/AGENT_SCOPE_MAP.md); [hợp đồng runtime/demo](docs/DEMO_CONTRACT.md).
 
 - [AGENTS.md](AGENTS.md): quy ước, công nghệ và các nguyên tắc bắt buộc.
 - [Kiến trúc codebase](docs/ARCHITECTURE.md): cây thư mục, trách nhiệm module và hướng phụ thuộc.

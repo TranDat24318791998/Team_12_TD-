@@ -2,6 +2,12 @@
 
 Hướng dẫn cho Codex khi làm việc trong repo này. Đọc hết file này trước mỗi task.
 
+## Phạm vi triển khai hiện hành
+
+Khi làm `tasks/demo/*`, đọc `docs/IMPLEMENTATION_PLAN.md` trước: Toàn sở hữu Agent + Tools + Knowledge. `docs/AGENT_TOOL_KNOWLEDGE.md` chốt tool calling/ACL; `docs/KNOWLEDGE_CONTRACT.md` chốt năm ngăn memory và read/write; `docs/DEMO_CONTRACT.md` chốt runtime/HTTP/media. Các quyết định cụ thể ở đó thay phạm vi demo cũ, task TV1–TV4 giữ làm tham chiếu/phân công gốc. Đây vẫn là đặc tả chưa implement.
+
+Provider hiện hành: OpenAI cho LLM/ảnh, Muse Gateway theo `docs/MUSE_API.md` cho video. Không dùng nhánh useapi.net cũ. UI/media/DB thuộc lane member tương ứng; không bỏ tool calling/knowledge để làm thay toàn bộ lane đó.
+
 ## Dự án là gì
 
 Hệ thống agent cho một sàn thương mại điện tử **mô phỏng** (tên hiển thị: `sàn·demo`):
@@ -37,6 +43,7 @@ app/
   domain/               policies.py, finance.py, validators.py, privacy.py, formatting.py
     models/             shops, packages, negotiation, cards, content, learning, metrics, events
   runtime/              session.py, manager.py, day.py
+  agents/               tools.py, runner.py (đặc tả D02a, chưa implement)
   negotiation/          agents.py, prompts.py, graph.py
   content/              text.py, images.py, video.py, prompts.py, service.py
   memory/               gateway.py, night.py, prompts.py
@@ -85,13 +92,14 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 | `LLM_MODEL_REFLECT` | model rút bài học ban đêm (mặc định = `LLM_MODEL`) |
 | `OPENAI_IMAGE_MODEL` | model tạo/sửa ảnh |
 | `LLM_MODE` | `live` gọi thật và ghi cache · `replay` đọc cache, thiếu thì dùng luật offline · `offline` không gọi · `auto` = live nếu có khoá |
-| `USEAPI_TOKEN`, `MUSE_EMAIL` | gọi Muse qua useapi.net |
+| `MUSE_API_BASE_URL`, `MUSE_API_KEY`, `MUSE_VIDEO_MODEL` | Muse Gateway backend-only, theo MUSE_API.md |
+| `MEDIA_MODE` | live/offline/replay độc lập LLM_MODE |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | tuỳ chọn |
 | `SEED` | mặc định 42 |
 | `DEMO_SHOP` | shop giám khảo điều khiển, mặc định `D` |
-| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, mặc định 40 |
+| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, hiện Settings mặc định40; D01 cấu hình demo64 cho tool loop |
 | `MAX_VIDEO_JOBS_PER_SESSION` | giới hạn job video Muse mỗi phiên, mặc định 3 |
-| `IMAGE_PROVIDER` | `openai` (mặc định) hoặc `muse` |
+| `IMAGE_PROVIDER` | OpenAI cho ảnh theo yêu cầu hiện hành |
 | `MOCK_API` | `1` = API trả dữ liệu mẫu trong `contracts/` (giao diện làm trước khi backend xong) |
 
 ## Nguyên tắc bắt buộc
@@ -109,7 +117,7 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 
 ## Cách làm một task
 
-1. Đọc `docs/ARCHITECTURE.md`, file task trong `tasks/`, rồi `docs/CONTRACT.md`; đọc `docs/SEED_DATA.md` hoặc `docs/DESIGN.md` nếu task nhắc tới.
+1. Với task demo, dùng thứ tự/contract ở mục Phạm vi triển khai hiện hành. Đọc `docs/ARCHITECTURE.md`, file task trong `tasks/`, rồi `docs/CONTRACT.md`; đọc `docs/SEED_DATA.md` hoặc `docs/DESIGN.md` nếu task nhắc tới.
 2. Chỉ tạo hoặc sửa các file trong mục **Output** của task. Nếu thấy phải đổi hợp đồng chung, dừng lại, ghi `TODO(contract): …` và báo, không tự đổi.
 3. Phần nào phụ thuộc module chưa có thì viết bản giả nhỏ trong `tests/fakes/` hoặc dùng JSON trong `contracts/`, đúng hình dạng hợp đồng.
 4. Viết test cho từng điều trong **Tiêu chí xong**, chạy `pytest -q`, báo lệnh đã chạy và kết quả.

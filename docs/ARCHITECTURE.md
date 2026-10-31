@@ -2,6 +2,14 @@
 
 Ứng dụng chạy trong một tiến trình FastAPI. Backend chia theo tính năng; model và luật thuần dùng chung nằm trong domain. Frontend là HTML/CSS/JS thuần, giao tiếp qua HTTP. Lệnh chạy giữ nguyên: `uvicorn app.main:app --reload`.
 
+## Bổ sung được chốt cho phần Agent + Tools + Knowledge
+
+Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](KNOWLEDGE_CONTRACT.md); chưa phải source đã có. Thêm `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
+
+Hướng phụ thuộc: `agents.runner` dùng domain + transport LLM được inject; `agents.tools` dùng domain và callable gateway/market được inject. Không import runtime/API/main hoặc tạo client. Feature callers lắp role tools trong các closure; `runtime.manager` cấp dependencies. LangGraph quyết định role; runner điều hành tool calls bên trong role; workflow giữ approval và mọi mutation.
+
+Store in-memory atomic trong demo và DB teammate adapter dùng cùng contract; không bỏ schema/ACL/evidence vì chưa có DB. SQLite/persistent checkpoint trong thiết kế đầy đủ chưa nằm trên critical path dưới2giờ. Chi tiết ownership mới ở [AGENT_SCOPE_MAP](AGENT_SCOPE_MAP.md).
+
 ## Cấu trúc chính
 
 ```text
@@ -27,6 +35,7 @@ app/
 │   ├── session.py          Session, ShopState: dữ liệu của mỗi run
 │   ├── manager.py          SessionManager: tạo phiên và nối service
 │   └── day.py              Workflow một ngày, interrupt và quyết định người bán
+├── agents/                 D02a: tools.py + runner.py, tool loop dùng chung (planned)
 ├── negotiation/
 │   ├── agents.py           Quyết định của agent sàn/shop và luật offline
 │   ├── prompts.py          Chỉ prompt thương lượng và input đã lọc
@@ -137,11 +146,6 @@ Settings, FeeConfig, policies, app factory, `/health`, frontend và media đã c
 
 Không duy trì shim tại các đường dẫn phẳng cũ: code nghiệp vụ chưa được triển khai và các tài liệu đang dùng đã cập nhật. PDF trong `docs/reference/` là kế hoạch gốc; đường dẫn triển khai lấy từ tài liệu Markdown hiện hành.
 
-## Điểm hợp đồng cần chốt khi ghép tính năng
+## Hợp đồng ghép tính năng hiện hành
 
-Việc chia package giữ nguyên URL, payload và chữ ký hàm nghiệp vụ. Các khác biệt có sẵn dưới đây chưa được thay đổi trong đợt tổ chức code:
-
-- `TODO(contract)`: trạng thái sau `/api/night`: `night_done` hay `idle`, thời điểm tăng ngày.
-- `TODO(contract)`: retry nội dung trả ảnh ngay hay `running` để polling.
-- `TODO(contract)`: ba phiên bản tổng cộng hay ba lần làm lại.
-- `TODO(contract)`: task 1.1 resolve replay thiếu key thành offline, trong khi replay cần dùng cache không cần key.
+Các điểm night/idle, retry async, ba phiên bản tổng cộng, replay thiếu key đã được chốt tại [DEMO_CONTRACT](DEMO_CONTRACT.md). Native tools/budget/typed memory theo hai contract mới ở trên. Coder sửa cả caller/fixture của task khi thực hiện các thay đổi đã được chốt; không giữ TODO cũ như một quyết định chưa có.

@@ -1,10 +1,10 @@
-# D03 — Luồng seller và HTTP
+# D03 — Điều phối ngày, seller approval và đầu nối API
 
-Timebox 16 phút. Cần D01/D02; nếu content/memory chưa xong, dùng fake đúng interface. Đọc [DEMO_CONTRACT](../../docs/DEMO_CONTRACT.md), mục 3, 5 và 6. Task này sở hữu route, wiring và các field của Session.
+Timebox 18 phút cho runtime và ghép nối, API owner làm route song song. Cần D01/D02a/D02/D04; nếu content/memory chưa xong, dùng fake đúng interface. Đọc [DEMO_CONTRACT](../../docs/DEMO_CONTRACT.md), mục 3, 5 và 6. Toàn sở hữu runtime; member API sở hữu route/wiring, cùng một integrator duyệt Session. Tách patch theo hai owner trong Output, không ghi cùng file đồng thời.
 
 ## Output
 
-`app/runtime/{day,manager,session}.py`, `app/api/{schemas,dependencies,router}.py`, `app/api/routes/{sessions,days,content,events,proof}.py`, `app/main.py`, `contracts/{state_awaiting,state_content,decision,content_apply,night}.json`, `tests/fakes/{content,memory}.py`, `tests/integration/runtime/test_day.py`, `tests/integration/api/test_demo_flow.py`, `docs/CODEX_LOG.md`.
+**Toàn:** `app/runtime/day.py`, runtime tests và runtime fixtures. **API integrator:** `app/runtime/{manager,session}.py`, `app/api/{schemas,dependencies,router}.py`, `app/api/routes/{sessions,days,content,events,proof}.py`, `app/main.py`, `contracts/{state_awaiting,state_content,decision,content_apply,night}.json`, `tests/fakes/{content,memory}.py`, `tests/integration/runtime/test_day.py`, `tests/integration/api/test_demo_flow.py`, `docs/CODEX_LOG.md`.
 
 ## Wiring
 
@@ -34,12 +34,15 @@ Ghi intent_confirmed, chuyển brief_confirmed. State không hợp lệ trả 40
 ```text
 under lock: verify not phase_busy, allowed step, brief confirmed; set phase_busy = True
 try:
+  expired_ids = monitor_active_packages(session)  # chạy trước mọi kế hoạch/chi trong ngày
+  opportunities = match_opportunities(session)  # ghi lý do selected/rejected A–E
   if D.active and memory has pending question:
       build question Card(package=None); step = awaiting_decision
   elif D.active:
       read memory; step = day_done  # không gia hạn khi gói còn hạn
   else:
-      step = negotiating; run_negotiation(D, day, kind=propose)
+      nếu D bị loại/cooldown: ghi lý do, step=day_done, không gọi graph
+      step = negotiating; run_negotiation(D, day, kind=renew if D in expired_ids else propose) nếu D eligible
       agreed/warning_only -> build Card with valid package, forecast, brief_version
       failed/ask_human -> step = brief_confirmed; emit safe reason; no Card/approval
 finally: clear phase_busy under lock
@@ -53,8 +56,8 @@ Kiểm tra card ID/version, brief version và state trước side effect. phase_
 
 - Offer accept: ghi seller_decision, lưu approved_card_id. Có content thì start service, chuyển content_review; active vẫn None. Nhánh không content gọi activate rồi chuyển day_done; nhánh này không thuộc brief P0 cần demo.
 - Offer negotiate: chỉ nhận note `Giảm voucher còn 2%`. Vô hiệu hóa card cũ, tăng attempt, gọi graph với owner_note. Card mới cần approval mới. Tối đa một lần; vượt giới hạn trả lỗi rõ theo contract.
-- Offer reject: không tạo content/active mới; pending_card=None, step=day_done.
-- Question-only: rule_answer phải khớp action. Gọi memory.answer_pref cho đúng pending preference. Có chỉ sửa style và tăng rules_version một lần; Không đánh dấu declined. Chuyển day_done, giữ gói active.
+- Offer reject: đặt cooldown_until=day+3, không tạo content/active mới; pending_card=None, step=day_done.
+- Question-only: rule_answer phải khớp action. Gọi T10 confirm_preference workflow → memory.answer_pref cho đúng pending preference; LLM không được tự gọi. Có lấy field/value từ pending RuleQuestion (D style, A voucher trong headless fixture), validate theo KNOWLEDGE_CONTRACT và tăng rules_version một lần; Không đánh dấu declined. Chuyển day_done, giữ gói active.
 
 Card question có package=None; không đọc card.package.ads_daily_budget. Agent agreed chưa phải seller accept.
 
@@ -71,7 +74,7 @@ Apply chạy trong một critical section ngắn, không gọi mạng:
 5. Active.start_day=day, end_day=day+duration−1, ads_paused=False; cập nhật voucher public.
 6. Lưu receipt/events; xóa content_draft, pending_card, approved_card_id; chuyển day_done. Listing public và receipt giữ bản đã chốt cho UI.
 
-`activate_approved_package` dùng `market.build_forecast_snapshots(shop, pkg, start_day, seed, calibration) -> list[ForecastSnapshot]` do D04 triển khai. Helper trả raw/issued riêng cho từng ngày trước khi có outcome. Lưu từng snapshot vào `session.forecast_snapshots[("D", snapshot.target_day)]` trước mọi settlement. Snapshot tạo một lần, gắn approved card; receipt apply trùng không tạo lại. `forecast_package` chỉ tính, không ghi Session/global state. D04 chưa xong thì fake đúng helper này trong test.
+`activate_approved_package` dùng `market.build_forecast_snapshots(shop, pkg, start_day, seed, calibration) -> list[ForecastSnapshot]` do member market cung cấp; D04 kiểm cùng-horizon contract. Helper trả raw/issued riêng cho từng ngày trước khi có outcome. Lưu từng snapshot vào `session.forecast_snapshots[(card.shop_id, snapshot.target_day)]` trước mọi settlement. Snapshot tạo một lần, gắn approved card; receipt apply trùng không tạo lại. `forecast_package` chỉ tính, không ghi Session/global state. Market chưa xong thì fake đúng helper này trong tests; báo integration pending, không tạo metric thắng giả.
 
 ContentService sở hữu event content_applied; runtime sở hữu package_applied. Route không ghi lặp. Callback sau publish thấy draft None thì bỏ qua, không sửa listing đã chốt.
 
@@ -110,3 +113,26 @@ ID trên chỉ dành cho fixture; ID thực do server cấp. JavaScript đọc s
 7. Activation lưu đủ forecast theo ngày trước settlement; helper dự báo thuần không tự sửa Session.
 
 Chạy `.venv/bin/python -m pytest -q tests/integration/runtime tests/integration/api`. Handoff phải nêu factory/fixture nào còn fake; endpoint trả JSON hardcode thay service chưa đạt yêu cầu.
+
+
+## 6. Phần điều phối gốc phải giữ, không chuyển thành việc UI
+
+```python
+monitor_active_packages(session) -> list[str]  # shop IDs vừa hết hạn hôm nay
+match_opportunities(session) -> list[str]      # eligible shop IDs, ghi event lý do
+```
+
+Hai helper dùng shop_id tổng quát, chỉ start_day chọn D cho tương tác. Không mở fan-out API hoặc nhiều pending cards trong slice này.
+
+- Monitor trước match/negotiation: `day > active.end_day` thì clear active, đặt public.active_voucher_pct=0, ghi auto_action và đưa shop vào candidates renew. Renew tạo offer/card mới, không tự gia hạn/chi thêm.
+- Active ads đủ `stop_after_days` ngày settle liên tiếp có spend>0, ROAS hữu hạn thấp hơn threshold → ads_paused=True trước spend ngày mới. Ngày thiếu metrics hoặc spend0 không tính là một ngày ROAS thấp. Ads đã paused không phát event lặp.
+- Inventory guard: lấy trung bình orders từ tối đa3 ngày metrics đã settle gần nhất (có ít hơn thì dùng số ngày hiện có), stock < 3×trung bình và trung bình>0 → pause. Không đủ sample thì không suy diễn tồn kho theo Persona.
+- Match: ngành có trend tăng trong ngày, không active/cooldown, stock>=30, listing_quality<0.6 hoặc search_rank_page>=2. Record lý do C stock15 bị loại; seed A–E chỉ fixture, UI không cần hiện5shop.
+- Cooldown `day < cooldown_until` bị loại; đến ngày bằng cooldown thì đủ điều kiện xét lại. Reject đặt day+3. Renew vẫn qua match và seller approval.
+- Sau confirm preference ngày2, next-use test gọi cùng tools/content context một invocation mới; không tự apply campaign mới hoặc tạo thêm video trả phí để chứng minh memory.
+
+Tests bổ sung: E hai ngày metric ROAS thấp→pause sáng ngày3 trước simulator; expired active→renew chưa active khi chưa approve; C không gọi graph; A voucher confirmation chỉ đổi đúng field/value pending; D vẫn đủ luồng chính. Đây là test điều phối với fixture, không phải proof6ngày.
+
+Bàn giao cho API/media: typed methods + JSON fixtures và trace từ runtime thật. Route mock chỉ dùng phát triển UI; không tính vào CORE PASS. Member UI chưa sẵn sàng thì D06 headless gọi đúng methods này, không viết workflow thứ hai trong script.
+
+`package_applied` và `market_result.data` giữ card_id/negotiation_id/prediction_id thật. D03 join từ approved card/history để learning ngày2 liên kết campaign ngày1 dù không có negotiation mới. Market trả DayMetrics chưa có refs thì runtime thêm refs trước append_event, không yêu cầu model tự suy luận ID.

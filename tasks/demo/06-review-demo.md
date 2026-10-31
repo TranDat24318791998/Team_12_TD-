@@ -1,55 +1,56 @@
-# D06 — Review độc lập và diễn tập
+# D06 — Review Agent/Tools/Knowledge và bàn giao tích hợp
 
-Timebox 9 phút, thêm 10 phút dự phòng. Coder dừng tính năng mới ở phút 101. Reviewer đọc contract/task/diff và caller liên quan, chạy test rồi đi hết UI thật.
+Timebox10phút +6phút buffer theo plan. Review độc lập sau patch/SHA coder; đọc [Agent/Tools](../../docs/AGENT_TOOL_KNOWLEDGE.md), [Knowledge](../../docs/KNOWLEDGE_CONTRACT.md), [scope map](../../docs/AGENT_SCOPE_MAP.md) và caller thực. Báo riêng CORE PASS/FIX REQUIRED và INTEGRATION LIVE PASS/PENDING.
 
 ## Output
 
-`tests/integration/api/test_demo_flow.py`, `docs/DEMO_RUNBOOK.md`, `docs/CODEX_LOG.md`. Chỉ sửa source trong phạm vi task tương ứng khi có lỗi tái hiện; ghi mã task gốc. Không mở rộng sang production.
+`scripts/run_agent_demo.py`, `tests/integration/agents/test_agent_knowledge_flow.py`, `tests/integration/api/test_demo_flow.py`, `docs/DEMO_RUNBOOK.md`, `docs/CODEX_LOG.md`. Fix source chỉ trong phạm vi task đã làm có lỗi tái hiện. Không thêm workflow riêng trong script, không bịa tool trace.
 
-## Gate review
+## Gate review bắt buộc
 
 | Gate | Bằng chứng | Nếu fail |
-| --- | --- | --- |
-| Finance | D: 45.000đ/ngày, 3%, stop 6,5; voucher 4% bị chặn | Chặn demo apply |
-| Privacy | Prompt capture sàn/trọng tài không có cost, private rules, private_note | Chặn live LLM |
-| Agent | Offline D thống nhất lượt 2; tối đa 3 lượt sàn, 12 model calls; referee thực sự được gọi | Sửa graph, không tạo event giả |
-| Approval | Accept chưa active; apply kiểm đúng card/brief/draft | Chặn apply |
-| Media | POST → task_id → poll → download → phát video; 3 ảnh ready | Chỉ mock thì chưa đạt media thật |
-| Version | Callback v1 không ghi đè v2/listing đã publish | Chặn demo retry |
-| Memory | Feedback ngày 1 → candidate; Có ngày 2 → rule; đọc lại | Chỉ summary chưa chứng minh learning |
-| One-effect | Apply/night lặp không tạo effect lần hai | Sửa state/receipt, không cần queue |
-| Honest source | Từng phần hiển thị đúng live/replay/offline | Sửa nhãn trước khi diễn |
+|---|---|---|
+| Native tool loop | AIMessage.tool_calls → handler → ToolMessage đúng ID → output model dùng kết quả | Core fail, structured output đơn lẻ chưa đủ |
+| Role ACL | Platform không gọi T02/T05/T09; args không đổi role/shop/run; denied handler không chạy | Chặn live |
+| Scope/privacy | Private cost/rules/Persona không trong public tools/messages/events | Chặn live |
+| Five-bin Knowledge | Typed Rules/Prefs/History/Calibration/Lessons; read/write/evidence/version test | Core fail nếu chỉ summary |
+| Read-back affects behavior | Confirm style đổi Content tool result/prompt; history/lesson đổi Platform decision fixture | Core fail nếu chỉ event memory_read |
+| Finance/graph | D 45k/3/6.5 offline;4% bị chặn;<=3lượt sàn,<=36modelcalls/negotiation; referee chạy | Sửa graph/validators |
+| Approval | Agreed chưa apply; seller accept vẫn chờ content nếu refresh; đúng card/brief/draft | Chặn apply |
+| Learning writes | 4bins commit atomic; Rules chỉ qua Yes; valid evidence; đủ4LessonOp | Chặn night/confirm |
+| Runtime gốc | C stock bị loại, E pause trước ngày3 spend, expired→renew cần approval | Sửa runtime helper |
+| One effect/version | Night/apply retry không lặp, stale callbacks không publish | Chặn apply/night |
+| Provider thật | OpenAI native tool round-trip; ảnh OpenAI/video Muse mở được | Live PENDING nếu chỉ fake |
+| Honest source | Fixture/offline/live/cache phân biệt, no revenue-uplift claim từ D2ngày | Sửa trace/runbook |
 
-Reviewer trả PASS hoặc FIX REQUIRED, kèm input tái hiện, expected/actual, file:line, cách sửa tối thiểu. Multiuser, load, spam, cloud auth và restart recovery ghi DEFERRED theo plan.
+Reviewer trả input tái hiện, expected/actual, file:line và cách sửa tối thiểu. Không chặn vì thiếu vector DB/auth/multiuser/anti-spam/full dashboard ngoài scope.
 
-## Test tự động
+## Test và headless harness
 
-Chạy `.venv/bin/python -m pytest -q` với provider fake. Test chính qua TestClient: reset → confirm brief → start → accept → fake jobs done → retry nền sáng → fake jobs done → apply → night ngày 1 → start ngày 2 → trả lời Có → GET state, assert style đã xác nhận.
+Chạy `.venv/bin/python -m pytest -q` bằng fake providers. Core integration dùng Session/runner/gateway/runtime thật; chỉ model, media, market chưa có adapter được inject fake rõ nguồn. Fake model phải đọc ToolMessage để chọn output, không trả transcript cố định bất chấp tool result.
 
-Assert active None trước apply, exact package, event ID không trùng, factor giữ 1,0, nguồn fake/offline ghi rõ. Inject clock/sleep; test không chờ thật 240 giây.
+Luồng test: reset → confirm brief → start → tool negotiation → accept → fake content/retry nền sáng → apply → market event → night → inspect5bins → ngày2 Yes → invocation Content tiếp theo + Platform read-memory fixture. Kiểm active None trước apply; exact approved package; evidence IDs có thật; Rules chưa đổi trước Yes; factor1 ở1–2samples; duplicate calls không thêm effect. Negative tests: MemoryOFF vẫn rules, cross-run denial, fake evidence rejected.
 
-## Smoke provider thủ công
+`scripts/run_agent_demo.py --mode offline --seed 42` dùng cùng runtime methods và in trace đã lọc; không tái implement logic bằng print. In từng stage: role/tool/callID/status/recordRefs, decision, candidate, confirmation, next-use. Fake dependency ghi fixture, offline policy ghi offline. Không in cost/private raw payload/token. Script `--mode live` cần key/model, chạy tối thiểu negotiation tool loop; Content/media thật chỉ khi adapter/config đủ. Không âm thầm fallback rồi báo live gate đạt.
 
-Đọc [MUSE_API](../../docs/MUSE_API.md). Khi user đã điền cấu hình, smoke một ảnh OpenAI và một video Muse; lưu task_id, media path local, status. Không log Authorization. Mở file bằng browser player để kiểm phát được, không chỉ HTTP 200. Schema Muse `{}` chưa đủ để chốt parser: lưu response thật đã loại secrets thành fixture rồi kiểm mapping trước live flow.
+API member sẵn sàng thì TestClient đi cùng flow HTTP qua10routes và kiểm serialization/versions. Chưa sẵn sàng: core harness vẫn bàn giao, HTTP integration ghi pending cụ thể; không nhận JSON hardcode là workflow thật.
 
-Nếu còn thời gian/quota, tạo cache bản đầu và bản retry nền sáng. Cache phải đến từ API thật; lúc diễn ghi cached. Không hứa demo 3 phút bao gồm hai video có thể chờ 240 giây mỗi video. Chưa đủ cache thì báo rõ bước nội dung phải chờ provider.
+## Smoke thật khi có cấu hình
 
-## Script trình diễn
+1. OpenAI: tối thiểu một invocation phát tool call, backend thực thi, model nhận ToolMessage và trả terminal. Lưu trace đã lọc với source live/modelconfigured; không yêu cầu wording giống fixture.
+2. Content/media member: một ảnh OpenAI và một video Muse theo [MUSE_API](../../docs/MUSE_API.md); capture response đã loại secret thành fixture, map status thật, tải/mở được file. Không log Authorization. Muse schema response `{}` vẫn cần response thực trước khi chốt parser.
+3. Key/model hoặc adapter thiếu → ghi pending, không gọi API placeholder và không giả thành công. Thời gian render ngoài3phút thao tác demo.
 
-1. Mở localhost:8000, reset seed 42; xác nhận brief tăng đơn, không công khai hard cap riêng.
-2. Start. Offline agent: chỉ vào đề xuất sàn 70.000đ/10%, counter shop 45.000đ/3%, trọng tài, code check. LLM live: mô tả output thực, không đòi transcript giống fixture.
-3. Hiển thị thẻ, Accept; chỉ ra gói chưa active khi đang review content.
-4. Góp ý nền sáng, chờ v2 đủ media. Chọn cover B, xem video và nhãn nguồn thật: từ mô tả hoặc từ ảnh A khi đã xác minh image-to-video. Apply.
-5. Hiển thị listing và gói active. Night; chỉ ra preference đang là candidate, chưa thành rule.
-6. Start ngày 2, trả lời Có; hiển thị rules_version, style mới, memory_read. Không tuyên bố memory đã tăng doanh thu từ một demo.
+## Script trình diễn phần Toàn
 
-## Khi gặp lỗi trên sân khấu
+1. Brief D, xem public context/catalog và memory lookup trong trace; sàn đưa đề xuất.
+2. Shop đọc luật riêng, gọi evaluate tool; counter an toàn; referee dùng public turns. Không lộ private tool payload khi trình chiếu.
+3. Seller accept → Content đọc verified facts/confirmed style; media pipeline member chạy; seller retry/apply đúng phiên bản.
+4. Night: xem evidence IDs, candidate, public history, calibration points và lesson ops thực được commit. Rules chưa tự đổi.
+5. Ngày2 seller Yes; Content invocation mới đọc style đã xác nhận. Cho thấy Platform đọc learned history/lesson qua tool. Nếu dùng fixture, nhãn thể hiện đúng, không tuyên bố revenue tăng.
 
-- LLM timeout: hiển thị fallback offline rồi tiếp tục, không dừng demo để debug provider.
-- Video đang chờ: hiển thị running, hoặc cache đúng draft nếu có. Seller có thể chủ động skip; không tự duyệt video.
-- OpenAI Images chưa cấu hình: báo giới hạn media, không gắn nhãn đã tạo ảnh thành công.
-- State cũ: reset demo, không sửa dữ liệu bằng console. Không restart rồi giả định card cũ dùng được khi chưa có resume.
+UI member chưa sẵn sàng thì dùng headless harness cho1/2/4/5 và fake Content tại3 có nhãn. Đây là bàn giao phần agent/knowledge, chưa đạt demo sản phẩm với media live. Không thay mục tiêu agent bằng việc làm đẹp UI.
 
 ## Bàn giao cuối
 
-Ghi SHA, lệnh test/kết quả, provider thật đã xác minh phần nào, đường dẫn media, cấu hình thiếu, bug đang chặn, mục DEFERRED. Giữ token trong .env; kiểm `git diff --cached` chỉ có tài liệu/code/fixture không chứa secrets. Bản single-session chạy local, không deploy public.
+Ghi SHA, test results, trace path, five-bin records và next-use evidence, mapping adapter thật/fake/pending, key thiếu (chỉ tên), provider response nào đã xác minh. Token ở .env ignored. CorePASS không tự suy ra LivePASS; lỗi chặn phần nào nêu đúng phần đó. Proof nhiều ngày mặc định6 là follow-up simulator owner, chưa có số thì /proof trả PROOF_NOT_READY.

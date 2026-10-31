@@ -1,14 +1,14 @@
 # D01 — Model, seed, tài chính và trạng thái phiên
 
-Timebox: **16 phút**. Phụ thuộc D00. Đọc `docs/DEMO_CONTRACT.md` mục 1–2, 4, 6 và `docs/SEED_DATA.md`. Task này chưa viết agent, UI hoặc media.
+Timebox: **15 phút**. Phụ thuộc D00. Đọc `docs/DEMO_CONTRACT.md` mục 1–2, 4, 6 và `docs/SEED_DATA.md`. Task này chưa viết agent, UI hoặc media.
 
 ## Output được sửa
 
-`app/domain/models/{shops,packages,negotiation,cards,content,learning,metrics,events,intent}.py`, `app/domain/{finance,validators,privacy,formatting}.py`, `app/simulation/world.py`, `app/runtime/{session,manager}.py`, `app/infrastructure/{store,eventlog}.py`, `app/core/settings.py`, `.env.example`, `data/seed.json`, `tests/unit/domain/{test_models,test_finance,test_privacy}.py`, `tests/unit/runtime/test_session.py`, `tests/fakes/`, `docs/CODEX_LOG.md`.
+`app/domain/models/{shops,packages,negotiation,cards,content,learning,metrics,events,intent,tools}.py`, `app/domain/{finance,validators,privacy,formatting}.py`, `app/simulation/world.py`, `app/runtime/{session,manager}.py`, `app/infrastructure/{store,eventlog}.py`, `app/core/settings.py`, `.env.example`, `data/{seed,campaigns}.json`, `contracts/agents/{public_context,shop_context,tool_checks}.json`, `tests/unit/domain/{test_models,test_finance,test_privacy}.py`, `tests/unit/runtime/test_session.py`, `tests/fakes/`, `docs/CODEX_LOG.md`.
 
 ## 1. Tạo model trước
 
-- Chép đúng field từ CONTRACT và các field bổ sung trong DEMO_CONTRACT. Package, Brief và Decision dùng model cụ thể, không dùng `dict[str, Any]`.
+- Tạo DTO tool theo AGENT_TOOL_KNOWLEDGE và record/view theo KNOWLEDGE_CONTRACT; một class cho một schema, không tạo bản dict khác trong agent. Chép đúng field từ CONTRACT và các field bổ sung trong DEMO_CONTRACT. Package, Brief và Decision dùng model cụ thể, không dùng `dict[str, Any]`.
 - Các danh sách dùng `default_factory`, không dùng shared mutable default.
 - `Package` kiểm kiểu và khoảng giá trị; hard cap của shop thuộc business validator. `model_copy(update=...)` không tự validate: dựng lại bằng `Package.model_validate(...)` sau clamp.
 - `PlatformTurn.accept` cần package; `ShopTurn.counter/accept` cần package. Action reject/withdraw có thể trả null. Output model không hợp lệ thì caller fallback; schema không tự sửa số tiền.
@@ -70,6 +70,7 @@ stop = ceil(be * 2) / 2
 MemoryStore.get(namespace, key, default=None)
 MemoryStore.put(namespace, key, value)
 MemoryStore.list(namespace)
+MemoryStore.commit_batch(...)  # exact StoreWrite/MemoryCommit + metadata theo KNOWLEDGE_CONTRACT
 EventLog.add(run_id, day, type, actor, shop_id, text_vi, data) -> Event
 EventLog.since(run_id, after_seq) -> list[Event]
 Session.new(settings, memory_enabled=True) -> Session
@@ -78,7 +79,7 @@ SessionManager.reset(memory_enabled=True, seed=42) -> Session
 
 Store namespace là tuple `(run_id, compartment, shop_or_scope)`. Trả deep-copy để caller không sửa store qua object đã đọc. EventLog giữ lock quanh cấp seq và append; gọi model/provider bên ngoài lock. JSONL dùng UTF-8, `ensure_ascii=False`. SessionManager nhận factory/fake dependencies để test; production wiring ở lifespan của D03.
 
-Rules chỉ nằm tại `session.states[D].private.rules`, kèm `session.rules_version`. Memory không giữ bản rules độc lập. Session dùng RLock, trạng thái busy và các receipt dict theo DEMO_CONTRACT. Đặt constructor defaults cho service chưa nối để fake tests chạy; không catch mọi ImportError để giấu module còn thiếu.
+Rules chỉ nằm tại `session.states[shop_id].private.rules`, kèm `session.rules_version`. Memory không giữ bản rules độc lập. Session.knowledge_revision/memory_cursor là property đọc store metadata. Session dùng RLock, trạng thái busy và các receipt dict theo DEMO_CONTRACT. Đặt constructor defaults cho service chưa nối để fake tests chạy; không catch mọi ImportError để giấu module còn thiếu.
 
 Settings thêm `MUSE_API_BASE_URL`, `MUSE_API_KEY`, `MUSE_VIDEO_MODEL` và `MEDIA_MODE` với mặc định `offline`. `MUSE_API_KEY` có `repr=False`; `describe()` ẩn toàn bộ token. LLM replay thiếu key vẫn resolve thành replay. Media mode độc lập với LLM mode: thiếu OpenAI LLM key không tự tắt Muse. Giữ nguyên SDK đã cài.
 
@@ -94,3 +95,14 @@ Settings thêm `MUSE_API_BASE_URL`, `MUSE_API_KEY`, `MUSE_VIDEO_MODEL` và `MEDI
 8. Settings không lộ Muse key. Replay không key vẫn là replay; `LLM_MODE=offline` và `MEDIA_MODE=live` không xung đột.
 
 Chạy `.venv/bin/python -m pytest -q tests/unit/domain tests/unit/runtime tests/unit/core` và baseline integration health. Bàn giao code có test tiền/privacy trước khi chuyển D02. Reviewer kiểm công thức độc lập bằng tính tay D, không chỉ nhận test chép lại implementation.
+
+
+## DTO và knowledge sources bắt buộc
+
+- `domain/models/tools.py`: PublicContext, ShopContext, PackageCheck, ShopPackageCheck, RefereeContext, ContentContext, CampaignRecord/CampaignCatalogResult theo AGENT_TOOL_KNOWLEDGE. Không dùng alias ToolCheckResult khác hợp đồng.
+- `domain/models/learning.py`: typed records/views/batches theo KNOWLEDGE_CONTRACT; Preference giữ evidence seq thật, hỗ trợ content_style và voucher_max_pct. D04 triển khai hành vi, D01 cấp schema trước để coder có thể làm riêng.
+- `data/campaigns.json`: tối thiểu một campaign mẫu eligible ngành của D, một record expired để test. Gắn source_id, hạn theo ngày mô phỏng, eligibility; không giới thiệu là campaign sàn thật. Load vào World/catalog dependency, không để model đọc path tùy ý.
+- Seed product facts giữ nguồn `seed:shop:<id>`; rules gắn version. LLM đọc dữ liệu qua role tools. Hạ tầng không cần vector DB.
+- Store in-memory là adapter demo của cùng commit_batch interface: metadata/revision/cursor/receipt và 4 bins cập nhật atomic theo KNOWLEDGE_CONTRACT. D04 nhận adapter này; DB member thay bằng transaction ở adapter riêng sau đó.
+- `MAX_LIVE_CALLS_PER_SESSION=64` trong config demo/.env.example. LLMClient dùng cùng budget cho native loop của 5 roles; không tạo counter riêng trong runner.
+- Tests bổ sung: đúng type từng fixture tool/view, catalog expired/khác category bị loại (filter do D02a), không có Persona trong public/private tool DTO. Không import app.agents từ domain.

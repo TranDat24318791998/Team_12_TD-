@@ -1,6 +1,6 @@
-# Hợp đồng implementation cho demo dưới 2 giờ
+# Hợp đồng runtime và tích hợp cho demo dưới 2 giờ
 
-Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. File này là đặc tả implementation hẹp để agent code/review dùng cùng nhau; source hiện chưa triển khai. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
+Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D; OpenAI cho LLM và ảnh, Muse Gateway cho video. Muse đã có base/key local; OpenAI chờ key/model. Bản sửa ưu tiên phần Toàn: Agent + Tools + Knowledge. [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md) quyết định tool calling/ACL; [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md) quyết định typed records/views/write semantics. File này giữ runtime/HTTP/media để agent code/review dùng cùng nhau; source hiện chưa triển khai. Giữ `docs/CONTRACT.md` cho field không đổi. Không diễn giải file này thành đã hoàn thành Data API v1.
 
 ## 1. Quyết định kiến trúc
 
@@ -11,7 +11,7 @@ Phạm vi do yêu cầu hiện hành: luồng chính, một phiên local shop D;
 - LangGraph chỉ làm vòng thương lượng; graph trả result rồi kết thúc. HTTP seller decision tiếp tục workflow từ `pending_card`; không cần `interrupt`, persistent checkpointer hoặc resume sau restart.
 - EventLog giữ list trong run, seq tăng bằng lock và append JSONL vào `runs/<run_id>/events.jsonl`. Không replay JSONL để tự khôi phục phiên trong MVP.
 - Worker ảnh/video dùng một ThreadPoolExecutor tối đa 4 worker, Session RLock để cập nhật ngắn. Không giữ lock qua provider/network/LLM.
-- Mỗi run có một LLMClient; `remaining_calls` là budget duy nhất. Session.live_calls_left là property đọc từ client. Client reserve trước mỗi network request.
+- Mỗi run có một LLMClient; tool loop theo D02a, demo budget64. `remaining_calls` là budget duy nhất. Session.live_calls_left là property đọc từ client. Client reserve trước mỗi network request.
 - `LLM_MODE` và nguồn media tách biệt: LLM offline vẫn có thể chạy media thật nếu media client được cấu hình. Pytest luôn inject fake provider; không đọc token thật.
 
 ## 2. Model cốt lõi
@@ -31,7 +31,7 @@ Giữ nguyên các field của ShopPublic/ShopPrivate/ShopRules/FeeConfig, Packa
 | SellerDecision | Field cũ + `expected_card_version:int, expected_brief_version:int`; HTTP P0 chỉ accept/negotiate/reject; edit/defer chưa hỗ trợ |
 | ContentDraft | Field cũ + `card_id:str, brief_version:int`; `version` 1..3 tính trong một card |
 | ContentText / `domain/models/content.py` | `title:str, description:str, checks:list[str]`; title/description chỉ dùng verified facts |
-| Preference / `domain/models/learning.py` | `pref_id:str, shop_id:str, field:Literal['content_style'], value:str, status:Literal['candidate','asked','confirmed','declined'], evidence_seqs:list[int], asked_day:int|None, declined_until:int|None` |
+| Preference / `domain/models/learning.py` | `pref_id:str, shop_id:str, field:Literal['content_style','voucher_max_pct'], value:str, status:Literal['candidate','asked','confirmed','declined'], evidence_seqs:list[int], asked_day:int|None, declined_until:int|None` |
 | ForecastSnapshot / `domain/models/metrics.py` | `prediction_id:str, shop_id:str, target_day:int, raw_point:float, issued_point:int, factor_used:float, package:Package` |
 
 Public brief không tự copy hard cap 45.000đ của shop vào `ads_daily_cap`. Mặc định field này null, nghĩa là chưa có ngân sách người bán chủ động công khai; shop vẫn enforce hard rule 45.000đ. Nếu seller cung cấp public cap khác thì lấy min với hard rules ở shop. Không ép live LLM phải đề xuất 70.000đ khi public brief đã chặn mức đó.
@@ -50,6 +50,7 @@ last_night: NightSummary|None
 memory, log, llm, content
 negotiation_attempt: int=0
 rules_version: int=1
+knowledge_revision, memory_cursor  # read-only properties từ store, không copy counters
 forecast_snapshots: dict[(shop_id,day),ForecastSnapshot]
 settled_days: set[int]
 night_receipts: dict[int,dict]
@@ -81,7 +82,7 @@ State `idle → brief_confirmed → negotiating → awaiting_decision → conten
 
 Sau night, idle + day=2 + brief.confirmed=true hiển thị Bắt đầu ngày 2, không bắt xác nhận lại brief. `StateView.busy` đọc `Session.phase_busy`; không tạo hai cờ độc lập.
 
-`/day/start` là sync trong handler thường `def`, FastAPI threadpool chạy; UI thấy busy local ngay, có thể poll events từ request khác. Mỗi model call tối đa 8 giây, tối đa 12 calls/negotiation (trọng tài sau mỗi lượt sàn/shop); không giữ Session.lock cả vòng. Server đánh dấu busy trước khi nhả lock, command xung đột trả 409. Không làm thêm operation/job framework cho day start.
+`/day/start` là sync trong handler thường `def`, FastAPI threadpool chạy; UI thấy busy local ngay, có thể poll events từ request khác. Mỗi model call tối đa 8 giây, tối đa 12 actor invocations, mỗi invocation tối đa 3 model calls = 36 calls/negotiation (trọng tài sau mỗi lượt sàn/shop); không giữ Session.lock cả vòng. Server đánh dấu busy trước khi nhả lock, command xung đột trả 409. Không làm thêm operation/job framework cho day start.
 
 P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, duration_days=3. Giá trị ngoài slice trả 422 `DEMO_BRIEF_UNSUPPORTED`; không xây thêm nhánh rồi bỏ thiếu UI. Public cap được chọn hoặc null. Gateway HTTP retry/apply cần cả card và brief version vì draft version bắt đầu lại từ 1 mỗi card.
 
@@ -108,7 +109,7 @@ P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, du
 - OpenAI: OPENAI_API_KEY, LLM_MODEL, LLM_MODEL_REFLECT, OPENAI_IMAGE_MODEL để trống đến khi người dùng điền. Video: MUSE_API_BASE_URL=https://muse-api.butterflyro.space, MUSE_API_KEY đã lưu local, MUSE_VIDEO_MODEL=muse-video. Đọc MUSE_API.md; không dùng endpoint useapi.net cũ. MEDIA_MODE tách biệt LLM_MODE, default offline trong Settings và live trong .env local đã chọn.
 - Input ảnh sản phẩm D là artifact bắt buộc cần cung cấp/chọn ở D00. Nếu không có ảnh gốc, cần tạo ảnh synthetic trước và ghi nguồn rõ; không dùng đường dẫn D-1.jpg chưa tồn tại.
 - Chữ tạo ngay bằng Content Agent (OpenAI hoặc template fallback có nhãn), ba ảnh dùng OpenAI và video dùng Muse chạy nền. Trước khi xác minh wire format ảnh tham chiếu của Muse, dùng text-to-video từ brief đã duyệt và ghi rõ chưa kiểm chứng giữ đúng hình dáng sản phẩm. Khi đã xác minh image-to-video, dùng cover A cùng draft; chọn B/C không tự tạo thêm video. UI ghi đúng nguồn video thực tế.
-- `start/retry` trả dưới1s với fake model/provider; real text call có timeout8s. Không chờ ảnh/video trong HTTP response.
+- `start/retry` trả dưới1s với fake model/provider; live Content có thể cần tối đa24s trước khi trả chữ, UI hiển thị busy; mỗi real model call có timeout8s; Content invocation tối đa3 calls. Không chờ ảnh/video trong HTTP response.
 - Worker capture `(run_id,card_id,brief_version,draft_version)`. Trước callback ghi state, so khớp current session/draft và chưa published. Kết quả cũ được bỏ qua, không ghi đè listing.
 - Image/video status dùng enum cũ: image running/done/failed/cached; video pending/running/done/failed/cached. `path` chỉ có khi local file thực tồn tại. `cached` phải là file tương ứng input/model/prompt, không lấy media bất kỳ rồi nhận là đúng brief.
 - Ba bản tổng cộng = initial +2 retry. Feedback tạo style cho draft hiện tại; chưa thay rules dài hạn.
@@ -125,6 +126,7 @@ P0 chỉ nhận brief tăng đơn với allow_ads=true, content_refresh=true, du
 - ForecastSnapshot trước settlement, raw daily cùng ngày. Không lấy forecast3ngày chia outcome1ngày. Chỉ D 1–2 mẫu→factor giữ1.0 đến đủ5mẫu.
 - `market.build_forecast_snapshots(shop,pkg,start_day,seed,calibration) -> list[ForecastSnapshot]` là hàm thuần trả các ngày trong thời hạn. `forecast_package` tổng hợp cùng output. `runtime.activate_approved_package` lưu các snapshot của gói đã duyệt vào Session trước settlement; function forecast không dùng global/Session để tự ghi. Retry apply dùng receipt, không tạo lại snapshot sau khi biết actual.
 - History lưu package seller thực sự áp dụng, refs negotiation/card, kết quả công khai; không có lãi/cost/private note trong platform_view.
+- Quyền, DTO typed và atomic commit của cả năm ngăn theo KNOWLEDGE_CONTRACT; các mục dưới chỉ giữ kịch bản D. Shop A có fixture seller edit voucher để test preference voucher_max_pct; chưa mở A UI.
 - Candidate `content_style='ảnh nền sáng'` lấy từ feedback event có thật. `pref_id` ổn định trong run/shop/field/value. Night chỉ tạo candidate, không sửa rules.
 - `Preference.evidence_seqs` là integer event seq. `LessonOp.evidence` giữ đúng CONTRACT: negotiation ID strings có thật; lấy liên kết từ event.data.negotiation_id. Không dùng chuỗi hóa event seq làm mã thương lượng.
 - Ngày2 start: đang có gói nên chỉ tạo question card. Yes→append style một lần và rules_version+1; No→declined/14ngày im lặng. Không chạy lại campaign.
@@ -137,4 +139,15 @@ Giữ Event của CONTRACT. Mọi `data` chứa IDs/version liên quan; thêm `s
 
 Các event cần có: `intent_confirmed`, `day_start`, `platform_turn`, `shop_turn`, `code_check`, `referee_review`, `card_sent`, `seller_decision`, `content_job`, `content_applied`, `package_applied`, `market_result`, `memory_read`, `memory_write`, `night_summary`, `rules_confirmed`.
 
+Tool events thêm `tool_called`, `tool_result`, `agent_completed`: schema và privacy theo D02a. Không xuất raw private ToolMessage. Model source và requested_by phân biệt native tool request với offline dispatch.
+
 `content_job` khi retry chứa feedback_vi và draft version. `seller_decision` chứa card/version và rule_answer. `package_applied` chứa approved card ID và exact package. Platform/referee prompt được dựng từ PublicTurn, không dùng browser seller event stream.
+
+
+## 8. Runtime giữ phần việc điều phối gốc
+
+D03 có monitor/match/renew helpers theo task gốc 1.6; không cần UI nhiều shop hay Send fan-out để test. Monitor dùng metrics đã settle: dừng ads khi đủ số ngày dưới ngưỡng, tồn kho thiếu hoặc hết hạn; không tăng chi. Match trả selected/rejected có lý do; C stock15 bị loại. Gói hết hạn tạo đề xuất renew mới và cần approval mới. Fixture E kiểm pause trước spend ngày3, fixture A kiểm sở thích voucher; chúng không biến demo D2ngày thành proof A–E.
+
+Day/daystart cùng current session, không dùng persistent interrupt/checkpointer ở slice này. Seller approval và content phiên bản vẫn là gate bắt buộc. Model không được gọi thẳng confirm_preference, commit_memory_updates, apply hoặc provider job.
+
+Market-result evidence giữ card/negotiation/prediction refs xuyên ngày; quy tắc join/không đếm support hai lần theo KNOWLEDGE_CONTRACT mục5.
