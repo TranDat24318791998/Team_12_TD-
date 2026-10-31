@@ -62,8 +62,15 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None, *, negotiation
             return {'result':fail(state,'Không thể đánh giá cuộc thương lượng.'), 'route':'end'}
         safe_reason,_=leak_guard(result.reason_vi,shop.public,shop.private,session.world.fees)
         safe_focus,_=leak_guard(result.focused_question or '',shop.public,shop.private,session.world.fees)
-        result=result.model_copy(update={'reason_vi':safe_reason,'focused_question':safe_focus or None})
-        log('referee_review','referee',result.reason_vi,{'action':result.action,'evidence_refs':result.evidence_refs,'source':session.last_agent_source})
+        safe_terms=[]
+        for term in result.unresolved_terms:
+            safe_term,redacted=leak_guard(term,shop.public,shop.private,session.world.fees)
+            if not redacted:safe_terms.append(safe_term)
+        result=result.model_copy(update={'reason_vi':safe_reason,'focused_question':safe_focus or None,'unresolved_terms':safe_terms})
+        log('referee_review','referee',result.reason_vi,{'action':result.action,'evidence_refs':result.evidence_refs,
+            'source':session.last_agent_source,'round':turns[-1].round,'unresolved_terms':result.unresolved_terms,
+            'next_actor':{'platform':'platform_agent','shop':'shop_agent','seller':'seller'}.get(result.next_actor),
+            'focused_question':result.focused_question})
         last=turns[-1]
         if last.action in ('withdraw','reject'):
             return {'result':fail(state,'Một bên từ chối gói.'), 'route':'end'}
@@ -113,7 +120,8 @@ def run_negotiation(session, shop_id, day, kind, owner_note=None, *, negotiation
         log('shop_turn','shop_agent',public.message_vi,{'turn_id':public.turn_id,'round':state['rounds'],
             'action':public.action,'package':public.package.model_dump(mode='json') if public.package else None,
             'source':session.last_agent_source,'redacted':redacted})
-        log('code_check','code','Đã kiểm gói shop.',{'ok':True,'codes':[]})
+        if decision.package is not None:
+            log('code_check','code','Đã kiểm gói shop.',{'ok':True,'codes':[]})
         return {'turns':turns+[public], 'candidate':decision.package, 'last_action':decision.action, 'focused_question':None, 'route':'review_shop'}
     graph=StateGraph(NegotiationState)
     graph.add_node('platform',platform); graph.add_node('shop',shop_turn); graph.add_node('review',review)

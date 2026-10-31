@@ -16,10 +16,11 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     images:['fan-original','fan-white','fan-pink','fan-mint'].map(image), video:null, active_voucher_pct:0
   };
   const packageFor = (voucher=3) => ({content_refresh:true,ads_daily_budget:45000,voucher_pct:voucher,stop_roas_below:6.5,stop_after_days:2,duration_days:3});
+  const briefPreset={intent:'increase_orders',goal_vi:'Đạt 24 đơn trong 3 ngày',allow_ads:true,ads_daily_cap:45000,content_refresh:true,duration_days:3};
   function fresh(memory=true) {
-    return { state:{run_id:makeRunId(),day:1,mode:'offline',memory_enabled:memory,step:'idle',demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
+    return { state:{run_id:makeRunId(),day:1,mode:'offline',memory_enabled:memory,step:'idle',brief:null,brief_preset:clone(briefPreset),brief_editable:false,demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
   }
-  function read() { try { const raw=storage.getItem(KEY); return raw ? JSON.parse(raw) : fresh(); } catch { return fresh(); } }
+  function read() { try { const raw=storage.getItem(KEY),db=raw ? JSON.parse(raw) : fresh();db.state.brief_preset=clone(briefPreset);db.state.brief_editable=false;return db; } catch { const db=fresh();db.state.brief_preset=clone(briefPreset);db.state.brief_editable=false;return db; } }
   function write(db) { storage.setItem(KEY, JSON.stringify(db)); }
   const time = () => new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',hour12:false});
   function event(db,type,actor,text,data={},shop='D') {
@@ -84,6 +85,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     if(url.pathname==='/api/demo/jump-day7' && method==='POST'){
       const sample=await loadDay7Sample(fetchImpl,options.signal);
       const next={...fresh(),state:sample.state,events:sample.events,proof:sample.proof,source:sample.source};
+      next.state.brief_preset=clone(briefPreset);next.state.brief_editable=false;
       next.state.sample_source=sample.source;
       // Keep the existing preview until the complete database response is valid.
       const previous=storage.getItem(KEY);
@@ -96,10 +98,11 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     if(url.pathname==='/api/reset' && method==='POST') { const next=fresh(body.memory??true); write(next); return clone({run_id:next.state.run_id,day:1,mode:next.state.mode,state:next.state}); }
     if(url.pathname==='/api/state' && method==='GET') result=s;
     else if(url.pathname==='/api/events' && method==='GET') result={run_id:s.run_id,events:db.events.filter(e=>e.seq>Number(url.searchParams.get('after') || 0)),last_seq:db.events.length,has_more:false};
-    else if(url.pathname==='/api/brief/confirm' && method==='POST'){s.brief={...body,confirmed:true,version:1};result={brief:s.brief,step:'idle'};}
+    else if(url.pathname==='/api/brief/confirm' && method==='POST'){if(Object.keys(body).length!==Object.keys(briefPreset).length || !Object.keys(briefPreset).every(key=>body[key]===briefPreset[key]))fail('Yêu cầu mẫu đã được cố định.');s.brief={...briefPreset,confirmed:true,version:1};result={brief:s.brief,step:'idle'};}
     else if(url.pathname==='/api/day/start' && method==='POST') {
       if(s.step==='complete' || s.day>SIMULATION_DAYS) fail('Phiên mô phỏng đã hoàn tất. Hãy đặt lại để chạy phiên mới.');
       if(s.step!=='idle' && s.step!=='night_done') fail('Ngày hiện tại đã bắt đầu.');
+      if(!s.brief?.confirmed) fail('Hãy xác nhận yêu cầu demo trước khi bắt đầu.');
       s.step='negotiating';s.pending_card=null;s.content_draft=null;db.ready=null;db.started=now();db.negotiations=1;
       if(s.active_package && s.active_package.end_day<s.day) s.active_package=null;
       event(db,'day_start','system',`Bắt đầu ngày mô phỏng ${s.day}.`,{day:s.day});

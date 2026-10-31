@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {readEvents} from '../src/api.js';
+import {deriveActivity} from '../src/activity.js';
+import {readProofEvidence} from '../src/proofArtifact.js';
+import {comparisonDays} from '../src/proofComparison.js';
+import {ControlPanel} from '../src/pages/Shop.jsx';
+import {DemoPage} from '../src/pages/Demo.jsx';
+import {NightPage} from '../src/pages/Night.jsx';
+import {EventFeed} from '../src/components/EventFeed.jsx';
+
+const noop=()=>{};
+export async function verifyDataContract(data){
+  const {state,pages,report,pair,retryable,unknown,brief_initial,brief_confirmed}=data;
+  const panelFor=value=>renderToStaticMarkup(<ControlPanel state={value} preview={false} onReset={noop} onStart={noop} onEndDay={noop} onConfirm={noop}/>);
+  const fixed=panelFor(brief_initial);
+  assert.match(fixed,/Đạt 24 đơn trong 3 ngày/);assert.match(fixed,/45\.000đ/);
+  assert.match(fixed,/data-confirm-brief/);assert.doesNotMatch(fixed,/<input|<textarea|<select/);
+  const confirmed=panelFor(brief_confirmed);
+  assert.match(confirmed,/Yêu cầu đã xác nhận ban đầu/);assert.match(confirmed,/Đạt 24 đơn trong 3 ngày/);assert.doesNotMatch(confirmed,/data-confirm-brief/);
+  let page=0;
+  const events=(await readEvents({request:async()=>pages[page++]},state.run_id)).events;
+  assert.equal(page,pages.length);
+  assert.ok(events.some(event=>event.type==='agent_completed' && event.data.source==='offline'));
+  const feed=renderToStaticMarkup(<EventFeed state={state} events={events} preview={false}/>);
+  assert.match(feed,/Nguồn thực tế: Ngoại tuyến \(quy tắc dự phòng\)/);
+  assert.match(feed,/Mã lý do: provider_unavailable/);
+  const panel=renderToStaticMarkup(<ControlPanel state={state} preview={false} onReset={noop} onStart={noop} onEndDay={noop}/>);
+  assert.match(panel,/Chế độ LLM cấu hình/);
+  const activity=deriveActivity({...state,day:1,step:'negotiating'},events);
+  assert.ok(activity.check && Array.isArray(activity.check.data.checks));
+  assert.ok(activity.referee && activity.referee.data.action);
+  const summary=state.last_night;
+  assert.equal(summary.source,'offline');
+  assert.ok(summary.history_updates.length && summary.history_refs.length);
+  assert.ok(summary.pref_candidates.length && summary.preference_refs.length);
+  const night=renderToStaticMarkup(<NightPage run={{state,events}} preview={false}/>);
+  assert.match(night,/Ngoại tuyến \(quy tắc dự phòng\)/);
+  for(const text of [...summary.history_updates,...summary.pref_candidates])assert.ok(night.includes(text));
+  assert.equal(retryable.learning_retry_allowed,true);assert.equal(unknown.learning_retry_allowed,false);
+  const demo=state=>renderToStaticMarkup(<DemoPage run={{state,events:[],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(demo(retryable),/Thử lại bước học/);assert.doesNotMatch(demo(unknown),/Thử lại bước học/);
+  assert.ok(comparisonDays(report).length>0);
+  let path;
+  const actual=await readProofEvidence({request:async requested=>{path=requested;return pair;}},report);
+  assert.equal(path,'/api/proof/events?comparison_id='+encodeURIComponent(report.comparison_id));
+  assert.deepEqual(actual,pair);
+}

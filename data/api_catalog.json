@@ -1278,6 +1278,15 @@
       "roles": ["seller"],
       "public": false,
       "scope": ["seller_session", "shop_D"]
+    },
+    {
+      "id": "API-078",
+      "method": "GET",
+      "path": "/api/proof/events",
+      "handler": "proof_events",
+      "roles": ["seller"],
+      "public": false,
+      "scope": ["seller_session", "comparison", "shop_D"]
     }
   ]
 }

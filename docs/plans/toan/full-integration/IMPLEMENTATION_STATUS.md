@@ -1,5 +1,7 @@
 # Nghiệm thu bản local
 
+**Review bổ sung commit `[3.4]` theo yêu cầu người dùng:** hai Astra độc lập đã tìm thêm lỗi tại ranh giới payload backend → frontend. Đang xử lý trước khi push FI01/FI02; xem [frontend](COMMIT_3_4_FRONTEND_REVIEW.md) và [backend](COMMIT_3_4_BACKEND_REVIEW.md). Các kết quả bên dưới là baseline đã nghiệm thu trước lượt đối chiếu bổ sung này.
+
 Cập nhật 31/10/2026, 15:12 UTC+7. **Đã implement và hoàn tất 9 review Astra max trong phạm vi demo.** Coder dùng Terra 6.1 max. Làm trên main; plan đã push tại `d46c812`, implementation tại `075ee58` ([FI01] integrate native agents, durable knowledge and local demo).
 
 ## Bản đang chạy

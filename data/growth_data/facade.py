@@ -50,11 +50,53 @@ class Facade:
         return {"shop_id":s,"version":job["attempt"],"card_id":card['card_id'] if card else None,"brief_version":run['brief_version'],"job_id":job['job_id'],"content_id":content['content_id'],"job_version":job['version'],"content_version":content['version'],"status":job['status'],"error_code":job['error_code'],"title":content["title"],"description":content["description"],
                 "images":images,"video":video,"outcome_unknown":any(v.get('status') in {'unknown','outcome_unknown'} for v in job['provider_state'].values()),"feedback_history":content["feedback_history"],"style_notes":content["style_notes"],"checks":content["validation"]}
 
+    def night_summary(self,c,r,run,handoff):
+        if not handoff or not handoff['night_summary']:return None
+        if run['demo_shop_id']!='D':return None
+        summary=handoff['night_summary'].copy()
+        if run['config'].get('driver',{}).get('agent_version')!='native':return summary
+        history_ids=set(summary.get('history_updates',[]));preference_ids=set(summary.get('pref_candidates',[]))
+        summary.update(history_updates=[],pref_candidates=[],history_refs=[],preference_refs=[])
+        snapshot=one(c,'SELECT * FROM night_snapshots WHERE run_id=? AND day=? AND shop_id=?',(r,handoff['day'],run['demo_shop_id']))
+        receipt=one(c,'SELECT * FROM night_commits WHERE run_id=? AND day=? AND shop_id=?',(r,handoff['day'],run['demo_shop_id']))
+        if not snapshot or not receipt or handoff['status']!='completed':return summary
+        if snapshot['snapshot_hash']!=receipt['snapshot_hash'] or handoff['receipt_hash']!=receipt['publication_hash']:return summary
+        from app.domain.models.learning import NightCommit, NightSnapshot
+        try:
+            frozen=NightSnapshot.model_validate(snapshot['payload'])
+            commit=NightCommit.model_validate(receipt['payload'])
+        except ValueError:
+            return summary
+        if (frozen.run_id,frozen.shop_id,frozen.day,frozen.through_seq)!=(r,run['demo_shop_id'],handoff['day'],handoff['settlement_cursor']):return summary
+        if (commit.run_id,commit.shop_id,commit.day,commit.snapshot_hash,commit.publication_hash)!=(r,run['demo_shop_id'],handoff['day'],snapshot['snapshot_hash'],receipt['publication_hash']):return summary
+        applied=set(commit.knowledge.store.applied_ids)
+        summary['source']=commit.source
+        for item in frozen.derived.history:
+            if item.negotiation_id not in history_ids or item.negotiation_id not in applied or item.shop_id!=run['demo_shop_id']:continue
+            status={'agreed':'đã thống nhất','failed':'không đạt thỏa thuận','warning_only':'đã thống nhất với cảnh báo'}[item.status]
+            parts=[f'Ngày {item.day}: {status} sau {item.rounds} vòng thương lượng']
+            action={'accept':'người bán đã duyệt','edit':'người bán đã chỉnh sửa và duyệt','reject':'người bán đã từ chối','negotiate':'người bán yêu cầu thương lượng thêm'}.get(item.seller_action)
+            if action:parts.append(action)
+            if item.approved_package is not None:parts.append(f"gói đã áp dụng voucher {item.approved_package.voucher_pct}%")
+            if item.outcome is not None:parts.append(f'ghi nhận {item.outcome.orders} đơn')
+            summary['history_updates'].append('; '.join(parts)+'.')
+            summary['history_refs'].append({'record_id':item.negotiation_id,'day':item.day,'version':item.version,'evidence_seqs':item.evidence_seqs})
+        for item in frozen.derived.preferences:
+            if item.pref_id not in preference_ids or item.pref_id not in applied or item.shop_id!=run['demo_shop_id']:continue
+            value=self.s.safe_text(c,r,item.value)
+            if value!=item.value:continue
+            if item.field=='content_style':text=f'Ghi nhận phong cách nội dung: {value}.'
+            elif item.value.isdigit() and 0<=int(item.value)<=30:text=f'Ghi nhận mức voucher người bán chọn: {item.value}%.'
+            else:continue
+            summary['pref_candidates'].append(text)
+            summary['preference_refs'].append({'record_id':item.pref_id,'field':item.field,'evidence_seqs':item.evidence_seqs})
+        return summary
+
     def state(self,c,p,run_id=None):
         run=self.s.run(c,p,run_id) if run_id else self.current(c,p);r=run["run_id"];self.s.scope(c,p,r,"D",{"seller"})
         card=one(c,"SELECT * FROM cards WHERE run_id=? AND shop_id='D' AND status='pending'",(r,))
         active=one(c,"SELECT * FROM campaigns WHERE run_id=? AND shop_id='D' AND status='active'",(r,))
-        handoff=one(c,"SELECT * FROM learning_handoffs WHERE run_id=? ORDER BY day DESC LIMIT 1",(r,))
+        handoff=one(c,"SELECT * FROM learning_handoffs WHERE run_id=? AND summary_shop_id='D' ORDER BY day DESC LIMIT 1",(r,))
         original=self.s.public(c,r,"D").copy()
         from .seed import world
         original.update({k:v for k,v in world()["shops"]["D"]["public"].items() if k not in {"images"}})
@@ -78,16 +120,17 @@ class Facade:
         metadata=one(c,'SELECT llm_limit FROM knowledge_meta WHERE run_id=?',(r,))
         limit=metadata['llm_limit'] if metadata and metadata['llm_limit'] is not None else getattr(self.s,'live_call_limit',None)
         used=c.execute('SELECT COUNT(*) FROM llm_call_reservations WHERE run_id=?',(r,)).fetchone()[0]
-        return {"run_id":r,"day":run["current_day"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"step":step,"brief":run['brief'],"rules_version":rules_version,"confirmed_style_notes":rules['content_style_notes'],
+        preset=self.s.brief_preset(run)
+        return {"run_id":r,"day":run["current_day"],"mode":run["mode"],"memory_enabled":bool(run["memory_enabled"]),"step":step,"brief":run['brief'],"brief_preset":preset,"brief_editable":preset is None,"rules_version":rules_version,"confirmed_style_notes":rules['content_style_notes'],
                 "simulation_days":run["simulation_days"],"execution_profile":run["execution_profile"],"data_source":run["config"].get("source","simulation"),"busy":busy,
                 "active_operation":self.s.operation_view(operation,p.role) if operation else None,
-                "learning_status":handoff["status"] if handoff else None,"learning_error":handoff["error_code"] if handoff else None,"learning_version":handoff['version'] if handoff else None,"learning_day":handoff['day'] if handoff else None,
+                "learning_status":handoff["status"] if handoff else None,"learning_error":handoff["error_code"] if handoff else None,"learning_version":handoff['version'] if handoff else None,"learning_day":handoff['day'] if handoff else None,"learning_retry_allowed":self.s.learning_retry_allowed(c,run,handoff),
                 "content_refs":{"active_content_id":current["active_content_id"],"original_content_id":seed_content["content_id"],"product_version":current["version"]},
                 "capabilities":{"trace":bool(trace),"faithful_llm_replay":False,"content_undo":True,"comparison":True,"external_workers":True},
                 "links":{"trace":trace["result"]["trace_url"] if trace else None},
                 "demo_shop":self.s.public(c,r,"D"),"demo_shop_original":original,
                 "active_package":{"package":active["package_snapshot"],"start_day":active["start_day"],"end_day":active["end_day"],"ads_paused":active["ads_status"]=="paused","card_id":active_card['card_id'] if active_card else None} if active else None,
-                "pending_card":self.card(c,r,card),"content_draft":self.draft(c,r),"last_night":handoff["night_summary"] if handoff else None,"live_calls_left":max(0,limit-used) if limit is not None else None}
+                "pending_card":self.card(c,r,card),"content_draft":self.draft(c,r),"last_night":self.night_summary(c,r,run,handoff),"live_calls_left":max(0,limit-used) if limit is not None else None}
 
     def decide(self,c,p,r,body):
         self.s.scope(c,p,r,"D",{"seller"})

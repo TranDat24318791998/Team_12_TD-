@@ -173,16 +173,21 @@ class IntegrationMixin:
         result = {"summary": handoff["night_summary"], "next_day": None if run["phase"] == "complete" else run["current_day"]}
         c.execute("UPDATE operations SET status='succeeded',result_json=?,error_code=NULL,version=version+1,updated_at=? WHERE run_id=? AND operation_id=?", (dumps(result), now(), r, op["operation_id"]))
 
+    def learning_retry_allowed(self,c,run,handoff):
+        if not handoff or run['current_day']!=handoff['day'] or handoff['status']!='failed':return False
+        reflection=one(c,'SELECT status FROM reflection_receipts WHERE run_id=? AND day=?',(run['run_id'],handoff['day']))
+        return not reflection or reflection['status'] not in {'reserved','unknown'}
+
     def learning_control(self, c, p, r, day, action, body):
         self.scope(c, p, r, roles={"seller", "orchestrator"})
         b = M.LearningControl.model_validate(body)
         h = one(c, "SELECT * FROM learning_handoffs WHERE run_id=? AND day=?", (r, day))
         require(h, "NOT_FOUND", "Không có handoff", 404)
         run = self.run(c, p, r)
+        if p.role=='seller':self.scope(c,p,r,run['demo_shop_id'],{'seller'})
         allowed={'failed'} if action=='retry' else {'pending','running','failed'}
         require(run["current_day"] == day and h["version"] == b.expected_version and h["status"] in allowed)
-        reflection=one(c,'SELECT status FROM reflection_receipts WHERE run_id=? AND day=?',(r,day))
-        if action=='retry': require(not reflection or reflection['status'] not in {'reserved','unknown'},'REFLECTION_UNKNOWN','Kết quả học chưa rõ; không gửi lại model')
+        if action=='retry': require(self.learning_retry_allowed(c,run,h),'REFLECTION_UNKNOWN','Kết quả học chưa rõ; không gửi lại model')
         status = "pending" if action == "retry" else "skipped"
         summary = None if action == "retry" else self.empty_summary(day)
         c.execute("UPDATE learning_handoffs SET status=?,night_summary_json=?,error_code=?,version=version+1,attempt=attempt+1,lease_until=?,updated_at=? WHERE run_id=? AND day=?",

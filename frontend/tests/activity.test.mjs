@@ -28,6 +28,13 @@ test('a passing check for an older package is not presented as validation for ch
   assert.equal(deriveActivity(state,[proposal,check]).checkMatchesLatest,true);
   assert.equal(deriveActivity(state,[proposal,check,response]).checkMatchesLatest,false);
 });
+test('incomplete legacy checks do not invent a failure or replace a complete result',()=>{
+  const valid=event(2,'code_check',{ok:true,checks:[]},{actor:'code'});
+  const incomplete=event(3,'code_check',{checks:[{message_vi:'Thiếu kết quả'}]},{actor:'code'});
+  assert.equal(deriveActivity(state,[proposal,incomplete]).check,undefined);
+  assert.equal(deriveActivity(state,[proposal,valid,incomplete]).check.seq,valid.seq);
+  assert.equal(deriveActivity(state,[proposal,valid,incomplete,response]).checkMatchesLatest,false);
+});
 
 test('agreement is distinct from a seller decision and does not fill all three rounds',()=>{
   const events=[proposal,response,acceptance];

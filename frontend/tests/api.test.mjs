@@ -65,6 +65,9 @@ test('preview covers negotiation, approval, retries, feedback confirmation and s
   const read=()=>client.request('/api/state');
   let commandCount=0;const command=(path,body)=>client.request(path,{method:'POST',body,target:String(++commandCount)});
   let state=await read();assert.equal(state.demo_shop.price,175000);assert.equal(state.demo_shop.stock,300);
+  assert.equal(state.brief_editable,false);await assert.rejects(command('/api/day/start'),/xác nhận yêu cầu/);
+  await assert.rejects(command('/api/brief/confirm',{...state.brief_preset,ads_daily_cap:1}),/đã được cố định/);
+  await command('/api/brief/confirm',state.brief_preset);
   await command('/api/day/start');clock+=6000;state=await read();assert.equal(state.pending_card.package.voucher_pct,3);
   await command('/api/decision',{card_id:state.pending_card.card_id,action:'negotiate',note_vi:'Giảm voucher còn 2%.'});clock+=3000;state=await read();assert.equal(state.pending_card.package.voucher_pct,2);
   await command('/api/decision',{card_id:state.pending_card.card_id,action:'accept'});
@@ -91,6 +94,7 @@ test('preview covers negotiation, approval, retries, feedback confirmation and s
 test('preview rejection/reset does not publish content or create an active package',async()=>{
   let clock=0;const client=createClient({preview:true,storage:storage(),now:()=>clock});
   await client.request('/api/reset',{method:'POST',body:{memory:false}});const initial=await client.request('/api/state');
+  await client.request('/api/brief/confirm',{method:'POST',body:initial.brief_preset});
   await client.request('/api/day/start',{method:'POST'});clock+=6000;let state=await client.request('/api/state');
   await client.request('/api/decision',{method:'POST',body:{card_id:state.pending_card.card_id,action:'reject'}});
   await client.request('/api/night',{method:'POST'});state=await client.request('/api/state');

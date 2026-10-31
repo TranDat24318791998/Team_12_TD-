@@ -35,6 +35,11 @@ PRIVATE = {"shop_agent","seller","simulated_seller","orchestrator","simulator","
 
 
 class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
+    @staticmethod
+    def brief_preset(run):
+        if run['demo_shop_id']!='D' or run['config'].get('driver',{}).get('agent_version')!='native':return None
+        return M.BriefConfirm.model_validate(run['config'].get('brief_preset',M.DEMO_D_BRIEF)).model_dump()
+
     def __init__(self, home, *, content_mode="local", learning_mode="skip",calibration_provider=None,product_image_path=None):
         require(content_mode in {"local","worker"} and learning_mode in {"skip","external"},"CONFIG_INVALID","Profile local không hợp lệ",422)
         self.content_mode=content_mode
@@ -160,6 +165,7 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         rid=uid("run")
         product_source_hash=hashlib.sha256(Path(self.product_image_path).read_bytes()).hexdigest() if self.product_image_path else None
         config={"driver":b.driver_config,"execution_profile":b.execution_profile,"content_mode":b.content_mode or self.content_mode,"learning_mode":b.learning_mode or self.learning_mode,"source":b.data_source,'demo_shop_id':b.demo_shop_id,'product_source_sha256':product_source_hash}
+        if b.demo_shop_id=='D' and b.driver_config.get('agent_version')=='native':config['brief_preset']=M.DEMO_D_BRIEF.copy()
         insert(c,"runs",run_id=rid,session_id=sid,scenario_version=b.scenario_version,schema_version=4,simulator_version="market-v2",seed=b.seed,
                mode=b.mode,memory_enabled=b.memory_enabled,history_days=14,simulation_days=b.simulation_days,start_date="2026-11-01",current_day=1,phase="ready",source_run_id=None,
                execution_profile=b.execution_profile,content_mode=config["content_mode"],learning_mode=config["learning_mode"],initial_snapshot_hash=fingerprint(world()),config_json=config,created_by=p.principal_id,demo_shop_id=b.demo_shop_id,**timestamps())
@@ -302,7 +308,8 @@ class DataService(IntegrationMixin, ComparisonMixin, MediaMixin):
         if run['execution_profile']=='external': status='running'
         c.execute("UPDATE negotiations SET platform_rounds=?,status=?,final_proposal_id=?,expected_next_role=?,version=version+1,updated_at=? WHERE run_id=? AND negotiation_id=?",(rounds,status,pid if accepted else None,"shop_agent" if p.role=="platform_agent" else "platform_agent",now(),r,b.negotiation_id))
         self.event(c,r,run["current_day"],"platform_turn" if p.role=="platform_agent" else "shop_turn",p.role,s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"parent_proposal_id":b.parent_proposal_id,"turn_id":b.turn_id,"round":rounds,"package":pkg,"stance":b.stance,"action":b.native_action or b.stance,"message_vi":shared},text=shared or "Agent gửi đề xuất",eid=pid)
-        self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":code.replace('_',' ').lower()} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
+        if pkg is not None:
+            self.event(c,r,run["current_day"],"code_check","orchestrator",s,{"negotiation_id":neg["negotiation_id"],"proposal_id":pid,"round":rounds,"ok":result["passed"],"passed":result["passed"],"checks":[{"code":code,"ok":False,"message_vi":code.replace('_',' ').lower()} for code in result["violations"]]},visibility="shop_private",text="Code kiểm tra luật shop",eid=pid)
         return self.shared_proposal(c,p,r,self.entity(c,"proposals",r,"proposal_id",pid))
 
     def finalize_negotiation(self,c,p,r,nid,body):

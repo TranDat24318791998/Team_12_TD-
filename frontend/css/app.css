@@ -513,3 +513,10 @@
   .process-agent > .icon { width: 12px; height: 12px; }
   .process-activity .activity-detail-body { width: calc(100vw - 28px); grid-template-columns: 1fr; }
 }
+
+.brand .brand-logo { width: 132px; height: 88px; object-fit: contain; background: white; border-radius: 4px; }
+.demo-top .brand .brand-logo { width: 90px; height: 60px; }
+@media(max-width:599px) {
+  .brand .brand-logo { width: 102px; height: 68px; }
+  .demo-top .brand .brand-logo { width: 75px; height: 50px; }
+}

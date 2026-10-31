@@ -16,3 +16,16 @@ export function readDemoArtifact(value){
 export function demoEvidence(artifact){
   return {schema_version:artifact.schema_version,manifest:artifact.manifest,evidence:artifact.evidence};
 }
+
+export async function readProofEvidence(client,report){
+  const {comparison_id,run_on,run_off}=report || {};
+  if(![comparison_id,run_on,run_off].every(value=>typeof value==='string' && value) || run_on===run_off)throw new Error('Báo cáo chưa có mã đối chứng hợp lệ.');
+  const result=await client.request('/api/proof/events?comparison_id='+encodeURIComponent(comparison_id));
+  if(result?.comparison_id!==comparison_id || result.run_on!==run_on || result.run_off!==run_off ||
+     !['on','off'].every(arm=>Number.isInteger(result.cutoffs?.[arm]) && result.cutoffs[arm]>=0 &&
+       Array.isArray(result.evidence?.[arm]) && result.evidence[arm].every(event=>event?.run_id===report['run_'+arm] &&
+         Number.isInteger(event.seq) && event.seq>0 && event.seq<=result.cutoffs[arm]))){
+    throw new Error('Nhật ký không khớp với báo cáo đối chứng đang xem.');
+  }
+  return result;
+}

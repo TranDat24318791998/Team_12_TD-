@@ -124,6 +124,11 @@ def test_export_real_offline_pair_is_read_only_and_d_scoped(tmp_path,monkeypatch
     service=DataService(home,content_mode='worker',learning_mode='external')
     seller=service.authenticate(sid=sid)
     with service.store.connect(write=True) as c:
+        from data.growth_data.models import DEMO_D_BRIEF
+        for rid in (on.run_id,off.run_id):
+            row=service.entity(c,'runs',rid,'run_id',rid)
+            assert row['config']['brief_preset']==DEMO_D_BRIEF
+            assert {key:row['brief'][key] for key in DEMO_D_BRIEF}==DEMO_D_BRIEF
         group=service.comparison_attach(c,seller,{'run_on':on.run_id,'run_off':off.run_id})['comparison_id']
         service.event(c,on.run_id,1,'content_job','content_worker','D',
             {'feedback_vi':'PRIVATE_SENTINEL sk-12345678901234567890','private_note':'hidden'},
@@ -146,8 +151,51 @@ def test_export_real_offline_pair_is_read_only_and_d_scoped(tmp_path,monkeypatch
     assert all(e['run_id']==on.run_id for e in artifact['evidence']['on'])
     assert all(e['seq']!=late_seq for e in artifact['evidence']['on'])
     assert all(m['event_seq']!=late_seq for day in artifact['report']['comparison_days'] for m in day['on']['messages'])
+    # Current-session proof must match the active run; exports are bound to both
+    # report arms even if another browser tab resets the selected run later.
+    from data.growth_data.api import create_app as data_app
+    app=data_app(home,bootstrap_defaults={'execution_profile':'external','content_mode':'worker',
+        'learning_mode':'external','mode':'offline','driver_config':{'agent_version':'native'}})
+    with TestClient(app) as client:
+        client.cookies.set('growth_sid',sid)
+        current=client.get('/api/state').json()['run_id']
+        assert current in {on.run_id,off.run_id}
+        report=client.get('/api/proof')
+        assert report.status_code==200,report.text
+        assert (report.json()['comparison_id'],report.json()['run_on'],report.json()['run_off'])==(group,on.run_id,off.run_id)
+        exported=client.get('/api/proof/events',params={'comparison_id':group})
+        assert exported.status_code==200,exported.text
+        evidence=exported.json()
+        assert (evidence['comparison_id'],evidence['run_on'],evidence['run_off'])==(group,on.run_id,off.run_id)
+        for arm,rid in (('on',on.run_id),('off',off.run_id)):
+            assert isinstance(evidence['cutoffs'][arm],int) and evidence['evidence'][arm]
+            assert all(event['run_id']==rid and event['seq']<=evidence['cutoffs'][arm] and event['shop_id'] in (None,'D') for event in evidence['evidence'][arm])
+        reset=client.post('/api/reset',json={'memory':True,'seed':42},headers={'Idempotency-Key':'reset','X-Request-ID':'reset'})
+        assert reset.status_code==200 and reset.json()['run_id'] not in {on.run_id,off.run_id}
+        assert client.get('/api/proof').status_code==409
+        assert client.get('/api/proof',params={'comparison_id':group}).status_code==409
+        assert client.get('/api/proof/events',params={'comparison_id':group}).json()==evidence
+    with TestClient(app) as other:
+        assert other.get('/api/proof/events',params={'comparison_id':group}).status_code==401
+        other.get('/api/state')
+        assert other.get('/api/proof/events',params={'comparison_id':group}).status_code==404
     with service.store.connect(write=True) as c:
         c.execute("UPDATE runs SET demo_shop_id='E' WHERE run_id IN (?,?)",(on.run_id,off.run_id))
     with pytest.raises(Fault) as error:
         export_demo_proof(home,group)
     assert error.value.code=='PROOF_SCOPE_DENIED'
+
+
+def test_non_demo_shop_simulation_keeps_its_explicit_custom_brief(tmp_path,monkeypatch):
+    from app.core.settings import Settings
+    from app.simulation.runner import run
+    from data.growth_data.service import DataService
+    monkeypatch.setenv('LLM_MODE','offline');monkeypatch.setenv('MEDIA_MODE','offline')
+    monkeypatch.delenv('DEMO_PRODUCT_IMAGE_PATH',raising=False)
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline',demo_shop='E',demo_product_image_path='')
+    result=run(settings,1,False,42,home=tmp_path)
+    service=DataService(tmp_path)
+    with service.store.connect() as c:
+        record=service.entity(c,'runs',result.run_id,'run_id',result.run_id)
+        assert record['demo_shop_id']=='E' and 'brief_preset' not in record['config']
+        assert record['brief']['goal_vi']=='Tăng đơn' and record['brief']['ads_daily_cap'] is None

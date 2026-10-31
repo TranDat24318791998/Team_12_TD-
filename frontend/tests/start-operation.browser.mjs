@@ -26,9 +26,10 @@ try{
     mode:'offline',memory_enabled:true,simulation_days:7,pending_card:null,content_draft:null,active_package:null,busy:false});
   const event={seq:1,run_id:'run-test',day:1,shop_id:'D',ts:'09:00',type:'agent_activity',actor:'platform_agent',
     text_vi:'Agent đang kiểm thử',data:{negotiation_id:'neg-1',task_id:'task-1',round:1,phase:'proposal',status:'running',label_vi:'Agent đang kiểm thử'}};
+  const preset={intent:'increase_orders',goal_vi:'Mục tiêu do máy chủ kiểm thử cung cấp',allow_ads:true,ads_daily_cap:12345,content_refresh:true,duration_days:3};
   const context=await browser.newContext();
   const page=await context.newPage();
-  let state=initial(),posts=0,rejectStart=false;
+  let state={...initial(),brief:null,brief_editable:false,brief_preset:null},posts=0,rejectStart=false,confirmedBody=null;
   await page.route('**/api/**',async route=>{
     const req=route.request(),url=new URL(req.url());
     const reply=(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -36,6 +37,11 @@ try{
     if(url.pathname==='/api/events'){
       const after=Number(url.searchParams.get('after') || 0);
       return reply(200,{run_id:state.run_id,events:posts && after<1?[event]:[],last_seq:posts?1:0,has_more:false});
+    }
+    if(url.pathname==='/api/brief/confirm' && req.method()==='POST'){
+      confirmedBody=req.postDataJSON();
+      state={...state,brief:{...confirmedBody,confirmed:true}};
+      return reply(200,{brief:state.brief,step:'idle'});
     }
     if(url.pathname==='/api/day/start' && req.method()==='POST'){
       posts++;
@@ -47,6 +53,20 @@ try{
     return reply(404,{error:{code:'NOT_FOUND',message_vi:'Không tìm thấy'}});
   });
   await page.goto(base+'/index.html?preview=0');
+  await page.getByRole('alert').getByText(/Chưa có yêu cầu demo cố định/).waitFor();
+  assert.equal(await page.locator('[data-start]').isDisabled(),true);
+  assert.equal(await page.locator('[data-confirm-brief]').count(),0);
+  state={...state,brief_preset:preset};
+  await page.reload();
+  await page.getByText(preset.goal_vi).waitFor();
+  assert.equal(await page.getByText('12.345đ').count(),1);
+  assert.equal(await page.locator('.demo-panel input, .demo-panel textarea, .demo-panel select').count(),0);
+  assert.equal(await page.locator('[data-start]').isDisabled(),true);
+  assert.equal(confirmedBody,null);
+  await page.locator('[data-confirm-brief]').click();
+  await page.getByText('Yêu cầu đã xác nhận ban đầu').waitFor();
+  assert.deepEqual(confirmedBody,preset);
+  await page.waitForFunction(()=>!document.querySelector('[data-start]').disabled);
   await page.locator('[data-start]').click();
   await page.waitForURL('**/demo.html?preview=0',{timeout:5000});
   await page.locator('#event-feed').getByText('Agent đang kiểm thử').waitFor({timeout:5000});
@@ -62,7 +82,7 @@ try{
   assert.match(page.url(),/index\.html/);
   assert.equal(posts,1);
   await context.close();
-  process.stdout.write('PASS: accepted start opens Demo while running, streams events and reports failure; rejected start stays on Shop.\n');
+  process.stdout.write('PASS: fixed server preset requires confirmation; accepted start opens Demo, streams events and reports failure; rejected start stays on Shop.\n');
 }finally{
   await browser?.close();
   await new Promise(resolve=>server.close(resolve));

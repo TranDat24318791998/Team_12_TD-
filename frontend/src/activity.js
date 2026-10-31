@@ -25,7 +25,7 @@ export function deriveActivity(state,events=[]){
   const platform=turns.findLast(event=>event.type==='platform_turn');
   const shop=turns.findLast(event=>event.type==='shop_turn');
   const lastTurn=turns.at(-1);
-  const check=current.findLast(event=>event.type==='code_check');
+  const check=current.findLast(event=>event.type==='code_check' && typeof event.data?.ok==='boolean');
   const referee=current.findLast(event=>event.type==='referee_review');
   const semantic=current.filter(event=>event.type!=='agent_activity').at(-1);
   const tasks=current.filter(event=>event.type==='agent_activity').map(event=>({...event.data,actor:event.actor,updated_seq:event.seq}));

@@ -40,9 +40,10 @@ def run(settings, days=7, memory_enabled=True, seed=42, *, home=None, seller_ses
     orchestrator=Principal('proof_orchestrator','orchestrator',None,(rid,),('*',))
     with TestClient(api) as client:
         client.cookies.set('growth_sid',seller.session_id)
+        preset=client.get('/api/state').json().get('brief_preset')
         response=client.post('/api/brief/confirm',headers={'X-Request-ID':'proof-brief','Idempotency-Key':'proof-brief'},
-            json={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,
-                  'content_refresh':True,'duration_days':3})
+            json=preset or {'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,
+                            'content_refresh':True,'duration_days':3})
         if response.status_code != 200:
             raise RuntimeError(f'brief failed: {response.status_code} {response.text}')
         for day in range(1,days+1):

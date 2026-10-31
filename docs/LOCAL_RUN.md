@@ -13,10 +13,11 @@ Chạy từ gốc repo. Bản product dùng React + Data + native worker tại `
 ## Cấu hình và dữ liệu
 
 - Python3.11 root `.venv`, Python3.12 `experiment/.venv`; dependencies theo hai requirements. Node>=20 chỉ cần build frontend. Máy này có bundled Node tại `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node`.
-- Root `.env`: OPENAI_API_KEY, LLM_MODEL/LLM_MODEL_REFLECT, LLM_MODE, MEDIA_MODE, MEDIA_API_BASE_URL/TOKEN, DEMO_PRODUCT_IMAGE_PATH. Các mode độc lập; có key không chứng minh generation đã chạy.
+- Root `.env`: OPENAI_API_KEY, LLM_MODEL/LLM_MODEL_REFLECT, LLM_MODE, MEDIA_MODE, MEDIA_API_BASE_URL/TOKEN, DEMO_PRODUCT_IMAGE_PATH, DEMO_LOGO_IMAGE_PATH. Các mode độc lập; có key không chứng minh generation đã chạy.
 - `experiment/.env`: provider keys/models, VIDEO_API_TOKEN, PLAYBACK_SECRET. Local profile override STORAGE_BACKEND=local, DATA_DIR=`experiment/data/local`, PUBLIC_BASE_URL=http://127.0.0.1:8010. Service token và root MEDIA_API_TOKEN phải khớp.
 - Business/Knowledge DB: `data/runtime/growth.db`; registered assets: `data/runtime/objects/`; source imports: `data/runtime/imports/`; media queue/objects: `experiment/data/local/`. Không copy jobs.sqlite3 cũ từ máy khác vào backend local rỗng vì asset paths/storage có thể khác.
 - D đã được user chọn đổi thành quạt để bàn từ MinIO đồng nghiệp, giữ số kinh doanh mô phỏng. Ảnh gốc nhỏ được lưu tại `assets/products/demo-d-desktop.jpg`, provenance/checksum tại file `.source.json` cạnh ảnh để clone mới tái tạo được demo. Data đăng ký ảnh riêng mỗi run. Các ảnh/video lớn đã nhập nằm trong ignored runtime; chúng là imported cache, không phải live output của bản này.
+- Logo ShopPilot AI ở `frontend/img/shoppilot-ai.png` giữ nguyên ảnh người dùng gửi. Trỏ DEMO_LOGO_IMAGE_PATH tới file này để các job media mới dùng cùng logo với giao diện; không cần tạo lại file hoặc đổi tên shop.
 - Secrets chỉ nằm trong env ignored/quyền0600. Không source/cat env trong log, đưa token vào browser hoặc truyền secret trên argv.
 
 Server dùng mode hiện tại trong cấu hình/environment. **Các thao tác demo ở live có thể gọi provider**; health/readiness/start không được tạo job mới để thử. Kiểm không trả phí dùng mode offline và fake providers/temp homes. Không thay mode của process đang chạy bằng cách chỉ sửa env; stop/start để nạp lại, giữ DB.
@@ -30,12 +31,12 @@ LLM_MODE=offline MEDIA_MODE=offline .venv/bin/python scripts/local_stack.py star
 ## Luồng demo
 
 1. Mở seller URL `http://127.0.0.1:8000/?preview=0`, xem đúng run/mode/sản phẩm.
-2. Xác nhận brief tăng đơn, rồi Bắt đầu ngày. Worker chạy nền, UI poll operation/events.
+2. Xem mục tiêu đặt sẵn **24 đơn trong 3 ngày**, ngân sách tối đa **45.000đ/ngày**, bấm xác nhận rồi Bắt đầu ngày. Các số của demo D không cho sửa; backend cũng từ chối body khác preset. Worker chạy nền, UI poll operation/events. Brief của run cũ đã xác nhận vẫn giữ nguyên lịch sử.
 3. Xem tools/Platform/Shop/Referee, chọn Accept/Negotiate/Reject. Content-refresh accept chưa bật campaign.
 4. Content worker tạo chữ, A rồi video từ A, sau đó B/C. Feedback nền sáng có tối đa hai lần làm lại, gửi all để video cùng attempt.
 5. Chọn cover, xem video; clip chưa pass review cần ack hoặc chọn bỏ video. Missing/corrupt cover không được Apply. Apply mới publish+activate.
 6. Kết thúc ngày. Data settle và night học; không thao tác ngày sau khi operation chưa xong. Ngày sau seller trả lời câu hỏi preference; Yes mới thành Rules/default.
-7. Proof chỉ hiển thị comparison được lưu đúng nguồn; preview7ngày là mẫu riêng, không thay report simulator.
+7. Proof “Phiên hiện tại” chỉ có dữ liệu khi active run nằm trong một cặp hoàn tất. Sau reset chưa có cặp thì báo chưa sẵn sàng. “Báo cáo mô phỏng đã chạy” là nguồn riêng; cả hai nguồn tải nhật ký của đúng cặp ON/OFF. Preview7ngày vẫn là mẫu riêng.
 
 ## Kiểm tra và báo lỗi
 
@@ -54,6 +55,8 @@ PYTHONPATH=experiment experiment/.venv/bin/python -m pytest experiment/tests -q
 ```
 
 Từ frontend, dùng `npm test` và `npm run build`, hoặc bundled Node chạy `build.mjs --tests`, `--test tests/*.test.mjs .test-build/*.test.mjs`, rồi `build.mjs`. Không hand-edit bundle. Integration tests phải dùng DB/temp providers riêng, không reset seller run đang dùng.
+
+`node frontend/tests/data-contract.integration.mjs` chạy cặp native offline trong DB tạm rồi đưa response HTTP thật qua React để kiểm contract. Hai script headless `start-operation.browser.mjs` và `proof-source.browser.mjs` ở cùng thư mục kiểm tương tác; chạy Chrome ẩn, không dùng profile/màn hình của người đang demo.
 
 Kết quả thực, report paths và gate chưa chạy được ghi tại [implementation status](plans/toan/full-integration/IMPLEMENTATION_STATUS.md) khi nghiệm thu. Không lấy số PASS từ README nguồn hoặc model-lookup200 thay cho live generation.
 

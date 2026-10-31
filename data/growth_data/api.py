@@ -26,6 +26,14 @@ from .simulation import business_date
 from .evidence import compare, proof, replay_export
 
 
+def seller_events(rows, run_id):
+    actors={"platform_turn":"platform_agent","opportunity":"platform_agent","shop_turn":"shop_agent","code_check":"code","seller_decision":"seller","content_job":"content_agent","market_result":"market","night_summary":"memory","memory_read":"memory","memory_write":"memory","referee_review":"referee"}
+    return [{"seq":e["seq"],"run_id":run_id,"day":e["day"],"ts":e["simulated_at"][11:16],
+             "type":'agent_activity' if e['type']=='agent_telemetry' else e["type"],
+             "actor":({'platform':'platform_agent','shop':'shop_agent','referee':'referee'}.get(e['actor_role'],'system') if e['type']=='agent_telemetry' else actors.get(e["type"],"system")),
+             "shop_id":e["shop_id"],"text_vi":e["text_vi"],"data":e["payload"]} for e in rows]
+
+
 def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_provider=None, bootstrap_defaults=None, worker_factory=None, product_image_path=None):
     service=DataService(home or os.environ.get("GROWTH_DATA_HOME") or Path(__file__).resolve().parents[1]/"runtime",content_mode=content_mode or os.environ.get("GROWTH_CONTENT_MODE","local"),learning_mode=learning_mode or os.environ.get("GROWTH_LEARNING_MODE","skip"),calibration_provider=calibration_provider,product_image_path=product_image_path)
     facade=Facade(service)
@@ -386,23 +394,27 @@ def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_
                     require(after>=0,'QUERY_INVALID','after không hợp lệ',422)
                     require(not request.query_params.get('run_id') or request.query_params['run_id']==r,'RUN_CHANGED','Phiên đã thay đổi')
                     rows,cursor,has_more=service.events(c,p,r,after,100)
-                    actors={"platform_turn":"platform_agent","opportunity":"platform_agent","shop_turn":"shop_agent","code_check":"code","seller_decision":"seller","content_job":"content_agent","market_result":"market","night_summary":"memory","memory_read":"memory","memory_write":"memory","referee_review":"referee"}
-                    data={"run_id":r,"events":[{"seq":e["seq"],"run_id":r,"day":e["day"],"ts":e["simulated_at"][11:16],"type":'agent_activity' if e['type']=='agent_telemetry' else e["type"],"actor":({'platform':'platform_agent','shop':'shop_agent','referee':'referee'}.get(e['actor_role'],'system') if e['type']=='agent_telemetry' else actors.get(e["type"],"system")),"shop_id":e["shop_id"],"text_vi":e["text_vi"],"data":e["payload"]} for e in rows],"last_seq":cursor,"has_more":has_more}
+                    data={"run_id":r,"events":seller_events(rows,r),"last_seq":cursor,"has_more":has_more}
                 else:
                     selected=request.query_params.get('comparison_id')
-                    g=one(c,"SELECT * FROM comparison_groups WHERE session_id=? AND group_id=?",(p.session_id,selected)) if selected else one(c,"SELECT * FROM comparison_groups WHERE session_id=? ORDER BY rowid DESC LIMIT 1",(p.session_id,))
+                    g=one(c,"SELECT * FROM comparison_groups WHERE session_id=? AND group_id=?",(p.session_id,selected)) if selected else one(c,"SELECT * FROM comparison_groups WHERE session_id=? AND (?=run_on_id OR ?=run_off_id) ORDER BY rowid DESC LIMIT 1",(p.session_id,r,r))
                     if selected: require(g,'NOT_FOUND','Không tìm thấy đối chứng',404)
+                    require(g and r in {g['run_on_id'],g['run_off_id']},'PROOF_NOT_READY','Phiên hiện tại chưa có đối chứng hoàn chỉnh',409)
                     if g and service.comparison_view(c,p,g["group_id"])["status"]=="ready":
-                        data=proof(service,c,p,g["run_on_id"],g["group_id"],request.query_params.get("variant","full_7d"));data["status"]="ready"
+                        data=proof(service,c,p,r,g["group_id"],request.query_params.get("variant","full_7d"));data.update(status='ready',comparison_id=g['group_id'])
                     else:
-                        if bootstrap_defaults: raise Fault('PROOF_NOT_READY','Chưa có hai run hoàn chỉnh trong phiên',409)
-                        data={"seed":42,"days":7,"run_on":g["run_on_id"] if g else "","run_off":g["run_off_id"] if g else "","metrics":[],"status":"pending" if g else "not_ready","note_vi":"Chưa có hai run hoàn chỉnh trong phiên. Tạo comparison qua /api/v1/comparisons; không dựng số thắng giả."}
+                        raise Fault('PROOF_NOT_READY','Chưa có hai run hoàn chỉnh trong phiên',409)
             return respond(request,p,data,legacy=True)
         if tag=="night":
             expected_day=M.LegacyNight.model_validate(body).expected_day if bootstrap_defaults else None
             if not bootstrap_defaults: require(not body,"INVALID_FIELDS","Night không nhận trường tùy ý",422)
             op=service.begin_night(p,r,request.headers.get("Idempotency-Key"),expected_day)
-            if op["status"]=="succeeded":return respond(request,p,op["result"],legacy=True)
+            if op["status"]=="succeeded":
+                with service.store.connect() as c:
+                    run=service.run(c,p,r)
+                    handoff=one(c,'SELECT * FROM learning_handoffs WHERE run_id=? AND day=?',(r,op['day']))
+                    result={**op['result'],'summary':facade.night_summary(c,r,run,handoff)}
+                return respond(request,p,result,legacy=True)
             if op["status"]=="failed":
                 return respond(request,p,{"error":{"code":op['error_code'] or 'LEARNING_FAILED','message_vi':'Tác vụ kết thúc ngày đã thất bại'},"operation_id":op['operation_id'],"status":"failed","day":op['day']},legacy=True,status=409)
             return respond(request,p,{"day":op["day"],"step":"day_done","operation_id":op["operation_id"],"status":op["status"],"error_code":op["error_code"]},legacy=True,status=202)
@@ -416,6 +428,10 @@ def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_
                 b=M.BriefConfirm.model_validate(body)
                 run=service.run(c,p,r)
                 require(run['phase']=='ready' and not one(c,"SELECT operation_id FROM operations WHERE run_id=? AND kind='start_day'",(r,)),'DAY_STARTED','Không thể đổi brief sau khi bắt đầu')
+                preset=service.brief_preset(run)
+                if preset is not None:
+                    require(not run['brief'] or not run['brief'].get('confirmed'),'BRIEF_ALREADY_CONFIRMED','Mục tiêu đã xác nhận không thể thay đổi')
+                    require(b.model_dump()==preset,'BRIEF_PRESET_MISMATCH','Mục tiêu và ngân sách demo phải đúng giá trị đã đặt',422)
                 brief={**b.model_dump(),'goal_vi':service.safe_text(c,r,b.goal_vi),'brief_id':uid('brief'),'version':run['brief_version']+1,'shop_id':run['demo_shop_id'],'confirmed':True}
                 c.execute('UPDATE runs SET brief_json=?,brief_version=?,version=version+1,updated_at=? WHERE run_id=?',(dumps(brief),brief['version'],now(),r))
                 service.event(c,r,run['current_day'],'brief_confirmed','seller',run['demo_shop_id'],{'brief_id':brief['brief_id'],'brief_version':brief['version']},visibility='shop_private',text='Người bán đã xác nhận mục tiêu')
@@ -443,6 +459,29 @@ def create_app(home=None, *, content_mode=None, learning_mode=None, calibration_
         require(p.role=='seller' and ('D' in p.allowed_shop_ids or '*' in p.allowed_shop_ids),'FORBIDDEN','Báo cáo chỉ dành cho người bán shop D',403)
         from .demo_proof import load_demo_proof
         return respond(request,p,load_demo_proof(service.home),legacy=True)
+
+    @application.get('/api/proof/events')
+    def proof_events(request:Request,comparison_id:str):
+        p=identity(request)
+        require(p.role=='seller','FORBIDDEN','Chỉ người bán được tải bằng chứng',403)
+        with service.store.connect() as c:
+            g=one(c,'SELECT * FROM comparison_groups WHERE session_id=? AND group_id=?',(p.session_id,comparison_id))
+            require(g,'NOT_FOUND','Không tìm thấy đối chứng',404)
+            require(service.comparison_view(c,p,comparison_id)['status']=='ready','PROOF_NOT_READY','Đối chứng chưa hoàn tất')
+            evidence={};cutoffs={}
+            for arm,key in (('on','run_on_id'),('off','run_off_id')):
+                rid=g[key]
+                scoped=service.scope(c,p,rid,'D',{'seller'})
+                require(scoped['demo_shop_id']=='D','NOT_FOUND','Không tìm thấy đối chứng',404)
+                end=c.execute('SELECT COALESCE(MAX(seq),0) FROM events WHERE run_id=?',(rid,)).fetchone()[0]
+                cursor=0;events=[]
+                while cursor<end:
+                    rows,next_cursor,_=service.events(c,p,rid,cursor,100)
+                    events.extend(seller_events([row for row in rows if row['seq']<=end],rid))
+                    if next_cursor<=cursor:break
+                    cursor=next_cursor
+                evidence[arm]=events;cutoffs[arm]=end
+            return respond(request,p,{'comparison_id':comparison_id,'run_on':g['run_on_id'],'run_off':g['run_off_id'],'evidence':evidence,'cutoffs':cutoffs},legacy=True)
 
     from .routes import register_integration_routes
     register_integration_routes(application,service,facade,identity,respond)

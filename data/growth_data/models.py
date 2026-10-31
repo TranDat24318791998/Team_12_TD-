@@ -4,6 +4,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+DEMO_D_BRIEF = {'intent':'increase_orders','goal_vi':'Đạt 24 đơn trong 3 ngày',
+                'allow_ads':True,'ads_daily_cap':45000,'content_refresh':True,'duration_days':3}
+
+
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, strict=True)
 

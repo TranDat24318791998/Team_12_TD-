@@ -4,7 +4,9 @@ import asyncio
 import io
 import json
 import shutil
+import subprocess
 import time
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -14,6 +16,7 @@ from app.core.settings import Settings
 from app.main import create_app
 from app.runtime.data_worker import DataWorker
 from data.growth_data.api import create_app as data_app
+from data.growth_data.models import DEMO_D_BRIEF
 from data.growth_data.storage import one
 from data.growth_data.errors import Fault
 import pytest
@@ -29,9 +32,10 @@ def tool(name,args,ident):
 
 class NativeTransport:
     is_fixture=True
-    def __init__(self, settings, seen):
+    def __init__(self, settings, seen, initial_offer=None):
         self.settings=settings
         self.seen=seen
+        self.initial_offer=initial_offer
 
     def invoke_tools(self, messages, **kwargs):
         name=kwargs['run_name']
@@ -41,7 +45,7 @@ class NativeTransport:
         initial=next((m for m in messages if isinstance(m,HumanMessage)),None)
         if role=='platform':
             request=json.loads(initial.content);turns=request['turns']
-            package=turns[-1]['package'] if turns and turns[-1]['action']=='counter' else {'content_refresh':True,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5,'stop_after_days':2,'duration_days':3}
+            package=turns[-1]['package'] if turns and turns[-1]['action']=='counter' else self.initial_offer or {'content_refresh':True,'ads_daily_budget':45000,'voucher_pct':3,'stop_roas_below':6.5,'stop_after_days':2,'duration_days':3}
             if not returned:
                 calls=[tool('get_public_context',{},'public'),tool('read_memory',{},'memory'),tool('search_campaign_catalog',{'query':''},'catalog'),tool('validate_platform_package',{'package':package},'validate')]
             elif not any(m.name=='forecast_package' for m in returned): calls=[tool('forecast_package',{'package':package},'forecast')]
@@ -89,12 +93,48 @@ def wait_for(client, predicate):
     raise AssertionError(state)
 
 
+def all_events(client,run_id):
+    events=[];after=0
+    while True:
+        response=client.get('/api/events',params={'run_id':run_id,'after':after})
+        assert response.status_code==200,response.text
+        page=response.json();events.extend(page['events'])
+        if not page['has_more']:return events
+        assert page['last_seq']>after
+        after=page['last_seq']
+
+
+def render_activity(tmp_path,state,events):
+    root=Path(__file__).resolve().parents[3]
+    node=shutil.which('node') or str(Path.home()/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node')
+    if not Path(node).is_file() or not (root/'frontend/node_modules/esbuild').exists():
+        pytest.skip('Node and frontend dependencies are required for the cross-boundary React check')
+    source="""import {renderToStaticMarkup} from 'react-dom/server';
+import {AgentActivity} from './src/components/AgentActivity.jsx';
+import {deriveActivity} from './src/activity.js';
+const {state,events}=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const activity=deriveActivity(state,events);
+console.log(JSON.stringify({check:activity.check,match:activity.checkMatchesLatest,
+  referee:activity.referee,html:renderToStaticMarkup(<AgentActivity state={state} events={events} preview={false}/>)}));"""
+    builder="""const fs=require('node:fs'), path=require('node:path');
+require(path.join(process.cwd(),'frontend/node_modules/esbuild')).buildSync({
+  stdin:{contents:fs.readFileSync(0,'utf8'),resolveDir:path.join(process.cwd(),'frontend'),loader:'jsx'},
+  bundle:true,platform:'node',format:'esm',jsx:'automatic',outfile:process.argv[1],logLevel:'silent',
+  banner:{js:"import {createRequire} from 'node:module';const require=createRequire(import.meta.url);"}});"""
+    bundle=tmp_path/'activity.mjs'
+    subprocess.run([node,'-e',builder,str(bundle)],input=source,text=True,cwd=root,check=True,capture_output=True)
+    result=subprocess.run([node,str(bundle)],input=json.dumps({'state':state,'events':events},ensure_ascii=False),
+                          text=True,cwd=root,check=True,capture_output=True)
+    return json.loads(result.stdout)
+
+
 def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
     monkeypatch.setenv('LLM_MODE','offline');monkeypatch.setenv('MEDIA_MODE','offline')
     seen=set()
     settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    initial={'content_refresh':True,'ads_daily_budget':45000,'voucher_pct':10,'stop_roas_below':4.0,'stop_after_days':2,'duration_days':3}
     app=create_app(home=tmp_path,bootstrap_defaults={'simulation_days':1},worker_factory=lambda service:DataWorker(service,settings,
-        llm_factory=lambda run,settings,store:NativeTransport(settings,seen),content_factory=FakeContent))
+        llm_factory=lambda run,settings,store:NativeTransport(settings,seen,initial),content_factory=FakeContent))
     with TestClient(app) as client:
         assert client.get('/ready').json()['worker']=='ready'
         first=client.get('/api/state').json()
@@ -102,7 +142,7 @@ def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
         assert reset.status_code==200
         run=reset.json()['run_id'];assert run!=first['run_id']
         assert client.post('/api/day/start',json={},headers=headers('premature')).json()['error']['code']=='BRIEF_REQUIRED'
-        brief={'intent':'increase_orders','goal_vi':'Tăng đơn hàng','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+        brief=DEMO_D_BRIEF.copy()
         assert client.post('/api/brief/confirm',json={**brief,'allow_ads':1},headers=headers('bad-brief')).status_code==422
         assert client.post('/api/brief/confirm',json=brief,headers={'Idempotency-Key':'no-request-id'}).status_code==400
         assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
@@ -111,6 +151,15 @@ def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
         state=wait_for(client,lambda s:not s['busy'] and s['pending_card'] is not None)
         card=state['pending_card']
         assert card['package']['voucher_pct']==3 and card['profit_after_fees_per_unit']==27136
+        events=all_events(client,run)
+        checks=[e for e in events if e['type']=='code_check' and e['shop_id']=='D' and e['data'].get('negotiation_id')==card['negotiation_id']]
+        failed=next(e for e in checks if e['data']['ok'] is False)
+        assert checks[-1]['data']['ok'] is True and checks[-1]['data']['proposal_id']==card['proposal_id']
+        assert isinstance(checks[-1]['data']['round'],int) and isinstance(checks[-1]['data']['checks'],list)
+        rendered=render_activity(tmp_path,state,events)
+        assert rendered['match'] and rendered['check']['data']['ok'] is True and 'Gói đã qua kiểm tra' in rendered['html']
+        rejected=render_activity(tmp_path,state,[e for e in events if e['seq']<=failed['seq']])
+        assert rejected['match'] and rejected['check']['data']['ok'] is False and 'Có ràng buộc chưa đạt' in rejected['html']
         stale={'card_id':card['card_id'],'expected_card_version':card['version']+1,'expected_brief_version':card['brief_version'],'action':'accept'}
         assert client.post('/api/decision',json=stale,headers=headers('stale')).status_code==409
         stale['expected_card_version']=card['version']
@@ -143,6 +192,12 @@ def test_composed_native_lifecycle_and_asset_gate(tmp_path,monkeypatch):
         assert night.status_code in (200,202)
         state=wait_for(client,lambda s:s['step']=='complete' or s['learning_status']=='failed')
         assert state['step']=='complete' and state['day']==1
+        summary=state['last_night']
+        assert summary['history_updates'] and summary['history_refs'] and summary['source'] in {'offline','fixture'}
+        assert summary['pref_candidates'] and summary['preference_refs']
+        assert 'ảnh nền sáng' in ' '.join(summary['pref_candidates']).casefold()
+        assert all(ref['record_id'] not in text for ref,text in zip(summary['history_refs'],summary['history_updates']))
+        assert all(ref['evidence_seqs'] for ref in summary['history_refs']+summary['preference_refs'])
         assert {'platform','shop','referee','learning'}<=seen
         with app.state.service.store.connect() as c:
             assert c.execute('SELECT COUNT(*) FROM daily_predictions WHERE run_id=?',(run,)).fetchone()[0]==5
@@ -167,7 +222,7 @@ def test_queued_operation_blocks_night_without_settlement(tmp_path):
     app=data_app(tmp_path,bootstrap_defaults=defaults)
     with TestClient(app) as client:
         run=client.get('/api/state').json()['run_id']
-        brief={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+        brief=DEMO_D_BRIEF.copy()
         assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
         assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
         result=client.post('/api/night',json={'expected_day':1},headers=headers('night'))
@@ -252,10 +307,41 @@ def test_learning_projection_discards_private_feedback(tmp_path):
         assert 'giá vốn' not in evidence[-1].text_vi.casefold() and '115' not in evidence[-1].text_vi
 
 
+def test_referee_focus_reaches_real_http_and_react_without_private_details(tmp_path,monkeypatch):
+    import app.negotiation.graph as graph
+    from app.domain.models.negotiation import RefereeDecision
+    def referee(brief,turns,**kwargs):
+        first=len(turns)==1
+        return RefereeDecision(action='refocus' if first else 'continue',reason_vi='Tập trung vào mục tiêu.',
+            evidence_refs=[turns[-1].turn_id],unresolved_terms=['Ngân sách quảng cáo','Giá vốn 115.000đ của chị Lan'],
+            next_actor='shop' if first else None,
+            focused_question='Ngân sách quảng cáo nào cần làm rõ?' if first else 'Giá vốn 115.000đ của chị Lan?')
+    monkeypatch.setattr(graph,'review_turn',referee)
+    settings=Settings(_env_file=None,llm_mode='offline',media_mode='offline')
+    app=create_app(home=tmp_path,worker_factory=lambda service:DataWorker(service,settings,
+        llm_factory=lambda run,settings,store:NativeTransport(settings,set()),content_factory=FakeContent))
+    with TestClient(app) as client:
+        run=client.get('/api/state').json()['run_id']
+        brief=DEMO_D_BRIEF.copy()
+        assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
+        assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
+        state=wait_for(client,lambda s:not s['busy'] and s['pending_card'] is not None)
+        events=all_events(client,run)
+        reviews=[e for e in events if e['type']=='referee_review' and e['shop_id']=='D']
+        first=reviews[0]['data']
+        assert first['action']=='refocus' and first['round']==1 and first['next_actor']=='shop_agent'
+        assert first['focused_question']=='Ngân sách quảng cáo nào cần làm rõ?'
+        assert first['unresolved_terms']==['Ngân sách quảng cáo'] and all(isinstance(seq,int) for seq in first['evidence_refs'])
+        assert all('115.000' not in json.dumps(e,ensure_ascii=False) and 'chị Lan' not in json.dumps(e,ensure_ascii=False) for e in reviews)
+        rendered=render_activity(tmp_path,state,[e for e in events if e['seq']<=reviews[0]['seq']])
+        assert rendered['referee']['data']['focused_question']==first['focused_question']
+        assert first['focused_question'] in rendered['html']
+
+
 def test_brief_gate_covers_both_start_routes_and_reset_replay(tmp_path):
     defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
     app=data_app(tmp_path,bootstrap_defaults=defaults)
-    brief={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+    brief=DEMO_D_BRIEF.copy()
     with TestClient(app) as client:
         for route in ('legacy','versioned'):
             created=client.post('/api/reset',json={'seed':42,'memory':True},headers=headers('reset-'+route)).json()
@@ -282,6 +368,37 @@ def test_brief_gate_covers_both_start_routes_and_reset_replay(tmp_path):
             assert c.execute('SELECT COUNT(*) FROM runs WHERE run_id IN (?,?)',(before.json()['run_id'],after.json()['run_id'])).fetchone()[0]==2
 
 
+def test_demo_preset_is_locked_unconfirmed_and_preserves_existing_briefs(tmp_path):
+    defaults={'execution_profile':'external','content_mode':'worker','learning_mode':'external','driver_config':{'agent_version':'native'}}
+    app=data_app(tmp_path,bootstrap_defaults=defaults)
+    with TestClient(app) as client:
+        state=client.get('/api/state').json();run=state['run_id']
+        assert state['brief'] is None and state['brief_preset']==DEMO_D_BRIEF and state['brief_editable'] is False
+        with app.state.service.store.connect(write=True) as c:
+            record=app.state.service.entity(c,'runs',run,'run_id',run)
+            assert record['brief'] is None and record['config']['brief_preset']==DEMO_D_BRIEF
+            # Older idle native runs did not yet store the new config field.
+            c.execute("UPDATE runs SET config_json=json_remove(config_json,'$.brief_preset') WHERE run_id=?",(run,))
+        assert client.get('/api/state').json()['brief_preset']==DEMO_D_BRIEF
+        assert client.post('/api/day/start',json={},headers=headers('no-confirm')).json()['error']['code']=='BRIEF_REQUIRED'
+        for key,body in (('budget',{**DEMO_D_BRIEF,'ads_daily_cap':50000}),
+                         ('goal',{**DEMO_D_BRIEF,'goal_vi':'Đạt 30 đơn trong 3 ngày'})):
+            response=client.post('/api/brief/confirm',json=body,headers=headers('tamper-'+key))
+            assert response.status_code==422 and response.json()['error']['code']=='BRIEF_PRESET_MISMATCH'
+        assert client.get('/api/state').json()['brief'] is None
+        accepted=client.post('/api/brief/confirm',json=DEMO_D_BRIEF,headers=headers('confirm'))
+        assert accepted.status_code==200 and accepted.json()['brief']['confirmed']
+        assert {key:accepted.json()['brief'][key] for key in DEMO_D_BRIEF}==DEMO_D_BRIEF
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF,headers=headers('confirm')).json()==accepted.json()
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF,headers=headers('confirm-again')).json()['error']['code']=='BRIEF_ALREADY_CONFIRMED'
+        with app.state.service.store.connect(write=True) as c:
+            legacy={**accepted.json()['brief'],'goal_vi':'Mục tiêu cũ đã xác nhận','ads_daily_cap':None}
+            c.execute('UPDATE runs SET brief_json=? WHERE run_id=?',(json.dumps(legacy,ensure_ascii=False),run))
+        assert client.get('/api/state').json()['brief']==legacy
+        assert client.post('/api/brief/confirm',json=DEMO_D_BRIEF,headers=headers('do-not-replace')).json()['error']['code']=='BRIEF_ALREADY_CONFIRMED'
+        assert client.get('/api/state').json()['brief']==legacy
+
+
 def test_edited_approval_binds_original_card_through_content_apply(tmp_path):
     from app.infrastructure.data_content import DataContentBridge
     from data.growth_data.service import Principal
@@ -293,7 +410,7 @@ def test_edited_approval_binds_original_card_through_content_apply(tmp_path):
     worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,seen))
     with TestClient(app) as client:
         run=client.get('/api/state').json()['run_id']
-        brief={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+        brief=DEMO_D_BRIEF.copy()
         assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
         assert client.post('/api/day/start',json={},headers=headers('start')).status_code==202
         with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
@@ -353,7 +470,7 @@ def test_expired_native_operation_recovered_on_actual_startup_and_can_close(tmp_
     app=data_app(tmp_path,bootstrap_defaults=defaults);service=app.state.service
     with TestClient(app) as client:
         run=client.post('/api/reset',json={'seed':42,'memory':False},headers=headers('reset')).json()['run_id']
-        brief={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+        brief=DEMO_D_BRIEF.copy()
         assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
         queued=client.post('/api/day/start',json={},headers=headers('start')).json()
         principal=Principal('native_orchestrator','orchestrator',None,(run,),('*',))
@@ -391,7 +508,7 @@ def test_pending_renegotiation_and_failed_night_are_truthful(tmp_path):
     worker=DataWorker(service,settings,llm_factory=lambda run,settings,store:NativeTransport(settings,set()))
     with TestClient(app) as client:
         run=client.get('/api/state').json()['run_id']
-        brief={'intent':'increase_orders','goal_vi':'Tăng đơn','allow_ads':True,'ads_daily_cap':None,'content_refresh':True,'duration_days':3}
+        brief=DEMO_D_BRIEF.copy()
         assert client.post('/api/brief/confirm',json=brief,headers=headers('brief')).status_code==200
         client.post('/api/day/start',json={},headers=headers('start'))
         with service.store.connect() as c:op=one(c,"SELECT * FROM operations WHERE run_id=? AND kind='start_day'",(run,))
@@ -424,5 +541,18 @@ def test_pending_renegotiation_and_failed_night_are_truthful(tmp_path):
         failed=client.post('/api/night',json={'expected_day':1},headers=headers('night'))
         assert failed.status_code==409 and failed.json()['operation_id']==night_id
         assert failed.json()['status']=='failed' and failed.json()['error']['code']=='LEARNING_TIMEOUT'
+        retryable=client.get('/api/state').json()
+        assert retryable['learning_status']=='failed' and retryable['learning_retry_allowed'] is True
+        url=f'/api/v1/runs/{run}/days/1/learning/retry'
+        retried=client.post(url,json={'expected_version':retryable['learning_version'],'reason_vi':'Thử lại'},headers=headers('learning-retry'))
+        assert retried.status_code==200,retried.text
+        with service.store.connect(write=True) as c:
+            c.execute("UPDATE learning_handoffs SET status='failed',error_code='UNKNOWN' WHERE run_id=? AND day=1",(run,))
+            c.execute("INSERT INTO night_snapshots(run_id,day,shop_id,snapshot_hash,payload_json) VALUES(?,1,'D','fixture','{}')",(run,))
+            c.execute("INSERT INTO reflection_receipts(run_id,day,snapshot_hash,owner_token,status,payload_json) VALUES(?,1,'fixture','owner','unknown','{}')",(run,))
+        blocked=client.get('/api/state').json()
+        assert blocked['learning_status']=='failed' and blocked['learning_retry_allowed'] is False
+        response=client.post(url,json={'expected_version':blocked['learning_version'],'reason_vi':'Thử lại'},headers=headers('learning-unknown'))
+        assert response.status_code==409 and response.json()['error']['code']=='REFLECTION_UNKNOWN'
         with service.store.connect() as c:
             assert c.execute("SELECT COUNT(*) FROM operations WHERE run_id=? AND kind='night'",(run,)).fetchone()[0]==1

@@ -15,7 +15,7 @@ export function App({client,page=globalThis.location?.pathname.split('/').pop() 
   const navigate=name=>{globalThis.location.href=pageURL(name,client.preview);};
   useEffect(()=>{document.body.classList.toggle('demo-page',demo);document.body.classList.toggle('proof-page',proof);},[demo,proof]);
   useEffect(()=>{if(proof)document.title='Học qua bộ nhớ · Growth Agents';},[proof]);
-  useEffect(()=>{if(run.state?.demo_shop)document.title=run.state.demo_shop.name+' · sàn·demo';},[run.state?.demo_shop?.name]);
+  useEffect(()=>{if(run.state?.demo_shop)document.title=run.state.demo_shop.name+' · ShopPilot AI';},[run.state?.demo_shop?.name]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),5500);return()=>clearTimeout(timer);},[notice]);
   async function endDay(){if(run.state?.step==='day_done' && await run.act('/api/night',{expected_day:run.state.day}))navigate('night.html');}
   async function jumpToDay7(){

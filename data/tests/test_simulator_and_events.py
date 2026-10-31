@@ -122,5 +122,4 @@ def test_empty_outcomes_comparison_preserves_null_and_measured_money(client,serv
     assert all(row["on"] is None and row["off"] is None for row in report["metrics"][:2])
     assert report['metrics'][2]['on'] is not None and report['metrics'][2]['off'] is not None
     assert report["metrics"][3]["on"]==report["metrics"][3]["off"]==0
-    legacy=h.get("/api/proof")
-    assert len(legacy['metrics'])==5 and legacy['metrics'][0]['on'] is None and legacy['metrics'][1]['on'] is None
+    assert client.get('/api/proof').status_code==409

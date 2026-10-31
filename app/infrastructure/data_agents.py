@@ -64,13 +64,21 @@ class DataEventLog:
             return event
         if kind=='negotiation_finished':
             return None
-        safe={key:value for key,value in data.items() if key in {'negotiation_id','action','source','role','tool_name','tool_call_id','requested_by','status','error_code','invocation_id','record_refs','who','items','versions','rules_version','memory_revision','round'}}
+        safe={key:value for key,value in data.items() if key in {'negotiation_id','action','source','role','tool_name','tool_call_id','requested_by','status','error_code','invocation_id','record_refs','who','items','versions','rules_version','memory_revision','round','next_actor'}}
         if kind=='referee_review':
             self.referee_action=data['action']
             safe['evidence_refs']=[self.turns[ref] for ref in data.get('evidence_refs',[]) if ref in self.turns]
         with s.store.connect(write=True) as c:
             self._fence(c,run_id)
-            seq=s.event(c,run_id,day,kind,actor,shop_id,safe,visibility='shop_private' if kind in {'tool_called','tool_result','agent_completed','memory_read'} else 'shared',text=s.safe_text(c,run_id,text_vi),eid=self.negotiation_id or '')
+            if kind=='code_check':
+                proposal=s.entity(c,'proposals',run_id,'proposal_id',self.last_proposal)
+                require(proposal['shop_id']==shop_id and proposal['negotiation_id']==self.negotiation_id,'EVIDENCE_INVALID','Kiểm tra không thuộc lượt thương lượng')
+                safe.update(proposal_id=proposal['proposal_id'],round=proposal['round'],ok=bool(data['ok']),
+                    checks=[{'code':code,'ok':False,'message_vi':code.replace('_',' ').lower()} for code in data.get('codes',[])])
+            if kind=='referee_review':
+                safe['focused_question']=s.safe_text(c,run_id,data['focused_question']) if data.get('focused_question') else None
+                safe['unresolved_terms']=[s.safe_text(c,run_id,term) for term in data.get('unresolved_terms',[])]
+            seq=s.event(c,run_id,day,kind,actor,shop_id,safe,visibility='shop_private' if kind in {'tool_called','tool_result','agent_completed','memory_read','code_check'} else 'shared',text=s.safe_text(c,run_id,text_vi),eid=self.negotiation_id or '')
             invocation=data.get('invocation_id')
             if self.negotiation_id and actor in {'platform','shop','referee'} and invocation and (kind=='agent_completed' or (kind=='tool_called' and invocation not in self.started_invocations)):
                 self.started_invocations.add(invocation)

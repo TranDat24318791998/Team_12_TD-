@@ -56,14 +56,14 @@ def test_agent_catalog_queries_and_knowledge_upload_read_revoke(client,service,r
 def test_browser_reference_comparison_attach_proof_and_replay(client,service):
     h=HttpHarness(client,service.issue_token)
     original=h.get("/api/state")["run_id"]
-    first=h.get("/api/proof")
-    assert first["status"]=="not_ready" and first["metrics"]==[]
+    assert client.get("/api/proof").status_code==409
     group=h.post("/api/v1/comparisons",{})
     status=h.get(f"/api/v1/comparisons/{group['comparison_id']}")
     assert status["status"]=="ready"
-    proof=h.get("/api/proof")
-    assert proof["status"]=="ready" and proof["run_on"]==group["run_on"]
-    assert all(x["on"]==x["off"] for x in proof["metrics"])
+    # The created pair is not selected as the seller's active run.
+    assert client.get("/api/proof").status_code==409
+    proof=h.get(f"/api/v1/runs/{group['run_on']}/proof?group_id={group['comparison_id']}")
+    assert proof["run_on"]==group["run_on"] and all(x["on"]==x["off"] for x in proof["metrics"])
     attached=h.post("/api/v1/comparisons/attach",{"run_on":group["run_on"],"run_off":group["run_off"]})
     assert attached["comparison_id"]!=group["comparison_id"]
     o=h.token(group["run_on"],"orchestrator")

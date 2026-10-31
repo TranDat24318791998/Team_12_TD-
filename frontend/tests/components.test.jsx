@@ -6,15 +6,21 @@ import {Proposal} from '../src/components/Proposal.jsx';
 import {ContentReview} from '../src/components/ContentReview.jsx';
 import {EventFeed} from '../src/components/EventFeed.jsx';
 import {AgentActivity} from '../src/components/AgentActivity.jsx';
-import {Progress} from '../src/components/Shell.jsx';
+import {Logo,Progress} from '../src/components/Shell.jsx';
 import {previewComparisonDays} from '../src/previewComparison.js';
 import {ControlPanel} from '../src/pages/Shop.jsx';
 import {NightPage} from '../src/pages/Night.jsx';
 import {ProofReport} from '../src/pages/Proof.jsx';
+import {DemoPage} from '../src/pages/Demo.jsx';
 const noop=()=>{};
 const shop={shop_id:'Z',name:'Shop Ánh Dương <b>',title:'Đèn bàn USB & đế gỗ',description:'Đèn bàn có đế gỗ.',category:'den_ban',price:299000,stock:17,rating:4.9,images:['https://demo.test/media/lamp.jpg'],attributes:['Sạc USB','2 màu: Đen, Nâu'],active_voucher_pct:7,listing_quality:.81,search_rank_page:1};
 const state={run_id:'database-run',day:1,step:'idle',demo_shop:shop,demo_shop_original:shop,memory_enabled:true,mode:'offline',last_night:null,active_package:null};
 const button=(html,name)=>html.match(new RegExp('<button\\b[^>]*data-'+name+'="true"[^>]*>'))?.[0];
+
+test('shop and demo share the supplied ShopPilot AI brand image',()=>{
+  const html=renderToStaticMarkup(<Logo preview={false}/>);
+  assert.match(html,/ShopPilot AI, trang shop/);assert.match(html,/shoppilot-ai\.png/);assert.match(html,/alt="ShopPilot AI"/);
+});
 
 test('React product renders a different database product without seed-specific labels',()=>{
   const html=renderToStaticMarkup(<Product shop={shop} onAddCart={noop} onNotice={noop}/>);
@@ -52,9 +58,43 @@ test('seller backstage escapes event text and excludes other shops',()=>{
   const html=renderToStaticMarkup(<EventFeed state={state} events={events} preview={false}/>);
   assert.match(html,/&lt;img/);assert.match(html,/Ghi chú riêng của shop Z/);assert.doesNotMatch(html,/Bí mật shop khác|<img src=x/);
 });
+test('configured live mode and actual offline fallback are labeled separately',()=>{
+  const live={...state,mode:'live'};
+  const panel=renderToStaticMarkup(<ControlPanel state={live} preview={false} onReset={noop} onStart={noop} onEndDay={noop}/>);
+  assert.match(panel,/Chế độ LLM cấu hình/);assert.match(panel,/Trực tiếp/);assert.doesNotMatch(panel,/Dữ liệu LLM/);
+  const completed={seq:1,run_id:state.run_id,day:1,shop_id:'Z',actor:'system',type:'agent_completed',ts:'10:00',text_vi:'Agent xử lý dữ liệu theo quyền.',data:{role:'platform',source:'offline',error_code:'provider_unavailable'}};
+  const feed=renderToStaticMarkup(<EventFeed state={live} events={[completed]} preview={false}/>);
+  assert.match(feed,/AGENT SÀN/);assert.match(feed,/Nguồn thực tế: Ngoại tuyến \(quy tắc dự phòng\)/);assert.match(feed,/Mã lý do: provider_unavailable/);
+  assert.doesNotMatch(feed,/Trực tiếp từ LLM/);
+});
+test('learning retry control follows the backend capability',()=>{
+  const failed={...state,step:'day_done',learning_status:'failed',learning_version:2,learning_day:1};
+  const render=allowed=>renderToStaticMarkup(<DemoPage run={{state:{...failed,learning_retry_allowed:allowed},events:[],act:noop}} preview={false} navigate={noop} onEndDay={noop} onNotice={noop}/>);
+  assert.match(render(true),/Thử lại bước học/);assert.match(render(false),/Bỏ qua bước học/);assert.doesNotMatch(render(false),/Thử lại bước học/);
+});
+test('night uses published learning source and does not infer an LLM from configured mode',()=>{
+  const summary={day:1,history_updates:['Ghi nhận quyết định.'],pref_candidates:['Ưu tiên ảnh nền sáng.'],source:'offline',calibration:{factor:1,points:0},lesson_ops:[],rejected_ops:0};
+  const completed={seq:1,run_id:state.run_id,day:1,shop_id:'Z',type:'agent_completed',data:{role:'learning',source:'offline',error_code:'provider_unavailable'}};
+  const html=renderToStaticMarkup(<NightPage run={{state:{...state,mode:'live',last_night:summary},events:[completed]}} preview={false}/>);
+  assert.match(html,/Ghi nhận quyết định/);assert.match(html,/Ưu tiên ảnh nền sáng/);assert.match(html,/Ngoại tuyến \(quy tắc dự phòng\)/);assert.match(html,/provider_unavailable/);
+  assert.match(html,/Ghi nhận từ người bán/);assert.doesNotMatch(html,/Cần chủ shop xác nhận/);
+  const unknown=renderToStaticMarkup(<NightPage run={{state:{...state,mode:'live',last_night:{...summary,source:undefined}},events:[]}} preview={false}/>);
+  assert.match(unknown,/Chưa có dữ liệu · Code kiểm tra/);assert.doesNotMatch(unknown,/LLM đề xuất|Trực tiếp từ LLM/);
+});
 test('day seven complete disables start and has no day eight control',()=>{
   const html=renderToStaticMarkup(<ControlPanel state={{...state,day:7,step:'complete'}} preview={false} onReset={noop} onStart={noop} onEndDay={noop}/>);
   assert.match(button(html,'start'),/disabled/);assert.match(html,/Đã hoàn tất 7 ngày/);assert.doesNotMatch(html,/Bắt đầu demo|Tiếp tục demo/);
+});
+test('brief shows only the server preset and preserves an older confirmed request',()=>{
+  const preset={intent:'increase_orders',goal_vi:'Mục tiêu do máy chủ cung cấp',allow_ads:true,ads_daily_cap:12345,content_refresh:true,duration_days:3};
+  const render=value=>renderToStaticMarkup(<ControlPanel state={value} preview={false} onReset={noop} onStart={noop} onEndDay={noop} onConfirm={noop}/>);
+  const html=render({...state,brief_editable:false,brief_preset:preset});
+  assert.match(html,/Yêu cầu demo cố định/);assert.match(html,/Mục tiêu do máy chủ cung cấp/);assert.match(html,/12\.345đ/);assert.match(html,/data-confirm-brief/);
+  assert.doesNotMatch(html,/<input|<textarea|brief-goal|brief-cap/);
+  const missing=render({...state,brief_editable:false});assert.match(missing,/Chưa có yêu cầu demo cố định/);assert.doesNotMatch(missing,/data-confirm-brief|45\.000đ|24 đơn/);
+  const old=render({...state,brief_editable:false,brief_preset:preset,brief:{confirmed:true,goal_vi:'Yêu cầu cũ đã duyệt',allow_ads:true,ads_daily_cap:5000,duration_days:3}});
+  assert.match(old,/Yêu cầu đã xác nhận ban đầu/);assert.match(old,/Yêu cầu cũ đã duyệt/);assert.match(old,/5\.000đ/);assert.doesNotMatch(old,/Mục tiêu do máy chủ cung cấp|data-confirm-brief/);
+  assert.doesNotMatch(render({...state,step:'complete',brief_editable:false,brief_preset:preset}),/Mục tiêu do máy chủ cung cấp/);
 });
 test('final night uses seven-day completion and null ROAS is not reported as zero',()=>{
   const finalState={...state,day:7,step:'complete',last_night:{day:7,history_updates:[],pref_candidates:[],calibration:{factor:1,points:0,mape_today:null},lesson_ops:[],rejected_ops:0,memory_md_path:'/api/reports/memory-7'}};
@@ -69,10 +109,11 @@ test('proof respects the response horizon and does not fabricate missing values'
 });
 test('precomputed proof identifies its offline source and preserves run identifiers',()=>{
   const report={days:7,seed:42,run_on:'original-on',run_off:'original-off',metrics:[],source:'precomputed_offline_simulation'};
-  const html=renderToStaticMarkup(<ProofReport report={report} manifest={{comparison_id:'pair-1',provider_eval:'not_run',artifact_sha256:'abc'}} onReset={noop} onExport={noop}/>);
+  const html=renderToStaticMarkup(<ProofReport report={report} manifest={{comparison_id:'pair-1',provider_eval:'not_run',artifact_sha256:'abc',brief:{goal_vi:'Yêu cầu gốc của lần chạy cũ',allow_ads:true,ads_daily_cap:null}}} onReset={noop} onExport={noop}/>);
   assert.match(html,/Mô phỏng ngoại tuyến đã chạy/);assert.match(html,/Chưa đánh giá provider/);
   assert.match(html,/original-on \/ original-off/);assert.match(html,/pair-1/);assert.match(html,/not_run/);
   assert.match(html,/Bắt đầu phiên demo mới/);assert.doesNotMatch(html,/Chạy lại từ đầu/);
+  assert.match(html,/Yêu cầu gốc của báo cáo: Yêu cầu gốc của lần chạy cũ/);assert.match(html,/Chưa đặt mức trần trong yêu cầu/);
 });
 
 test('agent overview shows package changes, safe referee text and distinct validation',()=>{
