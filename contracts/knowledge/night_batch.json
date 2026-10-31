@@ -1,0 +1,101 @@
+{
+  "source": "fixture",
+  "payload": {
+    "day": 1,
+    "through_seq": 10,
+    "history": [
+      {
+        "negotiation_id": "fixture-negotiation",
+        "shop_id": "D",
+        "day": 1,
+        "kind": "propose",
+        "status": "agreed",
+        "rounds": 2,
+        "proposed_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 70000,
+          "voucher_pct": 10,
+          "stop_roas_below": 4.0,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "agreed_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "approved_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "seller_action": "accept",
+        "ads_paused": false,
+        "outcome": {
+          "orders": 3,
+          "revenue": 525000,
+          "ads_spend": 18000,
+          "roas": 4.0
+        },
+        "evidence_seqs": [
+          5,
+          8
+        ],
+        "version": 1
+      }
+    ],
+    "preferences": [
+      {
+        "pref_id": "fixture-pref",
+        "shop_id": "D",
+        "field": "content_style",
+        "value": "ảnh nền sáng",
+        "status": "candidate",
+        "evidence_seqs": [
+          10
+        ],
+        "asked_day": null,
+        "declined_until": null
+      }
+    ],
+    "calibration": [
+      {
+        "category": "quat_mini",
+        "value": {
+          "category": "quat_mini",
+          "ratios": [
+            0.75
+          ],
+          "factor": 1.0,
+          "q_low": 1.0,
+          "q_high": 1.0
+        },
+        "samples": [
+          {
+            "sample_id": "fixture-sample",
+            "prediction_id": "fixture-prediction",
+            "shop_id": "D",
+            "target_day": 1,
+            "raw_point": 4.0,
+            "actual_orders": 3,
+            "ratio": 0.75,
+            "evidence_seqs": [
+              8
+            ]
+          }
+        ],
+        "version": 1
+      }
+    ],
+    "lesson_ops": [],
+    "valid_negotiation_ids": [
+      "fixture-negotiation"
+    ]
+  }
+}

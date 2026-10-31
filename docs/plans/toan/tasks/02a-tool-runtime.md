@@ -13,7 +13,7 @@ Model gọi tool bằng native function calling; backend kiểm quyền và inpu
 - `tests/fakes/llm.py`, `tests/fakes/agent_tools.py`.
 - `tests/unit/agents/test_tools.py`, `tests/unit/agents/test_runner.py`, `tests/unit/infrastructure/test_llm.py`.
 - `contracts/agent_tool_trace.json` — fixture ghi `source=fixture`, không nhận là live.
-- Một dòng kết quả trong `docs/CODEX_LOG.md`.
+- Một dòng kết quả trong `docs/plans/toan/CODEX_LOG.md`.
 
 D01 sở hữu model `PackageCheck`/`ShopPackageCheck` và DTO knowledge. D02 sở hữu prompt, graph và role callers. D04 sở hữu retrieval/học; D05 sở hữu content caller. Không xây plugin registry, MCP server hoặc agent tự sinh Python.
 
@@ -32,7 +32,7 @@ class BoundTool:
 @dataclass(frozen=True)
 class AgentRun:
     value: BaseModel
-    source: Literal["live", "replay", "offline"]
+    source: Literal["live", "replay", "offline", "fixture"]
     tool_call_ids: list[str]
     error_code: str | None
 
@@ -117,7 +117,7 @@ Inputs for a second batch may use outputs from the first. Tools within the same 
 
 Gắn kết quả T04/T05/T06 với fingerprint canonical JSON của `Package`. T04/T05 chỉ đánh dấu corrected package là đã kiểm khi `violations_after` rỗng; T06 phải tính trên package final, không reuse forecast của gói trước clamp. Các gate nghiệp vụ ngoài runner vẫn kiểm lại output cuối. Nếu model đổi package ở terminal mà chưa kiểm/forecast đúng gói, fallback; không tạo tool event giả để lấp prerequisite.
 
-Fallback gọi cùng adapter và lấy knowledge hiện tại, chạy luật deterministic của từng role; record `source=offline` và `requested_by=workflow`, không gắn model tool_call_id. Chỉ khi AIMessage thực sự yêu cầu tool thì event có `requested_by=model`. Có partial live calls rồi fallback thì outcome cuối offline, trace vẫn phản ánh các lần gọi trước thật.
+Transport giả trong test có `is_fixture=True` và báo source=fixture, không nhận là live. Fallback gọi cùng adapter và lấy knowledge hiện tại, chạy luật deterministic của từng role; record `source=offline` và `requested_by=workflow`, không gắn model tool_call_id. Chỉ khi AIMessage thực sự yêu cầu tool thì event có `requested_by=model`. Có partial live calls rồi fallback thì outcome cuối offline, trace vẫn phản ánh các lần gọi trước thật.
 
 ## 5. Evidence và privacy của trace
 

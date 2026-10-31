@@ -14,7 +14,7 @@ Chỉ sửa/tạo:
 
 - `app/negotiation/agents.py`, `prompts.py`, `graph.py`, `referee.py`.
 - `tests/unit/negotiation/test_negotiation.py`, `test_isolation.py`, `test_referee.py`.
-- Một dòng bàn giao trong `docs/CODEX_LOG.md`.
+- Một dòng bàn giao trong `docs/plans/toan/CODEX_LOG.md`.
 
 Model, seed, finance, validators, privacy, Session và EventLog do D01 cấp. Runner, tool bindings và OpenAI transport do D02a cấp; không viết bản runner thứ hai trong graph. Nếu thiếu, báo đúng tên interface; chỉ dùng fake trong test, không tạo một model trùng trong feature. Giữ nguyên requirements đã cài. Content và Learning không gọi ở task này.
 

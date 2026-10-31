@@ -1,1 +1,260 @@
-"""Phân quyền đọc và ghi bộ nhớ dài hạn."""
+"""Knowledge theo scope; model chỉ nhận projection, không có quyền ghi."""
+
+from copy import deepcopy
+from hashlib import sha256
+from threading import RLock
+from app.domain.models.learning import (Calibration, ContentMemoryView, KnowledgeCommit,
+    LearningEvidence, MemoryCommit, PlatformMemoryView, Preference, PublicEvidence,
+    PublicHistory, PublicLesson, PublicOutcome, ShopMemoryView, StoreWrite)
+from app.domain.models.packages import Package
+from app.domain.policies import LESSON_CAP_PER_SCOPE, PREF_ASK_THRESHOLD, PREF_DECLINE_SILENCE_DAYS
+from app.domain.privacy import leak_guard
+from app.infrastructure.store import StoreConflict
+
+
+class MemoryGateway:
+    def __init__(self, store, enabled, log=None, run_id=None, session=None):
+        self.store, self.enabled, self.log, self.run_id, self.session = store, enabled, log, run_id, session
+        self._learning_snapshot = None
+        self._lock = RLock()
+
+    def _ns(self, compartment, scope):
+        return (self.run_id, compartment, scope)
+
+    def _event(self, type, shop_id, data):
+        if self.log and self.session:
+            self.log.add(self.run_id, self.session.day, type, 'memory', shop_id, 'Bộ nhớ đã được xử lý.', data)
+
+    def get_rules(self, shop_id):
+        return self.session.states[shop_id].private.rules.model_copy(deep=True)
+
+    def get_history(self, shop_id):
+        if not self.enabled:
+            return []
+        return sorted(self.store.list(self._ns('history', shop_id)),
+                      key=lambda x: (x.day, x.negotiation_id), reverse=True)
+
+    def get_calibration(self, category):
+        record = self.store.get(self._ns('calibration', category), category) if self.enabled else None
+        return record.value if record else Calibration(category=category)
+
+    def list_lessons(self, scope):
+        if not self.enabled:
+            return []
+        return sorted(self.store.list(self._ns('lessons', scope)),
+                      key=lambda lesson: (-lesson.score, -lesson.updated_day, lesson.lesson_id))
+
+    def platform_view(self, shop_id, category, *, invocation_id=None):
+        history = self.get_history(shop_id)[:5]
+        record = self.store.get(self._ns('calibration', category), category) if self.enabled else None
+        lessons = self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5]
+        self._event('memory_read', shop_id, {'who': 'platform', 'items': [x.negotiation_id for x in history] + [x.lesson_id for x in lessons], 'versions': {x.negotiation_id:x.version for x in history} | {x.lesson_id:x.version for x in lessons}, 'invocation_id':invocation_id})
+        return PlatformMemoryView(history=history, calibration=record.value if record else None,
+                                  lessons=lessons, knowledge_revision=self.session.knowledge_revision)
+
+    def shop_view(self, shop_id, *, invocation_id=None):
+        prefs = self.store.list(self._ns('preferences', shop_id)) if self.enabled else []
+        evidence = [e.seq for e in self.log.since(self.run_id, 0) if e.type == 'rules_confirmed' and e.shop_id == shop_id] if self.log else []
+        self._event('memory_read', shop_id, {'who': 'shop', 'items': [p.pref_id for p in prefs], 'rules_version':self.session.rules_version, 'invocation_id':invocation_id})
+        return ShopMemoryView(rules=self.get_rules(shop_id), rules_version=self.session.rules_version,
+                              rules_evidence_seqs=evidence, preferences=prefs,
+                              knowledge_revision=self.session.knowledge_revision)
+
+    def content_view(self, shop_id, *, invocation_id=None):
+        prefs = self.store.list(self._ns('preferences', shop_id)) if self.enabled else []
+        ids = [p.pref_id for p in prefs if p.status == 'confirmed' and p.field == 'content_style']
+        self._event('memory_read', shop_id, {'who': 'content', 'items': ids, 'rules_version':self.session.rules_version, 'invocation_id':invocation_id})
+        return ContentMemoryView(confirmed_style_notes=list(self.get_rules(shop_id).content_style_notes),
+                                 rules_version=self.session.rules_version, preference_ids=ids)
+
+    def prefs_to_ask(self, shop_id, day):
+        if not self.enabled:
+            return []
+        prefs = self.store.list(self._ns('preferences', shop_id))
+        return [p for p in prefs if p.observation_count >= PREF_ASK_THRESHOLD and
+                (p.status == 'candidate' or (p.status == 'declined' and p.declined_until is not None and day >= p.declined_until))]
+
+    def _pending_pref(self, pref_id):
+        card = self.session.pending_card
+        if not card or card.kind != 'question' or not card.rule_question or card.rule_question.pref_id != pref_id:
+            raise ValueError('preference has no matching question')
+        pref = self.store.get(self._ns('preferences', card.shop_id), pref_id)
+        if not pref or (pref.field, pref.value) != (card.rule_question.field, card.rule_question.value):
+            raise ValueError('preference does not match card')
+        return card, pref
+
+    def mark_asked(self, pref_id, day):
+        with self.session.lock:
+            card, pref = self._pending_pref(pref_id)
+            if pref not in self.prefs_to_ask(card.shop_id, day) and pref.status != 'asked':
+                raise ValueError('preference is not askable')
+            updated = pref.model_copy(update={'status': 'asked', 'asked_day': day}, deep=True)
+            return self.store.commit_batch([StoreWrite(namespace=self._ns('preferences', card.shop_id), key=pref_id, value=updated)],
+                run_id=self.run_id, expected_revision=self.session.knowledge_revision,
+                new_cursor=self.session.memory_cursor, receipt_key=f'ask:{card.card_id}')
+
+    def answer_pref(self, pref_id, yes, day):
+        with self.session.lock:
+            card, pref = self._pending_pref(pref_id)
+            key = f'answer:{card.card_id}'
+            if key in self.session.knowledge_receipts:
+                previous_yes, result = self.session.knowledge_receipts[key]
+                if previous_yes != yes:
+                    raise ValueError('question was already answered differently')
+                return result
+            if pref.status != 'asked':
+                raise ValueError('preference was not asked')
+            rules = self.get_rules(card.shop_id)
+            if yes and pref.field == 'content_style':
+                if pref.value not in rules.content_style_notes:
+                    rules.content_style_notes.append(pref.value)
+            elif yes and pref.field == 'voucher_max_pct':
+                value = int(pref.value)
+                if not 0 <= value <= min(30, rules.voucher_max_pct):
+                    raise ValueError('invalid voucher preference')
+                rules.voucher_max_pct = value
+            updated = pref.model_copy(update={'status': 'confirmed' if yes else 'declined',
+                         'declined_until': None if yes else day + PREF_DECLINE_SILENCE_DAYS}, deep=True)
+            result = self.store.commit_batch([StoreWrite(namespace=self._ns('preferences', card.shop_id), key=pref_id, value=updated)],
+                run_id=self.run_id, expected_revision=self.session.knowledge_revision,
+                new_cursor=self.session.memory_cursor, receipt_key=key)
+            if yes:
+                self.session.states[card.shop_id].private.rules = rules
+                self.session.rules_version += 1
+                self._event('rules_confirmed', card.shop_id, {'pref_id': pref_id, 'rules_version': self.session.rules_version})
+            self.session.knowledge_receipts[key] = (yes, result)
+            return result
+
+    def read_learning_evidence(self, day):
+        if self._learning_snapshot and self._learning_snapshot.day == day:
+            return self._learning_snapshot.model_copy(deep=True)
+        return self.freeze_learning_evidence(day)
+
+    def freeze_learning_evidence(self, day):
+        events = self.log.since(self.run_id, self.session.memory_cursor)
+        through = max((e.seq for e in events), default=self.session.memory_cursor)
+        shop_id = self.session.settings.demo_shop
+        state = self.session.states[shop_id]
+        projected, ids = [], set()
+        for event in events:
+            if event.day != day or event.shop_id not in (None, shop_id):
+                continue
+            data = event.data
+            negotiation_id = data.get('negotiation_id')
+            if isinstance(negotiation_id, str) and negotiation_id:
+                ids.add(negotiation_id)
+            package = None
+            if isinstance(data.get('package'), dict):
+                try:
+                    package = Package.model_validate(data['package'])
+                except ValueError:
+                    pass
+            raw_metrics = data.get('metrics')
+            outcome = None
+            if isinstance(raw_metrics, dict):
+                try:
+                    outcome = PublicOutcome.model_validate({k: raw_metrics[k] for k in ('orders', 'revenue', 'ads_spend', 'roas')})
+                except (KeyError, ValueError):
+                    pass
+            text, _ = leak_guard(event.text_vi, state.public, state.private, self.session.world.fees)
+            feedback = data.get('feedback_vi') if event.type == 'content_job' else None
+            if feedback:
+                feedback, _ = leak_guard(str(feedback), state.public, state.private, self.session.world.fees)
+            projected.append(PublicEvidence(seq=event.seq, type=event.type, negotiation_id=negotiation_id,
+                text_vi=text, package=package, seller_action=data.get('action') if event.type == 'seller_decision' else None,
+                feedback_vi=feedback, outcome=outcome))
+        for history in self.get_history(shop_id):
+            if history.approved_package:
+                ids.add(history.negotiation_id)
+        category = state.public.category
+        snapshot = LearningEvidence(day=day, from_seq=self.session.memory_cursor + 1, through_seq=through,
+            events=projected, existing_lessons=self.list_lessons('strategy')[:5] + self.list_lessons(category)[:5],
+            valid_negotiation_ids=sorted(ids), knowledge_revision=self.session.knowledge_revision)
+        self._learning_snapshot = snapshot
+        self._event('memory_read', shop_id, {'who': 'learning', 'items': [x.lesson_id for x in snapshot.existing_lessons], 'versions': {x.lesson_id:x.version for x in snapshot.existing_lessons}, 'invocation_id':f'{self.run_id}:learning:{day}'})
+        return snapshot.model_copy(deep=True)
+
+    def commit_memory_updates(self, batch, *, expected_revision, expected_cursor):
+        with self.session.lock, self._lock:
+            key = f'night:{batch.day}'
+            if key in self.session.knowledge_receipts:
+                old = self.session.knowledge_receipts[key].model_copy(deep=True)
+                old.store.duplicate = True
+                return old
+            if not self.enabled:
+                raise ValueError('memory disabled')
+            if self.session.memory_cursor != expected_cursor or self.session.knowledge_revision != expected_revision:
+                raise StoreConflict('stale knowledge snapshot')
+            snapshot = self._learning_snapshot
+            if not snapshot or snapshot.day != batch.day or snapshot.through_seq != batch.through_seq:
+                raise ValueError('missing evidence snapshot')
+            valid_ids = set(snapshot.valid_negotiation_ids)
+            events = {e.seq: e for e in self.log.since(self.run_id, 0) if e.seq <= snapshot.through_seq}
+            writes = []
+            scoped_shop = self.session.settings.demo_shop
+            for history in batch.history:
+                if history.shop_id != scoped_shop or history.negotiation_id not in valid_ids or not history.evidence_seqs or any(seq not in events or events[seq].shop_id != scoped_shop or events[seq].data.get('negotiation_id') != history.negotiation_id for seq in history.evidence_seqs):
+                    raise ValueError('invalid public history evidence')
+                writes.append(StoreWrite(namespace=self._ns('history', history.shop_id), key=history.negotiation_id, value=history))
+            for pref in batch.preferences:
+                if pref.shop_id != scoped_shop or not pref.evidence_seqs:
+                    raise ValueError('invalid preference')
+                for seq in pref.evidence_seqs:
+                    event = events.get(seq)
+                    if not event or event.shop_id != pref.shop_id or not ((pref.field == 'content_style' and event.type == 'content_job' and event.data.get('feedback_vi')) or (pref.field == 'voucher_max_pct' and event.type == 'seller_decision' and event.data.get('edited_package'))):
+                        raise ValueError('invalid preference evidence')
+                writes.append(StoreWrite(namespace=self._ns('preferences', pref.shop_id), key=pref.pref_id, value=pref))
+            for record in batch.calibration:
+                if record.category != self.session.states[self.session.settings.demo_shop].public.category:
+                    raise ValueError('invalid calibration category')
+                if any(sample.shop_id != scoped_shop or not sample.evidence_seqs or any(seq not in events or events[seq].shop_id != scoped_shop or events[seq].type != 'market_result' or events[seq].day != sample.target_day or events[seq].data.get('prediction_id') != sample.prediction_id for seq in sample.evidence_seqs) for sample in record.samples):
+                    raise ValueError('invalid calibration evidence')
+                writes.append(StoreWrite(namespace=self._ns('calibration', record.category), key=record.category, value=record))
+            category = self.session.states[self.session.settings.demo_shop].public.category
+            state = self.session.states[self.session.settings.demo_shop]
+            scopes = {'strategy', category}
+            lessons = {scope: {x.lesson_id: x for x in self.list_lessons(scope)} for scope in scopes}
+            accepted, rejected, changed = [], 0, {}
+            for op in batch.lesson_ops:
+                if op.scope not in scopes or not op.evidence or not set(op.evidence) <= valid_ids:
+                    rejected += 1; continue
+                _, redacted = leak_guard(op.text_vi, state.public, state.private, self.session.world.fees)
+                if redacted or len(op.text_vi) > 500 or not op.text_vi.strip():
+                    rejected += 1; continue
+                bucket = lessons[op.scope]
+                if op.op == 'ADD':
+                    norm = ' '.join(op.text_vi.casefold().split())
+                    if any(' '.join(x.text_vi.casefold().split()) == norm for x in bucket.values()):
+                        rejected += 1; continue
+                    lesson_id = sha256(f'{self.run_id}:{op.scope}:{norm}'.encode()).hexdigest()[:16]
+                    lesson = PublicLesson(lesson_id=lesson_id, scope=op.scope, text_vi=op.text_vi,
+                        score=2, evidence=list(dict.fromkeys(op.evidence)), created_day=batch.day, updated_day=batch.day, version=1)
+                else:
+                    lesson = bucket.get(op.lesson_id)
+                    if not lesson or set(op.evidence) <= set(lesson.evidence):
+                        rejected += 1; continue
+                    updates = {'score': lesson.score + (-1 if op.op == 'DOWNVOTE' else 1),
+                               'evidence': list(dict.fromkeys(lesson.evidence + op.evidence)),
+                               'updated_day': batch.day, 'version': lesson.version + 1}
+                    if op.op == 'EDIT': updates['text_vi'] = op.text_vi
+                    lesson = lesson.model_copy(update=updates, deep=True)
+                if lesson.score <= 0:
+                    bucket.pop(lesson.lesson_id, None)
+                    changed[(op.scope, lesson.lesson_id)] = None
+                else:
+                    bucket[lesson.lesson_id] = lesson
+                    changed[(op.scope, lesson.lesson_id)] = lesson
+                accepted.append(op)
+            for scope, bucket in lessons.items():
+                while len(bucket) > LESSON_CAP_PER_SCOPE:
+                    victim = min(bucket.values(), key=lambda x: (x.score, x.updated_day, x.lesson_id))
+                    del bucket[victim.lesson_id]
+                    changed[(scope, victim.lesson_id)] = None
+            for (scope, lesson_id), lesson in changed.items():
+                writes.append(StoreWrite(namespace=self._ns('lessons', scope), key=lesson_id, value=lesson))
+            commit = self.store.commit_batch(writes, run_id=self.run_id, expected_revision=expected_revision,
+                                             new_cursor=batch.through_seq, receipt_key=key)
+            result = KnowledgeCommit(store=commit, accepted_lesson_ops=accepted, rejected_ops=rejected)
+            self.session.knowledge_receipts[key] = result.model_copy(deep=True)
+            self._learning_snapshot = None
+            return result

@@ -4,7 +4,7 @@ Timebox: **15 phút**. Phụ thuộc D00. Đọc `docs/DEMO_CONTRACT.md` mục 1
 
 ## Output được sửa
 
-`app/domain/models/{shops,packages,negotiation,cards,content,learning,metrics,events,intent,tools}.py`, `app/domain/{finance,validators,privacy,formatting}.py`, `app/simulation/world.py`, `app/runtime/{session,manager}.py`, `app/infrastructure/{store,eventlog}.py`, `app/core/settings.py`, `.env.example`, `data/{seed,campaigns}.json`, `contracts/agents/{public_context,shop_context,tool_checks}.json`, `tests/unit/domain/{test_models,test_finance,test_privacy}.py`, `tests/unit/runtime/test_session.py`, `tests/fakes/`, `docs/CODEX_LOG.md`.
+`app/domain/models/{shops,packages,negotiation,cards,content,learning,metrics,events,intent,tools}.py`, `app/domain/{finance,validators,privacy,formatting}.py`, `app/simulation/world.py`, `app/runtime/{session,manager}.py`, `app/infrastructure/{store,eventlog}.py`, `app/core/settings.py`, `.env.example`, `data/{seed,campaigns}.json`, `contracts/agents/{public_context,shop_context,tool_checks}.json`, `tests/unit/domain/{test_models,test_finance,test_privacy}.py`, `tests/unit/runtime/test_session.py`, `tests/fakes/`, `docs/plans/toan/CODEX_LOG.md`.
 
 ## 1. Tạo model trước
 

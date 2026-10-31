@@ -4,7 +4,7 @@ Dự án cho SEAxOpenAI Hackathon: hai agent đại diện sàn và shop thươn
 
 ## Trạng thái
 
-Khung task 1.1 đã được tổ chức theo package nghiệp vụ. Settings, app factory, `/health` và frontend tĩnh chạy được; agent, thị trường và bộ nhớ hiện là khung để triển khai theo từng task.
+Core Agent + Tools + Knowledge đã có code và headless test với fixture market/media. Settings, app factory, `/health` và frontend tĩnh chạy được; adapter market/media và route nghiệp vụ còn chờ member tương ứng tích hợp. Xem [runbook phần Toàn](docs/plans/toan/DEMO_RUNBOOK.md).
 
 ## Cấu trúc codebase
 

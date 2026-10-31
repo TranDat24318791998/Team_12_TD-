@@ -1,0 +1,226 @@
+{
+  "shops": [
+    {
+      "public": {
+        "shop_id": "A",
+        "name": "Quạt Xinh Official",
+        "category": "quat_mini",
+        "price": 189000,
+        "stock": 400,
+        "listing_quality": 0.45,
+        "search_rank_page": 3,
+        "rating": 4.6,
+        "base_impressions": 3000,
+        "title": "Quạt mini cầm tay sạc USB",
+        "description": "Quạt mini cầm tay, sạc USB.",
+        "attributes": [
+          "sạc USB"
+        ],
+        "images": [],
+        "video": null,
+        "active_voucher_pct": 0
+      },
+      "private": {
+        "owner_name": "anh Minh",
+        "unit_cost": 110000,
+        "rules": {
+          "allow_ads": true,
+          "ads_daily_max": 100000,
+          "voucher_max_pct": 10,
+          "min_profit_per_unit": 30000,
+          "max_breakeven_roas": 6.5,
+          "require_stop_condition": true,
+          "content_style_notes": []
+        }
+      },
+      "persona": {
+        "shop_id": "A",
+        "hidden_voucher_comfort_pct": 5,
+        "content_style_pref": null,
+        "accepts_ads": true
+      }
+    },
+    {
+      "public": {
+        "shop_id": "B",
+        "name": "Gió Mát Store",
+        "category": "quat_mini",
+        "price": 129000,
+        "stock": 250,
+        "listing_quality": 0.35,
+        "search_rank_page": 4,
+        "rating": 4.6,
+        "base_impressions": 2000,
+        "title": "Quạt mini cầm tay sạc USB",
+        "description": "Quạt mini cầm tay, sạc USB.",
+        "attributes": [
+          "sạc USB"
+        ],
+        "images": [],
+        "video": null,
+        "active_voucher_pct": 0
+      },
+      "private": {
+        "owner_name": "chị Hoa",
+        "unit_cost": 112000,
+        "rules": {
+          "allow_ads": false,
+          "ads_daily_max": 0,
+          "voucher_max_pct": 5,
+          "min_profit_per_unit": 12000,
+          "max_breakeven_roas": 6.5,
+          "require_stop_condition": true,
+          "content_style_notes": []
+        }
+      },
+      "persona": {
+        "shop_id": "B",
+        "hidden_voucher_comfort_pct": null,
+        "content_style_pref": null,
+        "accepts_ads": false
+      }
+    },
+    {
+      "public": {
+        "shop_id": "C",
+        "name": "Tiện Ích 24h",
+        "category": "quat_mini",
+        "price": 159000,
+        "stock": 15,
+        "listing_quality": 0.4,
+        "search_rank_page": 3,
+        "rating": 4.6,
+        "base_impressions": 1500,
+        "title": "Quạt mini cầm tay sạc USB",
+        "description": "Quạt mini cầm tay, sạc USB.",
+        "attributes": [
+          "sạc USB"
+        ],
+        "images": [],
+        "video": null,
+        "active_voucher_pct": 0
+      },
+      "private": {
+        "owner_name": "anh Tuấn",
+        "unit_cost": 95000,
+        "rules": {
+          "allow_ads": true,
+          "ads_daily_max": 80000,
+          "voucher_max_pct": 10,
+          "min_profit_per_unit": 25000,
+          "max_breakeven_roas": 6.5,
+          "require_stop_condition": true,
+          "content_style_notes": []
+        }
+      },
+      "persona": {
+        "shop_id": "C",
+        "hidden_voucher_comfort_pct": null,
+        "content_style_pref": null,
+        "accepts_ads": true
+      }
+    },
+    {
+      "public": {
+        "shop_id": "D",
+        "name": "Nhà Bé Lan",
+        "category": "quat_mini",
+        "price": 175000,
+        "stock": 300,
+        "listing_quality": 0.55,
+        "search_rank_page": 3,
+        "rating": 4.6,
+        "base_impressions": 2500,
+        "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+        "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+        "attributes": [
+          "3 tốc độ gió",
+          "sạc USB",
+          "pin 2000mAh",
+          "3 màu: Trắng, Hồng, Xanh mint"
+        ],
+        "images": [],
+        "video": null,
+        "active_voucher_pct": 0
+      },
+      "private": {
+        "owner_name": "chị Lan",
+        "unit_cost": 115000,
+        "rules": {
+          "allow_ads": true,
+          "ads_daily_max": 45000,
+          "voucher_max_pct": 8,
+          "min_profit_per_unit": 18000,
+          "max_breakeven_roas": 6.5,
+          "require_stop_condition": true,
+          "content_style_notes": []
+        }
+      },
+      "persona": {
+        "shop_id": "D",
+        "hidden_voucher_comfort_pct": null,
+        "content_style_pref": "ảnh nền sáng",
+        "accepts_ads": true
+      }
+    },
+    {
+      "public": {
+        "shop_id": "E",
+        "name": "Mát Lạnh Shop",
+        "category": "quat_mini",
+        "price": 99000,
+        "stock": 350,
+        "listing_quality": 0.5,
+        "search_rank_page": 2,
+        "rating": 4.6,
+        "base_impressions": 2200,
+        "title": "Quạt mini cầm tay sạc USB",
+        "description": "Quạt mini cầm tay, sạc USB.",
+        "attributes": [
+          "sạc USB"
+        ],
+        "images": [],
+        "video": null,
+        "active_voucher_pct": 0
+      },
+      "private": {
+        "owner_name": "anh Phúc",
+        "unit_cost": 60000,
+        "rules": {
+          "allow_ads": true,
+          "ads_daily_max": 50000,
+          "voucher_max_pct": 5,
+          "min_profit_per_unit": 15000,
+          "max_breakeven_roas": 6.5,
+          "require_stop_condition": true,
+          "content_style_notes": []
+        }
+      },
+      "persona": {
+        "shop_id": "E",
+        "hidden_voucher_comfort_pct": null,
+        "content_style_pref": null,
+        "accepts_ads": true
+      }
+    }
+  ],
+  "trend": {
+    "keyword": "quạt mini cầm tay",
+    "category": "quat_mini",
+    "growth_7d_pct": 240,
+    "daily_growth": 0.12
+  },
+  "calendar": [
+    {
+      "date": "2026-11-11",
+      "name": "11.11"
+    }
+  ],
+  "fees": {
+    "fixed_pct": 8,
+    "transaction_pct": 5,
+    "tax_pct": 1.5,
+    "per_order": 3000
+  },
+  "start_date": "2026-11-01"
+}

@@ -43,7 +43,7 @@ app/
   domain/               policies.py, finance.py, validators.py, privacy.py, formatting.py
     models/             shops, packages, negotiation, cards, content, learning, metrics, events
   runtime/              session.py, manager.py, day.py
-  agents/               tools.py, runner.py (đặc tả D02a, chưa implement)
+  agents/               tools.py, runner.py và content.py cho role/tool runtime
   negotiation/          agents.py, prompts.py, graph.py
   content/              text.py, images.py, video.py, prompts.py, service.py
   memory/               gateway.py, night.py, prompts.py
@@ -97,7 +97,7 @@ python scripts/run_sim.py --days 6       # chạy 6 ngày không giao diện
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | tuỳ chọn |
 | `SEED` | mặc định 42 |
 | `DEMO_SHOP` | shop giám khảo điều khiển, mặc định `D` |
-| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, hiện Settings mặc định40; D01 cấu hình demo64 cho tool loop |
+| `MAX_LIVE_CALLS_PER_SESSION` | giới hạn lời gọi LLM trả phí mỗi phiên demo, mặc định64 cho demo tool loop |
 | `MAX_VIDEO_JOBS_PER_SESSION` | giới hạn job video Muse mỗi phiên, mặc định 3 |
 | `IMAGE_PROVIDER` | OpenAI cho ảnh theo yêu cầu hiện hành |
 | `MOCK_API` | `1` = API trả dữ liệu mẫu trong `contracts/` (giao diện làm trước khi backend xong) |

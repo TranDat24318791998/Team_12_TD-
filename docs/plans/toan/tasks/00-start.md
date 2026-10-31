@@ -4,7 +4,7 @@ Timebox 8 phút. Đọc `AGENTS.md`, `docs/plans/toan/README.md`, `docs/DEMO_CON
 
 ## Output
 
-`docs/CODEX_LOG.md`, `.env.example` (chỉ tên biến/giá trị không bí mật), `contracts/demo_scenario.json`, `contracts/agents/handoff.json`. Config thật chỉ ở `.env` gitignored. Các task sau được thêm đúng fixtures trong Output của mình.
+`docs/plans/toan/CODEX_LOG.md`, `.env.example` (chỉ tên biến/giá trị không bí mật), `contracts/demo_scenario.json`, `contracts/agents/handoff.json`. Config thật chỉ ở `.env` gitignored. Các task sau được thêm đúng fixtures trong Output của mình.
 
 ## Các bước
 

@@ -1,12 +1,13 @@
 # Plan của Toàn — Agent, Tools và Knowledge
 
-Cập nhật 31/10/2026 theo phần việc Toàn nhận từ đầu: **agent + điều phối + tool adapters + Knowledge + học ban đêm**. Đây là plan giao coder/reviewer, chưa phải chức năng đã implement. Bản này thay lịch trước đã dành quá nhiều thời gian cho UI/media và chỉ dùng LLM structured output.
+Cập nhật 31/10/2026 theo phần việc Toàn nhận từ đầu: **agent + điều phối + tool adapters + Knowledge + học ban đêm**. Đây là plan giao coder/reviewer; trạng thái implementation và lệnh chạy ở [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Bản này thay lịch trước đã dành quá nhiều thời gian cho UI/media và chỉ dùng LLM structured output.
 
 Thư mục `docs/plans/toan/` chứa bộ plan/code task riêng của Toàn. Bắt đầu đọc file này, rồi giao từng task trong `tasks/` theo lịch bên dưới.
 
 ```text
 docs/plans/toan/
   README.md                  Phạm vi, lịch và prompt giao coder/reviewer
+  DEMO_RUNBOOK.md            Lệnh chạy và đầu nối còn chờ team
   AGENT_TOOL_KNOWLEDGE.md     Đặc tả agent, tool calling và quyền
   KNOWLEDGE_CONTRACT.md      Năm ngăn memory, retrieval và learning
   AGENT_SCOPE_MAP.md         Phần việc gốc và đầu nối với team

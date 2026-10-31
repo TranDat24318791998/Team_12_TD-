@@ -1,0 +1,68 @@
+{
+  "source": "fixture",
+  "payload": {
+    "history": [
+      {
+        "negotiation_id": "fixture-negotiation",
+        "shop_id": "D",
+        "day": 1,
+        "kind": "propose",
+        "status": "agreed",
+        "rounds": 2,
+        "proposed_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 70000,
+          "voucher_pct": 10,
+          "stop_roas_below": 4.0,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "agreed_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "approved_package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "seller_action": "accept",
+        "ads_paused": false,
+        "outcome": {
+          "orders": 3,
+          "revenue": 525000,
+          "ads_spend": 18000,
+          "roas": 4.0
+        },
+        "evidence_seqs": [
+          5,
+          8
+        ],
+        "version": 1
+      }
+    ],
+    "calibration": null,
+    "lessons": [
+      {
+        "lesson_id": "fixture-lesson",
+        "scope": "strategy",
+        "text_vi": "Ưu tiên nội dung rõ ràng.",
+        "score": 2,
+        "evidence": [
+          "fixture-negotiation"
+        ],
+        "created_day": 1,
+        "updated_day": 1,
+        "version": 1
+      }
+    ],
+    "knowledge_revision": 0
+  }
+}

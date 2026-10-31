@@ -1,6 +1,6 @@
 # Hợp đồng Agent và Tools
 
-Cập nhật 31/10/2026: phần Toàn là agent, điều phối, tools và Knowledge. Năm ngăn memory có schema tại [KNOWLEDGE_CONTRACT](KNOWLEDGE_CONTRACT.md); nguồn phân công và mapping workbook tại [AGENT_SCOPE_MAP](AGENT_SCOPE_MAP.md). Chưa có implementation của các mục bên dưới.
+Cập nhật 31/10/2026: phần Toàn là agent, điều phối, tools và Knowledge. Năm ngăn memory có schema tại [KNOWLEDGE_CONTRACT](KNOWLEDGE_CONTRACT.md); nguồn phân công và mapping workbook tại [AGENT_SCOPE_MAP](AGENT_SCOPE_MAP.md). Tình trạng triển khai và các đầu nối còn chờ member khác được ghi trong [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
 
 ## 1. Module và luồng gọi
 
@@ -86,7 +86,7 @@ ShopPackageCheck.financials tính trên corrected_package khi có, nếu không 
 - Private tool replies chỉ ở transcript shop. Graph tạo PublicTurn cho actor khác, không share nguyên messages giữa role. Public trace chỉ run/invocation/negotiation/card IDs, actor, tool_name, opaque tool_call_id, source/requested_by/status, safe record_refs, elapsed_ms. Opaque record IDs không encode private value; không xuất raw private args/result.
 - `LLMClient.remaining_calls` là bộ đếm mạng duy nhất. D00/D01 cấu hình demo **64**. 12 actor invocations/negotiation ×3 = tối đa36 calls; D chuẩn 6×3=18. Content/retry/Learning dùng cùng budget. Hết budget fallback, không reset khi đổi role. Timeout8s/max_retries0, lỗi mạng đầu tiên tắt live cho run.
 
-Offline/fake vẫn chạy adapters và code gates; `source` là nguồn model. Fake transport chứng minh loop đúng trong test, không chứng minh OpenAI thật đã chọn tool. Chỉ log decision reason, tool/evidence IDs và dữ liệu được phép, không yêu cầu suy luận nội bộ.
+Offline/fake vẫn chạy adapters và code gates; `source` là nguồn model, fake transport ghi `fixture` rõ ràng. Fake transport chứng minh loop đúng trong test, không chứng minh OpenAI thật đã chọn tool. Chỉ log decision reason, tool/evidence IDs và dữ liệu được phép, không yêu cầu suy luận nội bộ.
 
 ## 5. Năm vai trò và Knowledge sử dụng
 

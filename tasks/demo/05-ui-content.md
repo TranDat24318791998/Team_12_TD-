@@ -1,6 +1,6 @@
 # [D05] Một màn hình demo và vòng duyệt nội dung
 
-**Owner:** member Content/Media/UI; Toàn giao tool runner, ContentContext và approval methods. Đây là lane tích hợp song song, không chiếm lịch code lõi 120 phút của Toàn. Đầu nối cần đọc: [Agent/Tools](../../docs/plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [Knowledge](../../docs/plans/toan/KNOWLEDGE_CONTRACT.md).
+**Owner:** member Content/Media/UI; Toàn giao tool runner, ContentContext và approval methods. Đây là lane tích hợp song song, không chiếm lịch code lõi 120 phút của Toàn. Đầu nối cần đọc: [Agent/Tools](../../docs/plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [Knowledge](../../docs/plans/toan/KNOWLEDGE_CONTRACT.md). Có thể dùng `app.agents.content.generate_content(session, shop_id, card_id=..., draft_version=..., feedback_history=...)`, trả AgentRun với `value: ContentText`; ContentService vẫn sở hữu jobs và kiểm claim.
 
 ## Kết quả cần đạt
 

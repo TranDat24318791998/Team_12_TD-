@@ -1,0 +1,15 @@
+{
+  "source": "fixture",
+  "payload": {
+    "store": {
+      "revision": 1,
+      "cursor": 10,
+      "applied_ids": [
+        "fixture-pref"
+      ],
+      "duplicate": false
+    },
+    "accepted_lesson_ops": [],
+    "rejected_ops": 0
+  }
+}

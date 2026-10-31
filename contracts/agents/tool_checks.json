@@ -1,0 +1,93 @@
+{
+  "source": "fixture",
+  "payload": {
+    "platform": {
+      "input_package": {
+        "content_refresh": true,
+        "ads_daily_budget": 70000,
+        "voucher_pct": 10,
+        "stop_roas_below": 4.0,
+        "stop_after_days": 2,
+        "duration_days": 3
+      },
+      "corrected_package": {
+        "content_refresh": true,
+        "ads_daily_budget": 70000,
+        "voucher_pct": 10,
+        "stop_roas_below": 4.0,
+        "stop_after_days": 2,
+        "duration_days": 3
+      },
+      "violations_before": [],
+      "violations_after": [],
+      "ok": true,
+      "warnings": [],
+      "changes": []
+    },
+    "shop": {
+      "input_package": {
+        "content_refresh": true,
+        "ads_daily_budget": 70000,
+        "voucher_pct": 10,
+        "stop_roas_below": 4.0,
+        "stop_after_days": 2,
+        "duration_days": 3
+      },
+      "corrected_package": {
+        "content_refresh": true,
+        "ads_daily_budget": 45000,
+        "voucher_pct": 3,
+        "stop_roas_below": 6.5,
+        "stop_after_days": 2,
+        "duration_days": 3
+      },
+      "violations_before": [
+        {
+          "code": "ADS_OVER_CAP",
+          "side": "shop",
+          "field": "ads_daily_budget",
+          "message_vi": "Ngân sách vượt luật shop."
+        },
+        {
+          "code": "VOUCHER_OVER_CAP",
+          "side": "shop",
+          "field": "voucher_pct",
+          "message_vi": "Voucher vượt luật shop."
+        },
+        {
+          "code": "PROFIT_TOO_LOW",
+          "side": "shop",
+          "field": "voucher_pct",
+          "message_vi": "Gói không đạt lãi tối thiểu."
+        },
+        {
+          "code": "BREAKEVEN_TOO_HIGH",
+          "side": "shop",
+          "field": "voucher_pct",
+          "message_vi": "Gói vượt ngưỡng hòa vốn."
+        },
+        {
+          "code": "STOP_TOO_LOW",
+          "side": "shop",
+          "field": "stop_roas_below",
+          "message_vi": "Ngưỡng dừng chưa bảo vệ shop."
+        }
+      ],
+      "violations_after": [],
+      "ok": false,
+      "warnings": [],
+      "changes": [
+        "ads_daily_budget",
+        "voucher_pct",
+        "stop_roas_below"
+      ],
+      "financials": {
+        "profit_per_unit": 27136,
+        "breakeven_roas": 6.255527712264151,
+        "min_stop_threshold": 6.5,
+        "max_voucher_pct": 3,
+        "reason": null
+      }
+    }
+  }
+}

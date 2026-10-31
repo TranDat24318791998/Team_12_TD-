@@ -4,7 +4,7 @@
 
 ## Bổ sung được chốt cho phần Agent + Tools + Knowledge
 
-Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](plans/toan/KNOWLEDGE_CONTRACT.md); chưa phải source đã có. Thêm `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
+Thiết kế mới ở [AGENT_TOOL_KNOWLEDGE](plans/toan/AGENT_TOOL_KNOWLEDGE.md) và [KNOWLEDGE_CONTRACT](plans/toan/KNOWLEDGE_CONTRACT.md); core đã được triển khai. `app/agents/tools.py` (role-bound read/compute tools) và `runner.py` (native tool loop hữu hạn). `domain/models/tools.py` giữ DTO công khai/riêng; typed memory records/views ở models/learning.py. Prompt vẫn thuộc negotiation/content/memory.
 
 Hướng phụ thuộc: `agents.runner` dùng domain + transport LLM được inject; `agents.tools` dùng domain và callable gateway/market được inject. Không import runtime/API/main hoặc tạo client. Feature callers lắp role tools trong các closure; `runtime.manager` cấp dependencies. LangGraph quyết định role; runner điều hành tool calls bên trong role; workflow giữ approval và mọi mutation.
 
@@ -35,7 +35,7 @@ app/
 │   ├── session.py          Session, ShopState: dữ liệu của mỗi run
 │   ├── manager.py          SessionManager: tạo phiên và nối service
 │   └── day.py              Workflow một ngày, interrupt và quyết định người bán
-├── agents/                 D02a: tools.py + runner.py, tool loop dùng chung (planned)
+├── agents/                 D02a: tools.py + runner.py + content.py cho tool loop và Content role
 ├── negotiation/
 │   ├── agents.py           Quyết định của agent sàn/shop và luật offline
 │   ├── prompts.py          Chỉ prompt thương lượng và input đã lọc
@@ -142,7 +142,7 @@ Task 1.2 khởi tạo các model dùng chung; các task sau thêm trường đú
 
 ## Những gì đã chạy
 
-Settings, FeeConfig, policies, app factory, `/health`, frontend và media đã có triển khai. Các router nghiệp vụ mới chỉ có APIRouter rỗng; service, graph và hầu hết model là khung mô tả trách nhiệm. Test hiện chia unit cấu hình và integration HTTP; không gọi API trả phí.
+Domain, tool runner, graph thương lượng, knowledge gateway/learning và runtime ngày đã có code và test headless với fixture. Settings, app factory, `/health` và frontend tĩnh chạy được. Router nghiệp vụ, market và media thật vẫn chờ member tích hợp; xem [runbook](plans/toan/DEMO_RUNBOOK.md). Test không gọi API trả phí.
 
 Không duy trì shim tại các đường dẫn phẳng cũ: code nghiệp vụ chưa được triển khai và các tài liệu đang dùng đã cập nhật. PDF trong `docs/reference/` là kế hoạch gốc; đường dẫn triển khai lấy từ tài liệu Markdown hiện hành.
 
