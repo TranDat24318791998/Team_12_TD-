@@ -1,0 +1,4167 @@
+{
+  "$defs": {
+    "Calibration": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "ratios": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 30,
+          "title": "Ratios",
+          "type": "array"
+        },
+        "factor": {
+          "default": 1.0,
+          "title": "Factor",
+          "type": "number"
+        },
+        "q_low": {
+          "default": 1.0,
+          "title": "Q Low",
+          "type": "number"
+        },
+        "q_high": {
+          "default": 1.0,
+          "title": "Q High",
+          "type": "number"
+        }
+      },
+      "required": [
+        "category"
+      ],
+      "title": "Calibration",
+      "type": "object"
+    },
+    "CalibrationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Calibration"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/CalibrationSample"
+          },
+          "title": "Samples",
+          "type": "array"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category",
+        "value",
+        "samples",
+        "version"
+      ],
+      "title": "CalibrationRecord",
+      "type": "object"
+    },
+    "CalibrationSample": {
+      "additionalProperties": false,
+      "properties": {
+        "sample_id": {
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "prediction_id": {
+          "title": "Prediction Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "target_day": {
+          "title": "Target Day",
+          "type": "integer"
+        },
+        "raw_point": {
+          "title": "Raw Point",
+          "type": "number"
+        },
+        "actual_orders": {
+          "title": "Actual Orders",
+          "type": "integer"
+        },
+        "ratio": {
+          "title": "Ratio",
+          "type": "number"
+        },
+        "evidence_seqs": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Seqs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sample_id",
+        "prediction_id",
+        "shop_id",
+        "target_day",
+        "raw_point",
+        "actual_orders",
+        "ratio",
+        "evidence_seqs"
+      ],
+      "title": "CalibrationSample",
+      "type": "object"
+    },
+    "CallReservation": {
+      "additionalProperties": false,
+      "properties": {
+        "granted": {
+          "title": "Granted",
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "granted",
+            "already_reserved",
+            "exhausted"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "used": {
+          "minimum": 0,
+          "title": "Used",
+          "type": "integer"
+        },
+        "remaining": {
+          "minimum": 0,
+          "title": "Remaining",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "granted",
+        "reason",
+        "used",
+        "remaining"
+      ],
+      "title": "CallReservation",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "granted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "granted": {
+                "const": true
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "granted": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CallReservationEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "CallReservation",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CallReservation"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "CallReservationEnvelope",
+      "type": "object"
+    },
+    "ClaimReflectionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "owner_token": {
+          "minLength": 1,
+          "title": "Owner Token",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "day",
+        "snapshot_hash",
+        "owner_token"
+      ],
+      "title": "ClaimReflectionRequest",
+      "type": "object"
+    },
+    "ClaimReflectionRequestEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ClaimReflectionRequest",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ClaimReflectionRequest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ClaimReflectionRequestEnvelope",
+      "type": "object"
+    },
+    "CommitNightRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "publication": {
+          "$ref": "#/$defs/NightPublication"
+        },
+        "expected_revision": {
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "expected_cursor": {
+          "minimum": 0,
+          "title": "Expected Cursor",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "publication",
+        "expected_revision",
+        "expected_cursor"
+      ],
+      "title": "CommitNightRequest",
+      "type": "object"
+    },
+    "CommitNightRequestEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "CommitNightRequest",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CommitNightRequest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "CommitNightRequestEnvelope",
+      "type": "object"
+    },
+    "CompiledSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "skill_id": {
+          "enum": [
+            "platform_offer",
+            "platform_renew",
+            "shop_negotiate",
+            "content_brief"
+          ],
+          "title": "Skill Id",
+          "type": "string"
+        },
+        "base_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Hash",
+          "type": "string"
+        },
+        "learned_steps": {
+          "items": {
+            "$ref": "#/$defs/PolicyStep"
+          },
+          "maxItems": 3,
+          "title": "Learned Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "skill_id",
+        "base_hash"
+      ],
+      "title": "CompiledSkill",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "skill_id": {
+                "const": "platform_offer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "learned_steps": {
+                "items": {
+                  "properties": {
+                    "target_skill": {
+                      "const": "platform_offer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "skill_id": {
+                "const": "platform_renew"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "learned_steps": {
+                "items": {
+                  "properties": {
+                    "target_skill": {
+                      "const": "platform_renew"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "skill_id": {
+                "enum": [
+                  "shop_negotiate",
+                  "content_brief"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "learned_steps": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CompiledSkillEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "CompiledSkill",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CompiledSkill"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "CompiledSkillEnvelope",
+      "type": "object"
+    },
+    "DayMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "impressions": {
+          "title": "Impressions",
+          "type": "integer"
+        },
+        "clicks": {
+          "title": "Clicks",
+          "type": "integer"
+        },
+        "orders": {
+          "title": "Orders",
+          "type": "integer"
+        },
+        "revenue": {
+          "title": "Revenue",
+          "type": "integer"
+        },
+        "ads_spend": {
+          "title": "Ads Spend",
+          "type": "integer"
+        },
+        "roas": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Roas"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "integer"
+        },
+        "profit_after_fees": {
+          "title": "Profit After Fees",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shop_id",
+        "day",
+        "impressions",
+        "clicks",
+        "orders",
+        "revenue",
+        "ads_spend",
+        "roas",
+        "fees",
+        "profit_after_fees"
+      ],
+      "title": "DayMetrics",
+      "type": "object"
+    },
+    "EvidenceFact": {
+      "additionalProperties": false,
+      "properties": {
+        "fact_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Id",
+          "type": "string"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "approved_package",
+            "seller_approved_voucher_edit",
+            "ads_auto_paused"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "negotiation_id": {
+          "minLength": 1,
+          "title": "Negotiation Id",
+          "type": "string"
+        },
+        "card_id": {
+          "minLength": 1,
+          "title": "Card Id",
+          "type": "string"
+        },
+        "package_applied_seq": {
+          "minimum": 1,
+          "title": "Package Applied Seq",
+          "type": "integer"
+        },
+        "support_seq": {
+          "minimum": 1,
+          "title": "Support Seq",
+          "type": "integer"
+        },
+        "source_seqs": {
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Source Seqs",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "package": {
+          "$ref": "#/$defs/Package"
+        }
+      },
+      "required": [
+        "fact_id",
+        "run_id",
+        "shop_id",
+        "category",
+        "day",
+        "kind",
+        "negotiation_id",
+        "card_id",
+        "package_applied_seq",
+        "support_seq",
+        "source_seqs",
+        "package"
+      ],
+      "title": "EvidenceFact",
+      "type": "object"
+    },
+    "EvidenceFactEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "EvidenceFact",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/EvidenceFact"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "EvidenceFactEnvelope",
+      "type": "object"
+    },
+    "KnowledgeCommit": {
+      "additionalProperties": false,
+      "properties": {
+        "store": {
+          "$ref": "#/$defs/MemoryCommit"
+        },
+        "accepted_lesson_ops": {
+          "items": {
+            "$ref": "#/$defs/LessonOp"
+          },
+          "title": "Accepted Lesson Ops",
+          "type": "array"
+        },
+        "rejected_ops": {
+          "title": "Rejected Ops",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "store",
+        "accepted_lesson_ops",
+        "rejected_ops"
+      ],
+      "title": "KnowledgeCommit",
+      "type": "object"
+    },
+    "KnowledgeMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "cursor": {
+          "minimum": 0,
+          "title": "Cursor",
+          "type": "integer"
+        },
+        "llm_limit": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Llm Limit"
+        }
+      },
+      "required": [
+        "run_id",
+        "revision",
+        "cursor",
+        "llm_limit"
+      ],
+      "title": "KnowledgeMeta",
+      "type": "object"
+    },
+    "KnowledgeMetaEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "KnowledgeMeta",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/KnowledgeMeta"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "KnowledgeMetaEnvelope",
+      "type": "object"
+    },
+    "KnowledgeRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "compartment": {
+          "enum": [
+            "history",
+            "preferences",
+            "calibration",
+            "lessons"
+          ],
+          "title": "Compartment",
+          "type": "string"
+        },
+        "scope": {
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "record_key": {
+          "minLength": 1,
+          "title": "Record Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicHistory"
+            },
+            {
+              "$ref": "#/$defs/Preference"
+            },
+            {
+              "$ref": "#/$defs/CalibrationRecord"
+            },
+            {
+              "$ref": "#/$defs/PublicLesson"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "run_id",
+        "compartment",
+        "scope",
+        "record_key",
+        "value"
+      ],
+      "title": "KnowledgeRecord",
+      "type": "object",
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "compartment": {
+                  "const": "history"
+                },
+                "value": {
+                  "$ref": "#/$defs/PublicHistory"
+                }
+              }
+            },
+            {
+              "properties": {
+                "compartment": {
+                  "const": "preferences"
+                },
+                "value": {
+                  "$ref": "#/$defs/Preference"
+                }
+              }
+            },
+            {
+              "properties": {
+                "compartment": {
+                  "const": "calibration"
+                },
+                "value": {
+                  "$ref": "#/$defs/CalibrationRecord"
+                }
+              }
+            },
+            {
+              "properties": {
+                "compartment": {
+                  "const": "lessons"
+                },
+                "value": {
+                  "$ref": "#/$defs/PublicLesson"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "KnowledgeRecordEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "KnowledgeRecord",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/KnowledgeRecord"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "KnowledgeRecordEnvelope",
+      "type": "object"
+    },
+    "LLMCallReservationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "call_id": {
+          "minLength": 1,
+          "title": "Call Id",
+          "type": "string"
+        },
+        "reserved_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+          "title": "Reserved At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "call_id",
+        "reserved_at"
+      ],
+      "title": "LLMCallReservationRecord",
+      "type": "object"
+    },
+    "LLMCallReservationRecordEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "LLMCallReservationRecord",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LLMCallReservationRecord"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "LLMCallReservationRecordEnvelope",
+      "type": "object"
+    },
+    "LearningEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "from_seq": {
+          "title": "From Seq",
+          "type": "integer"
+        },
+        "through_seq": {
+          "title": "Through Seq",
+          "type": "integer"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/PublicEvidence"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "existing_lessons": {
+          "items": {
+            "$ref": "#/$defs/PublicLesson"
+          },
+          "title": "Existing Lessons",
+          "type": "array"
+        },
+        "valid_negotiation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Valid Negotiation Ids",
+          "type": "array"
+        },
+        "knowledge_revision": {
+          "title": "Knowledge Revision",
+          "type": "integer"
+        },
+        "skill_facts": {
+          "items": {
+            "$ref": "#/$defs/EvidenceFact"
+          },
+          "title": "Skill Facts",
+          "type": "array"
+        },
+        "skill_bundles": {
+          "items": {
+            "$ref": "#/$defs/SkillBundle"
+          },
+          "maxItems": 2,
+          "title": "Skill Bundles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day",
+        "from_seq",
+        "through_seq",
+        "events",
+        "existing_lessons",
+        "valid_negotiation_ids",
+        "knowledge_revision"
+      ],
+      "title": "LearningEvidence",
+      "type": "object"
+    },
+    "LearningEvidenceEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "LearningEvidence",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LearningEvidence"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "LearningEvidenceEnvelope",
+      "type": "object"
+    },
+    "LegacyCommitReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "receipt_key": {
+          "minLength": 1,
+          "title": "Receipt Key",
+          "type": "string"
+        },
+        "payload_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/MemoryCommit"
+        }
+      },
+      "required": [
+        "run_id",
+        "receipt_key",
+        "payload_hash",
+        "result"
+      ],
+      "title": "LegacyCommitReceipt",
+      "type": "object"
+    },
+    "LegacyCommitReceiptEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "LegacyCommitReceipt",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LegacyCommitReceipt"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "LegacyCommitReceiptEnvelope",
+      "type": "object"
+    },
+    "LessonOp": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "ADD",
+            "UPVOTE",
+            "DOWNVOTE",
+            "EDIT"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "lesson_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lesson Id"
+        },
+        "text_vi": {
+          "title": "Text Vi",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op",
+        "lesson_id",
+        "text_vi",
+        "scope",
+        "evidence"
+      ],
+      "title": "LessonOp",
+      "type": "object"
+    },
+    "MemoryCommit": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "cursor": {
+          "title": "Cursor",
+          "type": "integer"
+        },
+        "applied_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applied Ids",
+          "type": "array"
+        },
+        "duplicate": {
+          "title": "Duplicate",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "revision",
+        "cursor",
+        "applied_ids",
+        "duplicate"
+      ],
+      "title": "MemoryCommit",
+      "type": "object"
+    },
+    "MemoryUpdateBatch": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "through_seq": {
+          "title": "Through Seq",
+          "type": "integer"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/PublicHistory"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "preferences": {
+          "items": {
+            "$ref": "#/$defs/Preference"
+          },
+          "title": "Preferences",
+          "type": "array"
+        },
+        "calibration": {
+          "items": {
+            "$ref": "#/$defs/CalibrationRecord"
+          },
+          "title": "Calibration",
+          "type": "array"
+        },
+        "lesson_ops": {
+          "items": {
+            "$ref": "#/$defs/LessonOp"
+          },
+          "title": "Lesson Ops",
+          "type": "array"
+        },
+        "valid_negotiation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Valid Negotiation Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day",
+        "through_seq",
+        "history",
+        "preferences",
+        "calibration",
+        "lesson_ops",
+        "valid_negotiation_ids"
+      ],
+      "title": "MemoryUpdateBatch",
+      "type": "object"
+    },
+    "NightCommit": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "publication_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Publication Hash",
+          "type": "string"
+        },
+        "knowledge": {
+          "$ref": "#/$defs/KnowledgeCommit"
+        },
+        "summary": {
+          "$ref": "#/$defs/NightSummary"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/SkillVersion"
+          },
+          "title": "Versions",
+          "type": "array"
+        },
+        "rejections": {
+          "items": {
+            "$ref": "#/$defs/PatchRejection"
+          },
+          "title": "Rejections",
+          "type": "array"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "day",
+        "snapshot_hash",
+        "publication_hash",
+        "knowledge",
+        "summary",
+        "source"
+      ],
+      "title": "NightCommit",
+      "type": "object"
+    },
+    "NightCommitEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "NightCommit",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NightCommit"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "NightCommitEnvelope",
+      "type": "object"
+    },
+    "NightPublication": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "through_seq": {
+          "minimum": 0,
+          "title": "Through Seq",
+          "type": "integer"
+        },
+        "writes": {
+          "items": {
+            "$ref": "#/$defs/StoreWrite"
+          },
+          "title": "Writes",
+          "type": "array"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/SkillVersion"
+          },
+          "maxItems": 2,
+          "title": "Versions",
+          "type": "array"
+        },
+        "summary": {
+          "$ref": "#/$defs/NightSummary"
+        },
+        "rejections": {
+          "items": {
+            "$ref": "#/$defs/PatchRejection"
+          },
+          "title": "Rejections",
+          "type": "array"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "day",
+        "snapshot_hash",
+        "through_seq",
+        "summary",
+        "source"
+      ],
+      "title": "NightPublication",
+      "type": "object"
+    },
+    "NightPublicationEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "NightPublication",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NightPublication"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "NightPublicationEnvelope",
+      "type": "object"
+    },
+    "NightReflectionOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "ops": {
+          "items": {
+            "$ref": "#/$defs/LessonOp"
+          },
+          "maxItems": 3,
+          "title": "Ops",
+          "type": "array"
+        },
+        "proposals": {
+          "items": {
+            "$ref": "#/$defs/SkillPatchProposal"
+          },
+          "maxItems": 3,
+          "title": "Proposals",
+          "type": "array"
+        }
+      },
+      "title": "NightReflectionOutput",
+      "type": "object",
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "ops": {
+                  "maxItems": 0
+                },
+                "proposals": {
+                  "maxItems": 3
+                }
+              }
+            },
+            {
+              "properties": {
+                "ops": {
+                  "maxItems": 1
+                },
+                "proposals": {
+                  "maxItems": 2
+                }
+              }
+            },
+            {
+              "properties": {
+                "ops": {
+                  "maxItems": 2
+                },
+                "proposals": {
+                  "maxItems": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "ops": {
+                  "maxItems": 3
+                },
+                "proposals": {
+                  "maxItems": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "NightReflectionOutputEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "NightReflectionOutput",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NightReflectionOutput"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "NightReflectionOutputEnvelope",
+      "type": "object"
+    },
+    "NightSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "expected_revision": {
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "expected_cursor": {
+          "minimum": 0,
+          "title": "Expected Cursor",
+          "type": "integer"
+        },
+        "through_seq": {
+          "minimum": 0,
+          "title": "Through Seq",
+          "type": "integer"
+        },
+        "evidence": {
+          "$ref": "#/$defs/LearningEvidence"
+        },
+        "derived": {
+          "$ref": "#/$defs/MemoryUpdateBatch"
+        },
+        "calibration_summary": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Calibration Summary",
+          "type": "object"
+        },
+        "prior_versions": {
+          "items": {
+            "$ref": "#/$defs/SkillVersion"
+          },
+          "maxItems": 2,
+          "title": "Prior Versions",
+          "type": "array"
+        },
+        "base_texts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 2,
+          "minProperties": 2,
+          "propertyNames": {
+            "enum": [
+              "platform_offer",
+              "platform_renew"
+            ]
+          },
+          "title": "Base Texts",
+          "type": "object"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "category",
+        "day",
+        "expected_revision",
+        "expected_cursor",
+        "through_seq",
+        "evidence",
+        "derived",
+        "calibration_summary",
+        "base_texts",
+        "snapshot_hash"
+      ],
+      "title": "NightSnapshot",
+      "type": "object"
+    },
+    "NightSnapshotEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "NightSnapshot",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NightSnapshot"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "NightSnapshotEnvelope",
+      "type": "object"
+    },
+    "NightSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "history_updates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "History Updates",
+          "type": "array"
+        },
+        "pref_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pref Candidates",
+          "type": "array"
+        },
+        "calibration": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Calibration",
+          "type": "object"
+        },
+        "lesson_ops": {
+          "items": {
+            "$ref": "#/$defs/LessonOp"
+          },
+          "title": "Lesson Ops",
+          "type": "array"
+        },
+        "rejected_ops": {
+          "title": "Rejected Ops",
+          "type": "integer"
+        },
+        "memory_md_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Memory Md Path"
+        }
+      },
+      "required": [
+        "day",
+        "history_updates",
+        "pref_candidates",
+        "calibration",
+        "lesson_ops",
+        "rejected_ops"
+      ],
+      "title": "NightSummary",
+      "type": "object"
+    },
+    "Package": {
+      "additionalProperties": false,
+      "properties": {
+        "content_refresh": {
+          "title": "Content Refresh",
+          "type": "boolean"
+        },
+        "ads_daily_budget": {
+          "minimum": 0,
+          "title": "Ads Daily Budget",
+          "type": "integer"
+        },
+        "voucher_pct": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Voucher Pct",
+          "type": "integer"
+        },
+        "stop_roas_below": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop Roas Below"
+        },
+        "stop_after_days": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Stop After Days",
+          "type": "integer"
+        },
+        "duration_days": {
+          "maximum": 14,
+          "minimum": 2,
+          "title": "Duration Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "content_refresh",
+        "ads_daily_budget",
+        "voucher_pct",
+        "duration_days"
+      ],
+      "title": "Package",
+      "type": "object"
+    },
+    "PatchRejection": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "enum": [
+            "op",
+            "proposal"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "code": {
+          "enum": [
+            "INVALID_PAIR",
+            "SCOPE_DENIED",
+            "STALE_SKILL",
+            "UNKNOWN_FACT",
+            "WRONG_FACT_KIND",
+            "NO_FRESH_EVIDENCE",
+            "EVIDENCE_MISMATCH",
+            "DUPLICATE_EVIDENCE",
+            "DUPLICATE_POLICY",
+            "MISSING_POLICY",
+            "STALE_LESSON",
+            "INVALID_LESSON",
+            "PRIVATE_VALIDATION_UNAVAILABLE",
+            "CANDIDATE_EVAL_FAILED"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        }
+      },
+      "required": [
+        "origin",
+        "index",
+        "code"
+      ],
+      "title": "PatchRejection",
+      "type": "object"
+    },
+    "PatchRejectionEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PatchRejection",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PatchRejection"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PatchRejectionEnvelope",
+      "type": "object"
+    },
+    "PinnedPlatformContext": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "negotiation_id": {
+          "minLength": 1,
+          "title": "Negotiation Id",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "propose",
+            "renew"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "through_seq": {
+          "minimum": 0,
+          "title": "Through Seq",
+          "type": "integer"
+        },
+        "memory": {
+          "$ref": "#/$defs/PlatformMemoryView"
+        },
+        "base_text": {
+          "title": "Base Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "category",
+        "negotiation_id",
+        "day",
+        "kind",
+        "through_seq",
+        "memory",
+        "base_text"
+      ],
+      "title": "PinnedPlatformContext",
+      "type": "object"
+    },
+    "PinnedPlatformContextEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PinnedPlatformContext",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PinnedPlatformContext"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PinnedPlatformContextEnvelope",
+      "type": "object"
+    },
+    "PlatformMemoryView": {
+      "additionalProperties": false,
+      "properties": {
+        "history": {
+          "items": {
+            "$ref": "#/$defs/PublicHistory"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "calibration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Calibration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lessons": {
+          "items": {
+            "$ref": "#/$defs/PublicLesson"
+          },
+          "title": "Lessons",
+          "type": "array"
+        },
+        "knowledge_revision": {
+          "title": "Knowledge Revision",
+          "type": "integer"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlatformSkillView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "history",
+        "calibration",
+        "lessons",
+        "knowledge_revision"
+      ],
+      "title": "PlatformMemoryView",
+      "type": "object"
+    },
+    "PlatformMemoryViewEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PlatformMemoryView",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PlatformMemoryView"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PlatformMemoryViewEnvelope",
+      "type": "object"
+    },
+    "PlatformSkillView": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle": {
+          "$ref": "#/$defs/SkillBundle"
+        },
+        "seed": {
+          "$ref": "#/$defs/SeedResult"
+        }
+      },
+      "required": [
+        "bundle",
+        "seed"
+      ],
+      "title": "PlatformSkillView",
+      "type": "object"
+    },
+    "PlatformSkillViewEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PlatformSkillView",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PlatformSkillView"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PlatformSkillViewEnvelope",
+      "type": "object"
+    },
+    "PolicyStep": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {
+          "minLength": 1,
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "lesson_id": {
+          "minLength": 1,
+          "title": "Lesson Id",
+          "type": "string"
+        },
+        "target_skill": {
+          "enum": [
+            "platform_offer",
+            "platform_renew"
+          ],
+          "title": "Target Skill",
+          "type": "string"
+        },
+        "trigger": {
+          "enum": [
+            "approved_package",
+            "seller_approved_voucher_edit",
+            "ads_auto_paused"
+          ],
+          "title": "Trigger",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "seed_last_approved",
+            "seed_approved_voucher",
+            "disable_ads_on_renewal"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "evidence_fact_ids": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Fact Ids",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "policy_id",
+        "lesson_id",
+        "target_skill",
+        "trigger",
+        "action",
+        "evidence_fact_ids"
+      ],
+      "title": "PolicyStep",
+      "type": "object",
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_offer"
+                },
+                "trigger": {
+                  "const": "approved_package"
+                },
+                "action": {
+                  "const": "seed_last_approved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_offer"
+                },
+                "trigger": {
+                  "const": "seller_approved_voucher_edit"
+                },
+                "action": {
+                  "const": "seed_approved_voucher"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "approved_package"
+                },
+                "action": {
+                  "const": "seed_last_approved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "seller_approved_voucher_edit"
+                },
+                "action": {
+                  "const": "seed_approved_voucher"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "ads_auto_paused"
+                },
+                "action": {
+                  "const": "disable_ads_on_renewal"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "PolicyStepEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PolicyStep",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PolicyStep"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PolicyStepEnvelope",
+      "type": "object"
+    },
+    "PolicyUse": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {
+          "minLength": 1,
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "fact_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "policy_id",
+        "fact_id"
+      ],
+      "title": "PolicyUse",
+      "type": "object"
+    },
+    "PolicyUseEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "PolicyUse",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PolicyUse"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "PolicyUseEnvelope",
+      "type": "object"
+    },
+    "Preference": {
+      "additionalProperties": false,
+      "properties": {
+        "pref_id": {
+          "title": "Pref Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "content_style",
+            "voucher_max_pct"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "candidate",
+            "asked",
+            "confirmed",
+            "declined"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "evidence_seqs": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Seqs",
+          "type": "array"
+        },
+        "asked_day": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asked Day"
+        },
+        "declined_until": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Declined Until"
+        }
+      },
+      "required": [
+        "pref_id",
+        "shop_id",
+        "field",
+        "value",
+        "status"
+      ],
+      "title": "Preference",
+      "type": "object"
+    },
+    "PublicEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "negotiation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Negotiation Id"
+        },
+        "text_vi": {
+          "default": "",
+          "title": "Text Vi",
+          "type": "string"
+        },
+        "package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seller_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seller Action"
+        },
+        "feedback_vi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback Vi"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "seq",
+        "type"
+      ],
+      "title": "PublicEvidence",
+      "type": "object"
+    },
+    "PublicHistory": {
+      "additionalProperties": false,
+      "properties": {
+        "negotiation_id": {
+          "title": "Negotiation Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "day": {
+          "title": "Day",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "agreed",
+            "failed",
+            "warning_only"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "rounds": {
+          "title": "Rounds",
+          "type": "integer"
+        },
+        "proposed_package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "agreed_package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "approved_package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seller_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seller Action"
+        },
+        "ads_paused": {
+          "default": false,
+          "title": "Ads Paused",
+          "type": "boolean"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evidence_seqs": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Seqs",
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "negotiation_id",
+        "shop_id",
+        "day",
+        "kind",
+        "status",
+        "rounds"
+      ],
+      "title": "PublicHistory",
+      "type": "object"
+    },
+    "PublicLesson": {
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "title": "Lesson Id",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "text_vi": {
+          "title": "Text Vi",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "created_day": {
+          "title": "Created Day",
+          "type": "integer"
+        },
+        "updated_day": {
+          "title": "Updated Day",
+          "type": "integer"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lesson_id",
+        "scope",
+        "text_vi",
+        "score",
+        "evidence",
+        "created_day",
+        "updated_day",
+        "version"
+      ],
+      "title": "PublicLesson",
+      "type": "object"
+    },
+    "PublicOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "orders": {
+          "title": "Orders",
+          "type": "integer"
+        },
+        "revenue": {
+          "title": "Revenue",
+          "type": "integer"
+        },
+        "ads_spend": {
+          "title": "Ads Spend",
+          "type": "integer"
+        },
+        "roas": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Roas"
+        }
+      },
+      "required": [
+        "orders",
+        "revenue",
+        "ads_spend",
+        "roas"
+      ],
+      "title": "PublicOutcome",
+      "type": "object"
+    },
+    "ReflectionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "day": {
+          "minimum": 1,
+          "title": "Day",
+          "type": "integer"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "owner_token": {
+          "minLength": 1,
+          "title": "Owner Token",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "reserved",
+            "completed",
+            "failed",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NightReflectionOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Code"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "day",
+        "snapshot_hash",
+        "owner_token",
+        "status",
+        "output",
+        "source",
+        "error_code"
+      ],
+      "title": "ReflectionReceipt",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "output": {
+                "$ref": "#/$defs/NightReflectionOutput"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "output": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReflectionReceiptEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ReflectionReceipt",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReflectionReceipt"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ReflectionReceiptEnvelope",
+      "type": "object"
+    },
+    "ReplayBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "run",
+            "negotiation",
+            "card",
+            "prediction",
+            "fact",
+            "lesson",
+            "preference",
+            "turn",
+            "tool_call"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "token": {
+          "minLength": 1,
+          "title": "Token",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "token",
+        "value"
+      ],
+      "title": "ReplayBinding",
+      "type": "object"
+    },
+    "ReplayBindingEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ReplayBinding",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReplayBinding"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ReplayBindingEnvelope",
+      "type": "object"
+    },
+    "ReplayEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "request_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Hash",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "platform",
+            "shop",
+            "referee",
+            "content",
+            "learning"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "shop_private"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "response_json": {
+          "title": "Response Json",
+          "type": "string"
+        },
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/ReplayBinding"
+          },
+          "title": "Bindings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "request_hash",
+        "role",
+        "shop_id",
+        "visibility",
+        "model_id",
+        "response_json"
+      ],
+      "title": "ReplayEntry",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "shop"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "visibility": {
+                "const": "shop_private"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReplayEntryEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ReplayEntry",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReplayEntry"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ReplayEntryEnvelope",
+      "type": "object"
+    },
+    "ReplayManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_run_id": {
+          "minLength": 1,
+          "title": "Source Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "config_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Config Hash",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ReplayEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_run_id",
+        "shop_id",
+        "config_hash"
+      ],
+      "title": "ReplayManifest",
+      "type": "object"
+    },
+    "ReplayManifestEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ReplayManifest",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReplayManifest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ReplayManifestEnvelope",
+      "type": "object"
+    },
+    "ReserveCallRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "call_id": {
+          "minLength": 1,
+          "title": "Call Id",
+          "type": "string"
+        },
+        "limit": {
+          "minimum": 0,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "call_id",
+        "limit"
+      ],
+      "title": "ReserveCallRequest",
+      "type": "object"
+    },
+    "ReserveCallRequestEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "ReserveCallRequest",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReserveCallRequest"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "ReserveCallRequestEnvelope",
+      "type": "object"
+    },
+    "RunResult": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "days": {
+          "maximum": 7,
+          "minimum": 1,
+          "title": "Days",
+          "type": "integer"
+        },
+        "memory_enabled": {
+          "title": "Memory Enabled",
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "replay",
+            "offline"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "daily_metrics": {
+          "items": {
+            "$ref": "#/$defs/DayMetrics"
+          },
+          "title": "Daily Metrics",
+          "type": "array"
+        },
+        "forecast_errors": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Forecast Errors",
+          "type": "array"
+        },
+        "negotiation_rounds": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Negotiation Rounds",
+          "type": "array"
+        },
+        "budget_slots_used": {
+          "minimum": 0,
+          "title": "Budget Slots Used",
+          "type": "integer"
+        },
+        "source_counts": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Source Counts",
+          "type": "object"
+        },
+        "skill_versions": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Skill Versions",
+          "type": "object"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        },
+        "invalid_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Invalid Reasons",
+          "type": "array"
+        },
+        "report_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Path"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "seed",
+        "days",
+        "memory_enabled",
+        "mode",
+        "budget_slots_used",
+        "valid"
+      ],
+      "title": "RunResult",
+      "type": "object"
+    },
+    "RunResultEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "RunResult",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RunResult"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "RunResultEnvelope",
+      "type": "object"
+    },
+    "SeedResult": {
+      "additionalProperties": false,
+      "properties": {
+        "package": {
+          "$ref": "#/$defs/Package"
+        },
+        "uses": {
+          "items": {
+            "$ref": "#/$defs/PolicyUse"
+          },
+          "title": "Uses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "title": "SeedResult",
+      "type": "object"
+    },
+    "SeedResultEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "SeedResult",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SeedResult"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "SeedResultEnvelope",
+      "type": "object"
+    },
+    "SkillBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "shop_id": {
+          "minLength": 1,
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        },
+        "effective_from_day": {
+          "minimum": 1,
+          "title": "Effective From Day",
+          "type": "integer"
+        },
+        "skill": {
+          "$ref": "#/$defs/CompiledSkill"
+        },
+        "artifact_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "shop_id",
+        "category",
+        "version",
+        "effective_from_day",
+        "skill",
+        "artifact_hash"
+      ],
+      "title": "SkillBundle",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "version": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "skill": {
+                "properties": {
+                  "learned_steps": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SkillBundleEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "SkillBundle",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SkillBundle"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "SkillBundleEnvelope",
+      "type": "object"
+    },
+    "SkillPatchProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "lesson_op": {
+          "$ref": "#/$defs/LessonOp"
+        },
+        "target_skill": {
+          "enum": [
+            "platform_offer",
+            "platform_renew"
+          ],
+          "title": "Target Skill",
+          "type": "string"
+        },
+        "trigger": {
+          "enum": [
+            "approved_package",
+            "seller_approved_voucher_edit",
+            "ads_auto_paused"
+          ],
+          "title": "Trigger",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "seed_last_approved",
+            "seed_approved_voucher",
+            "disable_ads_on_renewal"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "evidence_fact_ids": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Fact Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "base_skill_version": {
+          "minimum": 0,
+          "title": "Base Skill Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lesson_op",
+        "target_skill",
+        "trigger",
+        "action",
+        "evidence_fact_ids",
+        "base_skill_version"
+      ],
+      "title": "SkillPatchProposal",
+      "type": "object",
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_offer"
+                },
+                "trigger": {
+                  "const": "approved_package"
+                },
+                "action": {
+                  "const": "seed_last_approved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_offer"
+                },
+                "trigger": {
+                  "const": "seller_approved_voucher_edit"
+                },
+                "action": {
+                  "const": "seed_approved_voucher"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "approved_package"
+                },
+                "action": {
+                  "const": "seed_last_approved"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "seller_approved_voucher_edit"
+                },
+                "action": {
+                  "const": "seed_approved_voucher"
+                }
+              }
+            },
+            {
+              "properties": {
+                "target_skill": {
+                  "const": "platform_renew"
+                },
+                "trigger": {
+                  "const": "ads_auto_paused"
+                },
+                "action": {
+                  "const": "disable_ads_on_renewal"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "SkillPatchProposalEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "SkillPatchProposal",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SkillPatchProposal"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "SkillPatchProposalEnvelope",
+      "type": "object"
+    },
+    "SkillVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle": {
+          "$ref": "#/$defs/SkillBundle"
+        },
+        "parent_version": {
+          "minimum": 0,
+          "title": "Parent Version",
+          "type": "integer"
+        },
+        "created_day": {
+          "minimum": 1,
+          "title": "Created Day",
+          "type": "integer"
+        },
+        "source_through_seq": {
+          "minimum": 0,
+          "title": "Source Through Seq",
+          "type": "integer"
+        },
+        "artifact_json": {
+          "title": "Artifact Json",
+          "type": "string"
+        },
+        "eval_level": {
+          "enum": [
+            "static",
+            "deterministic",
+            "provider"
+          ],
+          "title": "Eval Level",
+          "type": "string"
+        },
+        "eval_checks": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Eval Checks",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "bundle",
+        "parent_version",
+        "created_day",
+        "source_through_seq",
+        "artifact_json",
+        "eval_level"
+      ],
+      "title": "SkillVersion",
+      "type": "object",
+      "allOf": [
+        {
+          "properties": {
+            "bundle": {
+              "properties": {
+                "skill": {
+                  "properties": {
+                    "skill_id": {
+                      "enum": [
+                        "platform_offer",
+                        "platform_renew"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SkillVersionEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "SkillVersion",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SkillVersion"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "SkillVersionEnvelope",
+      "type": "object"
+    },
+    "StagedLearning": {
+      "additionalProperties": false,
+      "properties": {
+        "writes": {
+          "items": {
+            "$ref": "#/$defs/StoreWrite"
+          },
+          "title": "Writes",
+          "type": "array"
+        },
+        "lessons": {
+          "items": {
+            "$ref": "#/$defs/PublicLesson"
+          },
+          "title": "Lessons",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/PolicyStep"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "accepted_ops": {
+          "items": {
+            "$ref": "#/$defs/LessonOp"
+          },
+          "title": "Accepted Ops",
+          "type": "array"
+        },
+        "rejections": {
+          "items": {
+            "$ref": "#/$defs/PatchRejection"
+          },
+          "title": "Rejections",
+          "type": "array"
+        }
+      },
+      "title": "StagedLearning",
+      "type": "object"
+    },
+    "StagedLearningEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "self-improve.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model": {
+          "const": "StagedLearning",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "live",
+            "replay",
+            "offline",
+            "fixture",
+            "skipped"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/StagedLearning"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model",
+        "source",
+        "payload"
+      ],
+      "title": "StagedLearningEnvelope",
+      "type": "object"
+    },
+    "StoreWrite": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Namespace",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicHistory"
+            },
+            {
+              "$ref": "#/$defs/Preference"
+            },
+            {
+              "$ref": "#/$defs/CalibrationRecord"
+            },
+            {
+              "$ref": "#/$defs/PublicLesson"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "namespace",
+        "key",
+        "value"
+      ],
+      "title": "StoreWrite",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "CallReservation": "#/$defs/CallReservationEnvelope",
+      "ClaimReflectionRequest": "#/$defs/ClaimReflectionRequestEnvelope",
+      "CommitNightRequest": "#/$defs/CommitNightRequestEnvelope",
+      "CompiledSkill": "#/$defs/CompiledSkillEnvelope",
+      "EvidenceFact": "#/$defs/EvidenceFactEnvelope",
+      "KnowledgeMeta": "#/$defs/KnowledgeMetaEnvelope",
+      "KnowledgeRecord": "#/$defs/KnowledgeRecordEnvelope",
+      "LLMCallReservationRecord": "#/$defs/LLMCallReservationRecordEnvelope",
+      "LearningEvidence": "#/$defs/LearningEvidenceEnvelope",
+      "LegacyCommitReceipt": "#/$defs/LegacyCommitReceiptEnvelope",
+      "NightCommit": "#/$defs/NightCommitEnvelope",
+      "NightPublication": "#/$defs/NightPublicationEnvelope",
+      "NightReflectionOutput": "#/$defs/NightReflectionOutputEnvelope",
+      "NightSnapshot": "#/$defs/NightSnapshotEnvelope",
+      "PatchRejection": "#/$defs/PatchRejectionEnvelope",
+      "PinnedPlatformContext": "#/$defs/PinnedPlatformContextEnvelope",
+      "PlatformMemoryView": "#/$defs/PlatformMemoryViewEnvelope",
+      "PlatformSkillView": "#/$defs/PlatformSkillViewEnvelope",
+      "PolicyStep": "#/$defs/PolicyStepEnvelope",
+      "PolicyUse": "#/$defs/PolicyUseEnvelope",
+      "ReflectionReceipt": "#/$defs/ReflectionReceiptEnvelope",
+      "ReplayBinding": "#/$defs/ReplayBindingEnvelope",
+      "ReplayEntry": "#/$defs/ReplayEntryEnvelope",
+      "ReplayManifest": "#/$defs/ReplayManifestEnvelope",
+      "ReserveCallRequest": "#/$defs/ReserveCallRequestEnvelope",
+      "RunResult": "#/$defs/RunResultEnvelope",
+      "SeedResult": "#/$defs/SeedResultEnvelope",
+      "SkillBundle": "#/$defs/SkillBundleEnvelope",
+      "SkillPatchProposal": "#/$defs/SkillPatchProposalEnvelope",
+      "SkillVersion": "#/$defs/SkillVersionEnvelope",
+      "StagedLearning": "#/$defs/StagedLearningEnvelope"
+    },
+    "propertyName": "model"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/EvidenceFactEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PolicyStepEnvelope"
+    },
+    {
+      "$ref": "#/$defs/CompiledSkillEnvelope"
+    },
+    {
+      "$ref": "#/$defs/SkillBundleEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PolicyUseEnvelope"
+    },
+    {
+      "$ref": "#/$defs/SeedResultEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PlatformSkillViewEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PlatformMemoryViewEnvelope"
+    },
+    {
+      "$ref": "#/$defs/LearningEvidenceEnvelope"
+    },
+    {
+      "$ref": "#/$defs/SkillPatchProposalEnvelope"
+    },
+    {
+      "$ref": "#/$defs/NightReflectionOutputEnvelope"
+    },
+    {
+      "$ref": "#/$defs/SkillVersionEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PatchRejectionEnvelope"
+    },
+    {
+      "$ref": "#/$defs/NightSnapshotEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ReflectionReceiptEnvelope"
+    },
+    {
+      "$ref": "#/$defs/StagedLearningEnvelope"
+    },
+    {
+      "$ref": "#/$defs/NightPublicationEnvelope"
+    },
+    {
+      "$ref": "#/$defs/NightCommitEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ClaimReflectionRequestEnvelope"
+    },
+    {
+      "$ref": "#/$defs/CommitNightRequestEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ReserveCallRequestEnvelope"
+    },
+    {
+      "$ref": "#/$defs/CallReservationEnvelope"
+    },
+    {
+      "$ref": "#/$defs/KnowledgeRecordEnvelope"
+    },
+    {
+      "$ref": "#/$defs/KnowledgeMetaEnvelope"
+    },
+    {
+      "$ref": "#/$defs/LegacyCommitReceiptEnvelope"
+    },
+    {
+      "$ref": "#/$defs/LLMCallReservationRecordEnvelope"
+    },
+    {
+      "$ref": "#/$defs/PinnedPlatformContextEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ReplayBindingEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ReplayEntryEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ReplayManifestEnvelope"
+    },
+    {
+      "$ref": "#/$defs/RunResultEnvelope"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:growth-agents:self-improve:v1",
+  "title": "Growth Agents self improve contract v1"
+}

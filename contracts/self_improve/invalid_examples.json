@@ -1,0 +1,251 @@
+[
+  {
+    "schema_version": "self-improve.v1",
+    "model": "PolicyStep",
+    "source": "fixture",
+    "payload": {
+      "policy_id": "platform_renew:seed_last_approved",
+      "lesson_id": "c29b3b530025aec4",
+      "target_skill": "platform_offer",
+      "trigger": "approved_package",
+      "action": "disable_ads_on_renewal",
+      "evidence_fact_ids": [
+        "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+      ]
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "PolicyStep",
+    "source": "fixture",
+    "payload": {
+      "policy_id": "platform_renew:seed_last_approved",
+      "lesson_id": "c29b3b530025aec4",
+      "target_skill": "platform_renew",
+      "trigger": "approved_package",
+      "action": "seed_last_approved",
+      "evidence_fact_ids": [
+        "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+      ],
+      "approved": true
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "PolicyStep",
+    "source": "fixture",
+    "payload": {
+      "policy_id": "platform_renew:seed_last_approved",
+      "lesson_id": "c29b3b530025aec4",
+      "target_skill": "platform_renew",
+      "trigger": "approved_package",
+      "action": "seed_last_approved",
+      "evidence_fact_ids": [
+        "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+      ],
+      "ads_daily_budget": 0
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "NightReflectionOutput",
+    "source": "fixture",
+    "payload": {
+      "ops": [
+        {
+          "op": "ADD",
+          "lesson_id": null,
+          "text_vi": "Khi gia hạn, dùng gói đã duyệt gần nhất làm điểm khởi đầu.",
+          "scope": "quat_mini",
+          "evidence": [
+            "n1"
+          ]
+        }
+      ],
+      "proposals": [
+        {
+          "lesson_op": {
+            "op": "ADD",
+            "lesson_id": null,
+            "text_vi": "Khi gia hạn, dùng gói đã duyệt gần nhất làm điểm khởi đầu.",
+            "scope": "quat_mini",
+            "evidence": [
+              "n1"
+            ]
+          },
+          "target_skill": "platform_renew",
+          "trigger": "approved_package",
+          "action": "seed_last_approved",
+          "evidence_fact_ids": [
+            "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+          ],
+          "base_skill_version": 0
+        },
+        {
+          "lesson_op": {
+            "op": "ADD",
+            "lesson_id": null,
+            "text_vi": "Khi gia hạn, dùng voucher được người bán sửa và duyệt gần nhất.",
+            "scope": "quat_mini",
+            "evidence": [
+              "n1"
+            ]
+          },
+          "target_skill": "platform_renew",
+          "trigger": "seller_approved_voucher_edit",
+          "action": "seed_approved_voucher",
+          "evidence_fact_ids": [
+            "ba98444895c0ccc92fdbc2c9e3c7f7aaa14b688dfb5bf3b688e0f897c9cbd7e4"
+          ],
+          "base_skill_version": 0
+        },
+        {
+          "lesson_op": {
+            "op": "ADD",
+            "lesson_id": null,
+            "text_vi": "Khi gia hạn, bỏ quảng cáo nếu gói gần nhất đã bị tự động tạm dừng quảng cáo.",
+            "scope": "quat_mini",
+            "evidence": [
+              "n1"
+            ]
+          },
+          "target_skill": "platform_renew",
+          "trigger": "ads_auto_paused",
+          "action": "disable_ads_on_renewal",
+          "evidence_fact_ids": [
+            "79c568f63694b34961e5d029d934565f70d8fc3fc04dca7b907b40855e9cbe6a"
+          ],
+          "base_skill_version": 0
+        }
+      ]
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "ReflectionReceipt",
+    "source": "fixture",
+    "payload": {
+      "run_id": "r1",
+      "shop_id": "E",
+      "day": 3,
+      "snapshot_hash": "b088eec240cf4c3d0540ab91cf02d29a2d7ba3c15e9cfee3342480a31b1c4301",
+      "owner_token": "worker-fixture-1",
+      "status": "unknown",
+      "output": {
+        "ops": [],
+        "proposals": [
+          {
+            "lesson_op": {
+              "op": "ADD",
+              "lesson_id": null,
+              "text_vi": "Khi gia hạn, dùng gói đã duyệt gần nhất làm điểm khởi đầu.",
+              "scope": "quat_mini",
+              "evidence": [
+                "n1"
+              ]
+            },
+            "target_skill": "platform_renew",
+            "trigger": "approved_package",
+            "action": "seed_last_approved",
+            "evidence_fact_ids": [
+              "bf4468cea3051e80f467b2674589d93ad646c32ab34ab270b436f70ffad74090"
+            ],
+            "base_skill_version": 0
+          },
+          {
+            "lesson_op": {
+              "op": "ADD",
+              "lesson_id": null,
+              "text_vi": "Khi gia hạn, dùng voucher được người bán sửa và duyệt gần nhất.",
+              "scope": "quat_mini",
+              "evidence": [
+                "n1"
+              ]
+            },
+            "target_skill": "platform_renew",
+            "trigger": "seller_approved_voucher_edit",
+            "action": "seed_approved_voucher",
+            "evidence_fact_ids": [
+              "ba98444895c0ccc92fdbc2c9e3c7f7aaa14b688dfb5bf3b688e0f897c9cbd7e4"
+            ],
+            "base_skill_version": 0
+          },
+          {
+            "lesson_op": {
+              "op": "ADD",
+              "lesson_id": null,
+              "text_vi": "Khi gia hạn, bỏ quảng cáo nếu gói gần nhất đã bị tự động tạm dừng quảng cáo.",
+              "scope": "quat_mini",
+              "evidence": [
+                "n1"
+              ]
+            },
+            "target_skill": "platform_renew",
+            "trigger": "ads_auto_paused",
+            "action": "disable_ads_on_renewal",
+            "evidence_fact_ids": [
+              "79c568f63694b34961e5d029d934565f70d8fc3fc04dca7b907b40855e9cbe6a"
+            ],
+            "base_skill_version": 0
+          }
+        ]
+      },
+      "source": "fixture",
+      "error_code": null
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "ReplayEntry",
+    "source": "fixture",
+    "payload": {
+      "request_hash": "2589e6f912b5146f25b5e91de9a614a2df2155dbda7fd9b9fcfca86f71bdf25d",
+      "role": "shop",
+      "shop_id": "E",
+      "visibility": "public",
+      "model_id": "fixture-model",
+      "response_json": "{\"content\": \"\", \"tool_calls\": [{\"name\": \"read_memory\", \"args\": {}, \"id\": \"call-fixture-1\", \"type\": \"tool_call\"}], \"invalid_tool_calls\": []}",
+      "bindings": [
+        {
+          "kind": "run",
+          "token": "RUN",
+          "value": "r1"
+        }
+      ]
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "CallReservation",
+    "source": "fixture",
+    "payload": {
+      "granted": false,
+      "reason": "granted",
+      "used": 1,
+      "remaining": 63
+    }
+  },
+  {
+    "schema_version": "self-improve.v1",
+    "model": "KnowledgeRecord",
+    "source": "fixture",
+    "payload": {
+      "run_id": "r1",
+      "compartment": "history",
+      "scope": "quat_mini",
+      "record_key": "c29b3b530025aec4",
+      "value": {
+        "lesson_id": "c29b3b530025aec4",
+        "scope": "quat_mini",
+        "text_vi": "Khi gia hạn, dùng gói đã duyệt gần nhất làm điểm khởi đầu.",
+        "score": 2,
+        "evidence": [
+          "n1"
+        ],
+        "created_day": 3,
+        "updated_day": 3,
+        "version": 1
+      }
+    }
+  }
+]

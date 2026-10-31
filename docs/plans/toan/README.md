@@ -1,5 +1,7 @@
 # Plan của Toàn — Agent, Tools và Knowledge
 
+**Lượt tích hợp hiện hành:** [full-integration/README.md](full-integration/README.md), với chín Astra review riêng và plan giao Terra 6.1 max. Data/media đã có source; phạm vi mới nối thật và host local, thay các dependency đang chờ trong plan ban đầu này. Giữ core/native-tools/Knowledge, không dựng business Session cạnh tranh với Data.
+
 Cập nhật 31/10/2026 theo phần việc Toàn nhận từ đầu: **agent + điều phối + tool adapters + Knowledge + học ban đêm**. Đây là plan giao coder/reviewer; trạng thái implementation và lệnh chạy ở [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). Bản này thay lịch trước đã dành quá nhiều thời gian cho UI/media và chỉ dùng LLM structured output.
 
 Thư mục `docs/plans/toan/` chứa bộ plan/code task riêng của Toàn. Bắt đầu đọc file này, rồi giao từng task trong `tasks/` theo lịch bên dưới.
@@ -45,6 +47,7 @@ DB/market/media chưa xong: dùng fake trong tests/headless harness, ghi rõ ngu
 ## 3. Nguồn quyết định implementation
 
 - [Media mới — plan MI01–MI04](media-integration/README.md): nối experiment OpenAI/Muse vào Content Agent, giữ Knowledge/approval và giao rõ phần UI/Data.
+- [Self improve — handoff hoàn chỉnh](self-improve/README.md): SI01–SI07, schema self-improve.v1 và contract cho member DB; bổ sung trên core hiện có, có prompt thực hiện liên tục.
 - [AGENT_TOOL_KNOWLEDGE.md](AGENT_TOOL_KNOWLEDGE.md): tool catalog, quyền, flow và điều kiện agent hoàn thành.
 - [KNOWLEDGE_CONTRACT.md](KNOWLEDGE_CONTRACT.md): schema năm ngăn, read/write interface, evidence và retrieval.
 - [AGENT_SCOPE_MAP.md](AGENT_SCOPE_MAP.md): phần việc gốc, 15 adapter và toàn bộ 32 dòng workbook.

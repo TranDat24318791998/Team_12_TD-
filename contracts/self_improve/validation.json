@@ -1,0 +1,10 @@
+{
+  "schema_version": "self-improve.v1",
+  "model_count": 31,
+  "positive_examples": 39,
+  "negative_examples_rejected": 8,
+  "pydantic_cross_field_examples_rejected": 10,
+  "pydantic_validation": true,
+  "json_schema_validation": true,
+  "schema_sha256": "fa4f9105c0029d8f7db756345eecbf3d8f6fb5914f51c41b21581ff9efe9da04"
+}

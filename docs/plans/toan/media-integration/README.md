@@ -1,5 +1,7 @@
 # Hợp nhất media mới vào Agent + Tools + Knowledge
 
+**Cập nhật khi Data mới đã có:** [full-integration](../full-integration/README.md) và [MEDIA_REVIEW](../full-integration/MEDIA_REVIEW.md) thay phần MI03 giữ business state trong Session bằng worker trên Data. Dùng asset subsystem của Data, cap video 50 MB và publication transaction đã có. Provider contract MI01/MI02 tiếp tục dùng; các nhận định Data accept→activate sớm trong bản cũ đã được sửa ở `9621b14` và không cần làm lại.
+
 Chốt ngày 31/10/2026. **Đây là plan để agent khác implement, chưa phải báo cáo đã nối xong.** Source media mới từ commit `a0a93f0` đã được đồng bộ vào main local tại `274ce6f`; core Agent/Knowledge giữ nguyên. Các bước dưới thay hướng viết provider trực tiếp trong D05a cũ.
 
 ## Kết quả cần đạt

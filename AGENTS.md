@@ -4,6 +4,8 @@ Hướng dẫn cho Codex khi làm việc trong repo này. Đọc hết file này
 
 ## Phạm vi triển khai hiện hành
 
+Theo yêu cầu tích hợp mới ngày 31/10/2026, đọc `docs/plans/toan/full-integration/README.md` và `IMPLEMENTATION_PLAN.md` trước khi nối các lane. Phạm vi đã được giao gồm DB local, agent/tools/Knowledge/self-improve, media, API/React và hosting trên máy này. Data là business/event authority; Knowledge dùng cùng SQLite. Các thay đổi interface được chốt trong plan này là công việc đã được yêu cầu: cập nhật caller/contracts/tests liên quan, không dừng để xin phép lại vì phân công hoặc scope cũ bên dưới. Reviewer mỗi phần dùng Astra max, coder dùng Terra 6.1 max; giữ ownership file trong plan.
+
 Khi làm phần **Agent + Tools + Knowledge của Toàn**, đọc `docs/plans/toan/README.md` và task tương ứng trong `docs/plans/toan/tasks/`. Hợp đồng runtime/HTTP/media dùng chung ở `docs/DEMO_CONTRACT.md`; task UI/media ở `tasks/demo/`, phân công gốc TV1–TV4 ở `tasks/`. Mỗi member theo phạm vi của mình; thay đổi interface dùng chung phải cập nhật các đầu nối liên quan.
 
 Provider hiện hành: OpenAI cho LLM/ảnh, Muse Gateway theo `docs/MUSE_API.md` cho video. Khi triển khai media, dùng service `experiment/` và plan `docs/plans/toan/media-integration/README.md`; core gọi HTTP, không chép provider pipeline. Không dùng nhánh useapi.net cũ. UI/media/DB thuộc lane member tương ứng; không bỏ tool calling/knowledge để làm thay toàn bộ lane đó.
