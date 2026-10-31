@@ -1,7 +1,8 @@
 import {SIMULATION_DAYS,CONTENT_ATTEMPTS,MAX_NEGOTIATION_ATTEMPTS} from './config.js';
 import {previewComparisonDays} from './previewComparison.js';
+import {loadDay7Sample} from './day7Sample.js';
 /* Browser-only fixtures. These illustrate the interface, never a real agent run. */
-export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now,assetRoot=new URL('../img/',import.meta.url)}={}) {
+export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now,assetRoot=new URL('../img/',import.meta.url),fetchImpl=globalThis.fetch,makeRunId=()=> 'preview-' + (globalThis.crypto?.randomUUID?.() || now())}={}) {
   const KEY = 'growth-agents.react-preview.v3';
   const root = assetRoot;
   const image = name => new URL(name + '.svg', root).href;
@@ -16,7 +17,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
   };
   const packageFor = (voucher=3) => ({content_refresh:true,ads_daily_budget:45000,voucher_pct:voucher,stop_roas_below:6.5,stop_after_days:2,duration_days:3});
   function fresh(memory=true) {
-    return { state:{run_id:'preview-' + (globalThis.crypto?.randomUUID?.() || now()),day:1,mode:'offline',memory_enabled:memory,step:'idle',demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
+    return { state:{run_id:makeRunId(),day:1,mode:'offline',memory_enabled:memory,step:'idle',demo_shop:clone(original),demo_shop_original:clone(original),active_package:null,pending_card:null,content_draft:null,last_night:null,live_calls_left:0},events:[],queue:[],started:null,ready:null,negotiations:0,styleConfirmed:false,styleCandidate:false,styleDeclinedUntil:0 };
   }
   function read() { try { const raw=storage.getItem(KEY); return raw ? JSON.parse(raw) : fresh(); } catch { return fresh(); } }
   function write(db) { storage.setItem(KEY, JSON.stringify(db)); }
@@ -80,6 +81,16 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
     const url=new URL(path,'https://preview.invalid');
     const method=(options.method || 'GET').toUpperCase();
     let body=options.body || {}; if(typeof body==='string') body=JSON.parse(body);
+    if(url.pathname==='/api/demo/jump-day7' && method==='POST'){
+      const sample=await loadDay7Sample(fetchImpl,options.signal);
+      const next={...fresh(),state:sample.state,events:sample.events,proof:sample.proof,source:sample.source};
+      next.state.sample_source=sample.source;
+      // Keep the existing preview until the complete database response is valid.
+      const previous=storage.getItem(KEY);
+      if(previous && !JSON.parse(previous).source)storage.setItem(KEY+'.before-day7',previous);
+      write(next);
+      return clone({state:next.state,source:next.source});
+    }
     const db=read(); advance(db); const s=db.state; let result;
     const fail=message=>{throw new Error(message);};
     if(url.pathname==='/api/reset' && method==='POST') { const next=fresh(body.memory??true); write(next); return clone({run_id:next.state.run_id,day:1,mode:next.state.mode,state:next.state}); }
@@ -158,7 +169,7 @@ export function createPreviewAPI({storage=globalThis.sessionStorage,now=Date.now
       if(summary.pref_candidates.length)db.styleCandidate=true;
       s.last_night=summary;event(db,'memory_write','memory',s.memory_enabled?'Đã cập nhật bộ nhớ cho ngày tiếp theo.':'Bộ nhớ đang tắt; không ghi nhận bài học.',{compartment:'history',summary_vi:'Tóm tắt ngày mô phỏng.'});event(db,'night_summary','memory','Hoàn tất tổng kết ban đêm.',{summary});const complete=s.day===SIMULATION_DAYS;if(!complete)s.day++;s.step=complete?'complete':'idle';s.pending_card=null;s.content_draft=null;db.ready=null;
       result={summary,next_day:s.step==='complete'?null:s.day};
-    } else if(url.pathname==='/api/proof' && method==='GET') result=proof;
+    } else if(url.pathname==='/api/proof' && method==='GET') result=db.proof || proof;
     else fail('Chưa có dữ liệu xem trước cho thao tác này.');
     write(db);return clone(result);
   }

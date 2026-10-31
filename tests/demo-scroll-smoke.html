@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kiểm tra cuộn chat Demo</title>
+<style>body{font:14px/1.7 system-ui;margin:20px;color:#45392f}button{padding:12px 18px;cursor:pointer}pre{white-space:pre-wrap;max-width:1000px}iframe{display:block;border:1px solid #ddd;flex-shrink:0}.pass{color:#26704e}.fail{color:#a52820}</style></head><body>
+<h1>Cuộn thẻ đề xuất và nội dung trong khung chat</h1><button id="run">Chạy kiểm tra cuộn chat</button><pre id="log" role="log"></pre><iframe id="app" title="Demo đang kiểm tra cuộn" width="1366" height="768"></iframe>
+<script>
+const frame=document.querySelector('#app'),log=document.querySelector('#log'),run=document.querySelector('#run');
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),doc=()=>frame.contentDocument,win=()=>frame.contentWindow,find=selector=>doc()?.querySelector(selector);
+let count=0;
+function check(value,label){if(!value)throw new Error(label);count++;log.textContent+='✓ '+label+'\n';}
+async function until(fn){const end=Date.now()+18000;while(Date.now()<end){if(fn())return;await pause(60);}throw new Error('Hết thời gian chờ giao diện');}
+const bounds=element=>element.getBoundingClientRect();
+const inside=(element,parent)=>bounds(element).top>=bounds(parent).top-1 && bounds(element).bottom<=bounds(parent).bottom+1;
+async function bottom(element){element.scrollTop=element.scrollHeight;await pause(100);}
+run.onclick=async()=>{
+  count=0;run.disabled=true;log.textContent='Đang chạy…\n';log.className='';
+  try{
+    sessionStorage.removeItem('growth-agents.react-preview.v3');
+    frame.src='../frontend/index.html?preview=1';await until(()=>find('[data-start]'));find('[data-start]').click();await until(()=>find('[data-decision="accept"]'));await pause(100);
+    const chat=find('#chat-content'),feed=find('#event-feed'),card=find('.offer-card');
+    check(bounds(find('.process-activity')).height<=64,'Thanh process không quá 64px trên laptop');
+    check(!find('.activity-details').open,'Chi tiết được gấp mặc định');
+    check(chat.scrollHeight>chat.clientHeight+50,'Hội thoại dài tạo vùng cuộn thật');
+    check(card.scrollHeight<=card.clientHeight+1,'Thẻ đề xuất giữ đủ nội dung, không bị nén và cắt');
+    await bottom(chat);check(chat.scrollTop>50 && inside(find('[data-decision="accept"]'),chat),'Cuộn được tới nút Đồng ý trong chat');
+    check(bounds(find('#composer')).bottom<=win().innerHeight+1,'Ô nhập lời nhắn luôn nằm trong màn hình');
+    const gridHeight=bounds(find('.demo-grid')).height;
+    find('.activity-details summary').click();await pause(100);
+    check(Math.abs(bounds(find('.demo-grid')).height-gridHeight)<2,'Mở chi tiết không đẩy nhỏ hai khung chat');
+    check(bounds(find('.activity-detail-body')).bottom<=win().innerHeight+1,'Chi tiết mở thành lớp nổi trong vùng nhìn');find('.activity-details summary').click();
+    feed.scrollTop=0;await pause(100);check(feed.scrollTop===0 && inside(feed.querySelector('.event'),feed),'Cuộn được lên đầu nhật ký');
+    await bottom(feed);check(feed.scrollTop>0 && inside(feed.querySelector('.event:last-child'),feed),'Cuộn được xuống cuối nhật ký');
+    check(chat.tabIndex===0 && feed.tabIndex===0,'Cả hai vùng cuộn nhận được focus bàn phím');
+    find('[data-decision="accept"]').click();await until(()=>find('[data-apply]') && !find('[data-apply]').disabled);
+    await bottom(chat);check(inside(find('[data-apply]'),chat),'Cuộn được tới nút Dùng bản này của thẻ nội dung');
+    const composerBottom=bounds(find('.seller-channel')).bottom;chat.scrollTop=0;await pause(100);
+    check(chat.scrollTop===0 && Math.abs(bounds(find('.seller-channel')).bottom-composerBottom)<1,'Cuộn hội thoại độc lập, không di chuyển khung');
+    check(doc().documentElement.scrollHeight<=win().innerHeight+1,'Toàn màn Demo vẫn nằm trong viewport');
+    check(doc().documentElement.scrollWidth<=win().innerWidth+1,'Không xuất hiện cuộn ngang');
+    log.className='pass';log.textContent+='\nHOÀN TẤT: '+count+' kiểm tra cuộn đạt.\n';
+  }catch(error){log.className='fail';log.textContent+='\nLỖI: '+error.message+'\n';}
+  finally{run.disabled=false;}
+};
+</script></body></html>

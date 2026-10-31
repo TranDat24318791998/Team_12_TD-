@@ -17,11 +17,14 @@ export function App({client,page=globalThis.location?.pathname.split('/').pop() 
   useEffect(()=>{if(run.state?.demo_shop)document.title=run.state.demo_shop.name+' · sàn·demo';},[run.state?.demo_shop?.name]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),5500);return()=>clearTimeout(timer);},[notice]);
   async function endDay(){if(run.state?.step==='day_done' && await run.act('/api/night'))navigate('night.html');}
+  async function jumpToDay7(){
+    if(await run.act('/api/demo/jump-day7'))navigate('proof.html?day=7');
+  }
   let view;
   if(proof)view=<ProofPage client={client} onReset={()=>setReset(true)} onNotice={setNotice} pending={run.pending}/>;
   else if(!run.state)view=<main id="main-content" className="wrap pad">{run.error?<ErrorPanel message={run.error} onRetry={()=>run.refresh().catch(()=>{})}/>:<Loading/>}</main>;
   else if(demo)view=<DemoPage run={run} preview={client.preview} navigate={navigate} onEndDay={endDay} onNotice={setNotice}/>;
   else if(page==='night.html')view=<NightPage run={run} preview={client.preview}/>;
   else view=<ShopPage run={run} preview={client.preview} updated={page==='updated.html'} onReset={()=>setReset(true)} onEndDay={endDay} onNotice={setNotice} onAddCart={count=>{setCart(value=>value+count);setNotice('Đã thêm vào giỏ hàng mô phỏng.');}} navigate={navigate}/>;
-  return <><Shell preview={client.preview} state={run.state} compact={demo || proof} comparison={proof} pending={run.pending} onEndDay={endDay} onNotice={setNotice} cart={cart}>{view}</Shell><ResetDialog open={reset} onClose={()=>setReset(false)} onReset={async memory=>{if(await run.act('/api/reset',{memory,seed:42}))navigate('index.html');}} pending={!!run.pending} error={run.actionError}/>{(notice || run.actionError) && <div className={'toast '+(run.actionError?'error':'')} role={run.actionError?'alert':'status'}>{run.actionError || notice}{run.actionError && <button className="icon-button" aria-label="Đóng thông báo" onClick={run.clearActionError}>×</button>}</div>}</>;
+  return <><Shell preview={client.preview} state={run.state} compact={demo || proof} comparison={proof} pending={run.pending} onEndDay={endDay} onJumpToDay7={jumpToDay7} onNotice={setNotice} cart={cart}>{view}</Shell><ResetDialog open={reset} onClose={()=>setReset(false)} onReset={async memory=>{if(await run.act('/api/reset',{memory,seed:42}))navigate('index.html');}} pending={!!run.pending} error={run.actionError}/>{(notice || run.actionError) && <div className={'toast '+(run.actionError?'error':'')} role={run.actionError?'alert':'status'}>{run.actionError || notice}{run.actionError && <button className="icon-button" aria-label="Đóng thông báo" onClick={run.clearActionError}>×</button>}</div>}</>;
 }

@@ -4,15 +4,15 @@ export function previewComparisonDays(){
   const rows=[
     {
       request:'Làm mới ảnh bìa và đề xuất gói hỗ trợ bán hàng giúp chị.',situation:'Ngày đầu · Hai bên chưa có lịch sử',
-      off:['Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.','Ảnh nền sáng, voucher 2% giúp chị nhé.','Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.'],
-      on:['Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.','Ảnh nền sáng, voucher 2% giúp chị nhé.','Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.'],
+      off:['Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.','Ảnh nền sáng, ít chữ, voucher 2% giúp chị nhé.','Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.'],
+      on:['Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.','Ảnh nền sáng, ít chữ, voucher 2% giúp chị nhé.','Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.'],
       offResult:'Cần hỏi sở thích trong ngày đầu',onResult:'Cùng điểm xuất phát, chưa có dữ liệu quá khứ',sources:[],
       takeaway:'Ngày 1: cả hai đều cần hỏi. Góp ý hôm nay là dữ liệu để tham khảo từ ngày mai.'
     },
     {
       request:'Làm ảnh bìa mới cho mẫu quạt này giúp chị nhé.',situation:'Ghi nhớ phong cách ảnh',
-      off:['Chị muốn ảnh theo phong cách nào?','Nền sáng như lần trước, đừng thêm quá nhiều chữ.','Em sẽ làm nền sáng, ít chữ. Chị duyệt bản nháp giúp em nhé.'],
-      on:['Em nhớ góp ý nền sáng hôm qua. Em giữ phong cách đó cho bản nháp mới, chị xem giúp em nhé.','Đúng rồi, giữ nền sáng như vậy giúp chị.'],
+      off:['Chị muốn ảnh theo phong cách nào?','Nền sáng, ít chữ như hôm qua nhé.'],
+      on:['Em nhớ chị thích nền sáng, ít chữ. Bản nháp mới giữ phong cách đó để chị duyệt.','Đúng ý chị, gửi nháp nhé.'],
       offResult:'Chủ shop cần nhắc lại phong cách',onResult:'Dùng góp ý cũ để đề xuất ngay từ đầu',sources:[[1,'Góp ý ảnh nền sáng']],
       takeaway:'Ngày 2: bên có học đọc lại góp ý ngày 1, giúp chủ shop bớt phải nhắc lại.'
     },

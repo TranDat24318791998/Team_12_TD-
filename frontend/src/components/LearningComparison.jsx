@@ -17,8 +17,8 @@ function Conversation({branch,request,day,learning}){
 
 export function LearningComparison({day}){
   return <div className="learning-comparison" data-comparison-day={day?.day ?? ''}>
-    <Conversation branch={day?.off} request={day?.request_vi} day={day?.day ?? 1} learning={false}/>
-    <Conversation branch={day?.on} request={day?.request_vi} day={day?.day ?? 1} learning/>
+    <Conversation branch={day?.off} request={day?.request_vi} day={day?.day ?? '—'} learning={false}/>
+    <Conversation branch={day?.on} request={day?.request_vi} day={day?.day ?? '—'} learning/>
   </div>;
 }
 

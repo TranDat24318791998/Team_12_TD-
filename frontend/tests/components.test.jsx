@@ -7,6 +7,7 @@ import {ContentReview} from '../src/components/ContentReview.jsx';
 import {EventFeed} from '../src/components/EventFeed.jsx';
 import {AgentActivity} from '../src/components/AgentActivity.jsx';
 import {Progress} from '../src/components/Shell.jsx';
+import {previewComparisonDays} from '../src/previewComparison.js';
 import {ControlPanel} from '../src/pages/Shop.jsx';
 import {NightPage} from '../src/pages/Night.jsx';
 import {ProofReport} from '../src/pages/Proof.jsx';
@@ -89,4 +90,26 @@ test('completed journey has six completed markers and rejected content is skippe
   const rejection={seq:1,run_id:state.run_id,day:1,shop_id:'Z',type:'seller_decision',data:{action:'reject'}};
   const rejected=renderToStaticMarkup(<Progress state={{...state,step:'day_done'}} events={[rejection]}/>);
   assert.equal((rejected.match(/class="skipped"/g) || []).length,2);
+});
+
+test('proof opens two aligned conversations on day two with prior-day evidence',()=>{
+  const report={days:7,seed:42,run_on:'preview-on',run_off:'preview-off',metrics:[],comparison_days:previewComparisonDays()};
+  const html=renderToStaticMarkup(<ProofReport report={report} preview onReset={noop} onExport={noop}/>);
+  assert.equal((html.match(/class="learning-chat /g) || []).length,2);
+  assert.match(html,/data-comparison-day="2"/);assert.match(html,/data-proof-day="2" aria-pressed="true"/);
+  assert.match(html,/Không học từ lịch sử/);assert.match(html,/Có học từ lịch sử/);assert.match(html,/Góp ý ảnh nền sáng/);
+  assert.match(html,/Hội thoại minh họa/);assert.match(html,/Số liệu minh họa giao diện/);
+  assert.equal((html.match(/Làm ảnh bìa mới cho mẫu quạt này giúp chị nhé\./g) || []).length,2);
+});
+test('missing real transcripts stay empty; report messages are escaped',()=>{
+  const legacy={days:7,seed:42,run_on:'real-on',run_off:'real-off',metrics:[]};
+  const empty=renderToStaticMarkup(<ProofReport report={legacy} onReset={noop} onExport={noop}/>);
+  assert.match(empty,/Chưa có hội thoại đối chứng/);assert.doesNotMatch(empty,/Em nhớ chị thích nền sáng/);
+  const days=previewComparisonDays();days[1].on.messages[0].text_vi='<img src=x onerror=alert(1)>';
+  const html=renderToStaticMarkup(<ProofReport report={{...legacy,run_on:'preview-on',run_off:'preview-off',comparison_days:days}} onReset={noop} onExport={noop}/>);
+  assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img src=x/);
+});
+test('agent diagram is compact with package details closed by default',()=>{
+  const html=renderToStaticMarkup(<AgentActivity state={{...state,step:'negotiating'}} events={[]}/>);
+  assert.match(html,/compact-activity/);assert.match(html,/<details class="activity-details">/);assert.doesNotMatch(html,/class="agent-node |class="interaction-steps"/);
 });

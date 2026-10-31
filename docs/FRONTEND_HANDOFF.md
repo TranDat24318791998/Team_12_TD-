@@ -12,6 +12,10 @@ Màn Demo có khối tương tác ở `src/components/AgentActivity.jsx`, projec
 
 Preview v3 minh họa thêm `agent_activity` và `referee_review`; source này không phải backend thật hoặc tracking conversion. Số ngày vẫn là 7, nội dung vẫn có 3 attempt tổng cộng. Polling đọc tiếp trong khi POST còn chờ, write vẫn được serialize. Ngày cuối thanh bước hoàn tất; từ chối/question-only bỏ qua nội dung/áp dụng khi có bằng chứng phù hợp.
 
+Màn bằng chứng nay ưu tiên **hai chat Không học / Có học từ lịch sử**, chọn ngày 1–7, cùng yêu cầu đầu vào và dẫn nguồn bộ nhớ từ ngày trước. React đọc mở rộng `ProofReport.comparison_days`; thiếu transcript thật thì hiện chưa có dữ liệu. Fixture riêng ở `src/previewComparison.js`; normalizer ở `src/proofComparison.js`, UI ở `src/components/LearningComparison.jsx`. Chỉ số và nguồn báo cáo vẫn mở được trong phần chi tiết.
+
+Khối `AgentActivity` trên Demo đã thu gọn; chi tiết gói/checks gấp mặc định. Desktop chia vùng nhìn cho kênh người bán và hậu trường; cuộn bên trong hai khung. Bản trình chiếu được kiểm tại 1366×768, tab 667px vẫn có hai chat cạnh nhau, điện thoại 390px xếp một cột. `tests/presentation-smoke.html` kiểm layout, cùng request, ngày 1 chưa có lịch sử, dẫn nguồn quá khứ và chuyển ngày.
+
 ## Mở bản đã build
 
 Tại gốc repo:
@@ -122,12 +126,14 @@ Lỗi facade dùng `error.message_vi`; client cũng đọc `error.message` tiế
 Đã chạy thành công:
 
 - `node build.mjs`: bundle production cùng React runtime và thông báo bản quyền.
-- `node build.mjs --tests` và `node --test tests/*.test.mjs .test-build/*.test.mjs`: **34 test đạt**. Bao gồm projection tương tác, nhiều attempt, snapshot cũ, terminal task đến trễ, checks của gói cũ, no-fit/question-only, escaping, idempotency, retry và kết thúc 7 ngày.
+- `node build.mjs --tests` và `node --test tests/*.test.mjs .test-build/*.test.mjs`: **41 test đạt**. Bao gồm projection tương tác, nhiều attempt, snapshot cũ, checks của gói cũ, no-fit/question-only, escaping, idempotency, kết thúc 7 ngày và hội thoại đối chứng không trộn run/nguồn tương lai.
 - `python3 tests/check_frontend.py`: 5 entry React, bundle, CSS, license và SVG hợp lệ.
 
 Bộ kiểm tra thủ công trên trình duyệt nằm ở `tests/frontend-smoke.html`. Chạy `python3 -m http.server 8000` ở gốc repo, mở http://localhost:8000/tests/frontend-smoke.html rồi bấm chạy. Bộ này dùng thao tác DOM trên React, không cần debug global hoặc gọi API trả phí.
 
 Đợt bổ sung tương tác ngày 31/10/2026 đã chạy browser smoke qua HTTP local và in-app browser: **30 kiểm tra đạt**, gồm layout 390px và desktop thực đo 1230px, thương lượng lại, checks/trọng tài, sửa nội dung, apply, câu hỏi sở thích và từ chối. `tests/useRun-smoke.html` dùng bundle browser được tạo bởi `node build.mjs --tests`; **đã đạt** kiểm tra effects React thật: polling trong khi POST pending, serialize write, không chồng read, không lặp event và dừng polling khi unmount. Không gọi API trả phí.
+
+Đợt hai chat đã chạy lại 30 kiểm tra luồng trên, cộng **21 kiểm tra trình chiếu đạt** trong `tests/presentation-smoke.html`: viewport 1366×768 đọc trọn hội thoại ngày 2 và thấy hai khung/nút thao tác không cần cuộn trang; luồng agent một hàng; hai chat cạnh nhau ở tab 667px; một cột ở 390px; chọn ngày 1/7; mở chỉ số; màn Demo có luồng agent dưới 155px và hai cột cùng vùng nhìn. Tổng hai bộ browser smoke ở đợt này: **51 kiểm tra đạt**.
 
 `python -m pytest -q`: **14 test đạt**, một warning deprecation từ Starlette/httpx. Lượt này chạy bằng Python 3.12 bundled và các dependency cần cho test được cài vào `/tmp/growth-agent-backend-check` với version theo requirements; không sửa Python runtime chung hoặc backend. Nhóm vẫn cần xác nhận môi trường deploy Python 3.11 của dự án và các API nghiệp vụ thật khi triển khai.
 
@@ -140,3 +146,11 @@ Khi backend hoàn tất, chạy `?preview=0` và kiểm tra: cookie giữa hai t
 Nhật ký đợt chuyển React ngày 31/10/2026: kiểm tra cấu trúc mới `frontend/`, chuyển 5 màn sang React, cập nhật theo data design v1.1, build và kiểm tra như trên. Phần triển khai tiếp theo của nhóm backend là hoàn tất seller facade và persistence theo hợp đồng mới.
 
 12:25 ngày 31/10/2026 (Asia/Ho_Chi_Minh), [3.4/3.5] frontend: thêm sơ đồ sàn–shop, vòng/attempt, so sánh gói, checks và trọng tài; polling trong khi POST; thêm requirements frontend/data và liên kết cho backend agent. Đã build, 34 test Node, kiểm tra assets, 30 browser smoke, kiểm tra effects polling và 14 pytest đạt. Cần backend/data owner chốt các mục `TODO(contract)` và triển khai 9 API thật. Ghi nhật ký tại đây vì `docs/CODEX_LOG.md` đã bị xóa trong working tree trước lượt này; không khôi phục file người dùng đã xóa.
+
+13:19 ngày 31/10/2026 (Asia/Ho_Chi_Minh), [3.4/3.6] frontend: thay màn bằng chứng bằng hai chat không học/có học theo ngày, nguồn bộ nhớ quá khứ, gấp chỉ số/chi tiết và thu gọn luồng agent. Bổ sung requirements frontend/data cho `comparison_days`, không sửa CONTRACT hoặc gọi agent thật. Build, 41 test Node, kiểm tra assets, 51 browser smoke và 14 pytest đạt. Backend cần tạo seller projection từ transcript đã lưu; fixture vẫn là minh họa.
+
+13:40 ngày 31/10/2026 (Asia/Ho_Chi_Minh), [3.4] frontend: thu luồng agent màn Demo thành thanh process 54px ở laptop, giữ phiên/vòng và chuyển điều khoản/checks vào lớp nổi “Chi tiết”. Sửa lỗi grid nén thẻ đề xuất có `overflow:hidden`: chat dùng flex column, các thẻ giữ chiều cao tự nhiên và cuộn trong khung; chat/nhật ký nhận focus bàn phím. Không thay hợp đồng dữ liệu hoặc API. Production build, 41 test Node, kiểm tra assets và 14 pytest đạt. `tests/demo-scroll-smoke.html` đạt thêm **15 kiểm tra** ở 1366×768, bao gồm cuộn tới “Đồng ý”/“Dùng bản này”, giữ ô nhập trong màn hình và mở chi tiết không làm nhỏ chat. Đã kiểm tra thêm thao tác End và cuộn chuột thật trên trình duyệt; vùng chat di chuyển độc lập với trang. Bộ kiểm tra dùng preview riêng, không gọi API trả phí.
+
+13:55 ngày 31/10/2026 (Asia/Ho_Chi_Minh), [3.4/3.6] frontend theo yêu cầu bổ sung: nút “Nhảy tới ngày 7” đọc bộ mẫu 96 events/7 tổng kết từ SQLite, nhập vào phiên preview và mở Proof chọn ngày 7. Bản demo chạy bằng `python3 scripts/preview_server.py --port 8765`; `http.server` cũ không có endpoint này. Kho mẫu ở `runs/preview/samples.sqlite3`, nguồn seed công khai tại `frontend/fixtures/day7.json` (tạo lại bằng `node frontend/scripts/seed-day7.mjs`). API đọc mẫu riêng `GET /api/demo/day7`, không sửa runtime agent/API nghiệp vụ. Requirements frontend mục 8 và data mục 12 ghi shape/provenance/lifecycle. Build production, **44 test Node**, kiểm tra assets và **19 pytest** đạt (15 subtests, một warning Starlette/httpx cũ). Đã bấm nút trên trình duyệt: từ ngày 1 sang hai chat ngày 7, nhãn database mẫu hiện đúng; reload vẫn giữ kết quả. Không gọi provider trả phí. Phiên preview trước khi nhảy được giữ ở sessionStorage `.before-day7`.
+
+14:03 ngày 31/10/2026 (Asia/Ho_Chi_Minh), bàn giao backend/data: bổ sung frontend requirements mục 9 và data requirements mục 13 cho ngày 7 đọc động từ record DB; nêu rõ seed minh họa, projection, revision, reload, quyền và nghiệm thu bằng hai dataset khác nhau không build lại JS. Trang shop là điểm bắt đầu. Kho mẫu hiện tại vẫn chưa phải tích hợp động hoàn tất. Chỉ sửa tài liệu, kiểm tra `git diff --check`; không đổi API/runtime chung.

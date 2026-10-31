@@ -1,0 +1,2651 @@
+{
+  "schema_version": 1,
+  "source": {
+    "kind": "sqlite_sample",
+    "label_vi": "Dữ liệu mẫu 7 ngày từ database",
+    "seed": 42
+  },
+  "state": {
+    "run_id": "sample-day7",
+    "day": 7,
+    "mode": "offline",
+    "memory_enabled": true,
+    "step": "complete",
+    "demo_shop": {
+      "shop_id": "D",
+      "name": "Nhà Bé Lan",
+      "category": "quat_mini",
+      "price": 175000,
+      "stock": 300,
+      "listing_quality": 0.55,
+      "search_rank_page": 3,
+      "rating": 4.6,
+      "base_impressions": 2500,
+      "title": "Quạt mini cầm tay · 3 tốc độ gió, pin 2000mAh, sạc USB",
+      "description": "Nhỏ gọn trong lòng bàn tay, dễ mang theo mỗi ngày.\n• 3 tốc độ gió để lựa chọn.\n• Pin 2000mAh, sạc USB.\n• 3 màu: Trắng, Hồng, Xanh mint.",
+      "attributes": [
+        "3 tốc độ gió",
+        "sạc USB",
+        "pin 2000mAh",
+        "3 màu: Trắng, Hồng, Xanh mint"
+      ],
+      "images": [
+        "/img/cover-b.svg",
+        "/img/fan-white.svg",
+        "/img/fan-pink.svg",
+        "/img/fan-mint.svg"
+      ],
+      "video": null,
+      "active_voucher_pct": 3
+    },
+    "demo_shop_original": {
+      "shop_id": "D",
+      "name": "Nhà Bé Lan",
+      "category": "quat_mini",
+      "price": 175000,
+      "stock": 300,
+      "listing_quality": 0.55,
+      "search_rank_page": 3,
+      "rating": 4.6,
+      "base_impressions": 2500,
+      "title": "Quạt mini cầm tay sạc usb loại tốt giá rẻ",
+      "description": "Quạt mini cầm tay. Sạc usb. 3 tốc độ gió. Pin 2000mAh. Có 3 màu.",
+      "attributes": [
+        "3 tốc độ gió",
+        "sạc USB",
+        "pin 2000mAh",
+        "3 màu: Trắng, Hồng, Xanh mint"
+      ],
+      "images": [
+        "/img/fan-original.svg",
+        "/img/fan-white.svg",
+        "/img/fan-pink.svg",
+        "/img/fan-mint.svg"
+      ],
+      "video": null,
+      "active_voucher_pct": 0
+    },
+    "active_package": {
+      "package": {
+        "content_refresh": true,
+        "ads_daily_budget": 45000,
+        "voucher_pct": 3,
+        "stop_roas_below": 6.5,
+        "stop_after_days": 2,
+        "duration_days": 3
+      },
+      "start_day": 7,
+      "end_day": 9,
+      "ads_paused": false,
+      "card_id": "D-7-1"
+    },
+    "pending_card": null,
+    "content_draft": null,
+    "last_night": {
+      "day": 7,
+      "history_updates": [
+        "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+      ],
+      "pref_candidates": [],
+      "calibration": {
+        "factor": 0.87,
+        "points": 21,
+        "mape_today": 0.24
+      },
+      "lesson_ops": [
+        {
+          "op": "ADD",
+          "lesson_id": "preview-lesson",
+          "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+          "scope": "quat_mini",
+          "evidence": [
+            "D-7"
+          ]
+        }
+      ],
+      "rejected_ops": 0,
+      "memory_md_path": ""
+    },
+    "live_calls_left": 0
+  },
+  "events": [
+    {
+      "seq": 1,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:10",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 1.",
+      "data": {
+        "day": 1
+      }
+    },
+    {
+      "seq": 2,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:20",
+      "type": "opportunity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Từ khóa quạt mini cầm tay tăng 240% trong 7 ngày. Nhà Bé Lan có cơ hội cải thiện nội dung.",
+      "data": {
+        "keyword": "quạt mini cầm tay",
+        "growth_7d_pct": 240,
+        "chosen": [
+          "A",
+          "B",
+          "D",
+          "E"
+        ],
+        "excluded": [
+          {
+            "shop_id": "C",
+            "reason_vi": "Tồn kho dưới ngưỡng."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:30",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đọc lịch sử công khai và sở thích đã được xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": []
+      }
+    },
+    {
+      "seq": 4,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:40",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang chuẩn bị đề xuất.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "task_id": "D-1-attempt1-platform-1",
+        "round": 1,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang chuẩn bị gói tăng trưởng"
+      }
+    },
+    {
+      "seq": 5,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:50",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đề xuất làm mới nội dung, quảng cáo 70.000đ/ngày và voucher 10% trong 3 ngày.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "round": 1,
+        "action": "propose",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 70000,
+          "voucher_pct": 10,
+          "stop_roas_below": 4,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 6,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:00",
+      "type": "agent_activity",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Code đang kiểm tra gói đề xuất.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "task_id": "D-1-attempt1-check-1",
+        "round": 1,
+        "phase": "validation",
+        "status": "running",
+        "label_vi": "Code đang kiểm tra ngân sách và điều kiện dừng"
+      }
+    },
+    {
+      "seq": 7,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:10",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói đầu tiên chưa đáp ứng các giới hạn của chủ shop.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "ok": false,
+        "checks": [
+          {
+            "ok": false,
+            "message_vi": "Ngân sách quảng cáo vượt giới hạn chủ shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Voucher chưa phù hợp với giới hạn của shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Cần siết lại điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 8,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:20",
+      "type": "agent_activity",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Agent shop đang xây dựng phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "task_id": "D-1-attempt1-shop-1",
+        "round": 1,
+        "phase": "response",
+        "status": "running",
+        "label_vi": "Agent shop đang điều chỉnh gói theo giới hạn của chủ shop"
+      }
+    },
+    {
+      "seq": 9,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:30",
+      "type": "shop_turn",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Đề nghị ngân sách 45.000đ/ngày, voucher 3% và ngưỡng dừng 6,5.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "round": 1,
+        "action": "counter",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "private_note_vi": "Điều chỉnh gói để đáp ứng các giới hạn riêng của chủ shop.",
+        "redacted": true
+      }
+    },
+    {
+      "seq": 10,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:40",
+      "type": "referee_review",
+      "actor": "referee",
+      "shop_id": "D",
+      "text_vi": "Phản đề xuất tập trung vào ngân sách và điều kiện dừng. Tiếp tục trao đổi về gói đã điều chỉnh.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "round": 1,
+        "action": "continue",
+        "evidence_refs": [
+          5,
+          9
+        ],
+        "unresolved_terms": [
+          "Ngân sách quảng cáo",
+          "Voucher"
+        ],
+        "next_actor": "platform_agent",
+        "focused_question": null
+      }
+    },
+    {
+      "seq": 11,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "09:50",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang xem phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "task_id": "D-1-attempt1-platform-2",
+        "round": 2,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang xem gói 45.000đ/ngày và voucher 3%"
+      }
+    },
+    {
+      "seq": 12,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:00",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đồng ý với gói đã điều chỉnh. Chuyển chị Lan duyệt sau kiểm tra cuối.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "round": 2,
+        "action": "accept",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 13,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:10",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói cuối đã qua kiểm tra các luật của chủ shop.",
+      "data": {
+        "negotiation_id": "D-1-attempt1",
+        "ok": true,
+        "checks": [
+          {
+            "ok": true,
+            "message_vi": "Quảng cáo không vượt 45.000đ/ngày."
+          },
+          {
+            "ok": true,
+            "message_vi": "Voucher phù hợp với giới hạn lợi nhuận."
+          },
+          {
+            "ok": true,
+            "message_vi": "Có điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 14,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:20",
+      "type": "card_sent",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã gửi thẻ đề xuất để chị Lan quyết định.",
+      "data": {
+        "card": {
+          "card_id": "D-1-1",
+          "shop_id": "D",
+          "day": 1,
+          "kind": "offer",
+          "package": {
+            "content_refresh": true,
+            "ads_daily_budget": 45000,
+            "voucher_pct": 3,
+            "stop_roas_below": 6.5,
+            "stop_after_days": 2,
+            "duration_days": 3
+          },
+          "forecast": {
+            "low": 18,
+            "point": 24,
+            "high": 30,
+            "factor_used": 1,
+            "stock_warning": false
+          },
+          "profit_after_fees_per_unit": 27136,
+          "breakeven_roas_display": 6.5,
+          "reasons_vi": [
+            "Sản phẩm thuộc nhóm từ khóa đang được quan tâm.",
+            "Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.",
+            "Gói được kiểm tra theo giới hạn chủ shop."
+          ],
+          "warnings_vi": [],
+          "notices_vi": [],
+          "rule_question": null
+        }
+      }
+    },
+    {
+      "seq": 15,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:30",
+      "type": "seller_decision",
+      "actor": "seller",
+      "shop_id": "D",
+      "text_vi": "Giảm voucher còn 2% giúp chị.",
+      "data": {
+        "card_id": "D-1-1",
+        "action": "negotiate",
+        "note_vi": "Giảm voucher còn 2% giúp chị.",
+        "rule_answer": null
+      }
+    },
+    {
+      "seq": 16,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:40",
+      "type": "agent_activity",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Agent shop đang xem góp ý mới của chị.",
+      "data": {
+        "negotiation_id": "D-1-attempt2",
+        "task_id": "D-1-attempt2-shop-1",
+        "round": 1,
+        "phase": "response",
+        "status": "running",
+        "label_vi": "Agent shop đang xem yêu cầu điều chỉnh voucher"
+      }
+    },
+    {
+      "seq": 17,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "10:50",
+      "type": "shop_turn",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Đã nhận góp ý của chị. Đề nghị giảm voucher còn 2%.",
+      "data": {
+        "negotiation_id": "D-1-attempt2",
+        "round": 1,
+        "action": "counter",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 2,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "private_note_vi": "Chỉ thay đổi trong phạm vi người bán cho phép.",
+        "redacted": true
+      }
+    },
+    {
+      "seq": 18,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:00",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói điều chỉnh vẫn nằm trong các giới hạn của chủ shop.",
+      "data": {
+        "negotiation_id": "D-1-attempt2",
+        "ok": true,
+        "checks": [
+          {
+            "ok": true,
+            "message_vi": "Voucher 2% không làm tăng chi quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 19,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:10",
+      "type": "referee_review",
+      "actor": "referee",
+      "shop_id": "D",
+      "text_vi": "Gói điều chỉnh đáp ứng yêu cầu giảm voucher, không mở rộng phạm vi.",
+      "data": {
+        "negotiation_id": "D-1-attempt2",
+        "round": 1,
+        "action": "continue",
+        "evidence_refs": [
+          17
+        ],
+        "unresolved_terms": [],
+        "next_actor": "platform_agent",
+        "focused_question": null
+      }
+    },
+    {
+      "seq": 20,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:20",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đồng ý giảm voucher còn 2%. Gửi lại gói để chị Lan duyệt.",
+      "data": {
+        "negotiation_id": "D-1-attempt2",
+        "round": 1,
+        "action": "accept",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 2,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 21,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:30",
+      "type": "card_sent",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã gửi thẻ đề xuất để chị Lan quyết định.",
+      "data": {
+        "card": {
+          "card_id": "D-1-2",
+          "shop_id": "D",
+          "day": 1,
+          "kind": "offer",
+          "package": {
+            "content_refresh": true,
+            "ads_daily_budget": 45000,
+            "voucher_pct": 2,
+            "stop_roas_below": 6.5,
+            "stop_after_days": 2,
+            "duration_days": 3
+          },
+          "forecast": {
+            "low": 18,
+            "point": 24,
+            "high": 30,
+            "factor_used": 1,
+            "stock_warning": false
+          },
+          "profit_after_fees_per_unit": 28632,
+          "breakeven_roas_display": 6.5,
+          "reasons_vi": [
+            "Sản phẩm thuộc nhóm từ khóa đang được quan tâm.",
+            "Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.",
+            "Gói được kiểm tra theo giới hạn chủ shop."
+          ],
+          "warnings_vi": [],
+          "notices_vi": [],
+          "rule_question": null
+        }
+      }
+    },
+    {
+      "seq": 22,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:40",
+      "type": "seller_decision",
+      "actor": "seller",
+      "shop_id": "D",
+      "text_vi": "Chị Lan đã đồng ý.",
+      "data": {
+        "card_id": "D-1-2",
+        "action": "accept",
+        "note_vi": "",
+        "rule_answer": null
+      }
+    },
+    {
+      "seq": 23,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "11:50",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Đang chuẩn bị tiêu đề, mô tả và ba phương án ảnh bìa.",
+      "data": {
+        "kind": "text",
+        "status": "done",
+        "version": 1,
+        "detail_vi": "Nội dung mẫu cho giao diện."
+      }
+    },
+    {
+      "seq": 24,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:00",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Đang làm lại nội dung theo góp ý của chị Lan.",
+      "data": {
+        "kind": "image",
+        "status": "running",
+        "version": 2,
+        "detail_vi": "Nền sáng, ít chữ; giữ đúng màu quạt."
+      }
+    },
+    {
+      "seq": 25,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:10",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Ba phương án ảnh bìa đã sẵn sàng.",
+      "data": {
+        "kind": "image",
+        "status": "done",
+        "version": 2,
+        "detail_vi": "Ảnh minh họa cho bản xem trước giao diện."
+      }
+    },
+    {
+      "seq": 26,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:20",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Bản xem trước dùng ảnh minh họa; video thật do backend cung cấp.",
+      "data": {
+        "kind": "video",
+        "status": "failed",
+        "version": 2,
+        "detail_vi": "Có thể áp dụng nội dung và ảnh."
+      }
+    },
+    {
+      "seq": 27,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:30",
+      "type": "content_applied",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã áp dụng nội dung chị Lan chọn.",
+      "data": {
+        "version": 2,
+        "cover_option": "B"
+      }
+    },
+    {
+      "seq": 28,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:40",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 1,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 29,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "12:50",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 30,
+      "run_id": "sample-day7",
+      "day": 1,
+      "ts": "08:00",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 1,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [
+            "Chị Lan ưu tiên ảnh nền sáng. Sáng mai cần hỏi xác nhận trước khi đặt thành luật."
+          ],
+          "calibration": {
+            "factor": 0.87,
+            "points": 3,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-1"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 31,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "08:10",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 2.",
+      "data": {
+        "day": 2
+      }
+    },
+    {
+      "seq": 32,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "08:20",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Gói đã duyệt vẫn đang chạy. Đọc góp ý cần chủ shop xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Ưu tiên ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 33,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "08:30",
+      "type": "card_sent",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã gửi thẻ đề xuất để chị Lan quyết định.",
+      "data": {
+        "card": {
+          "card_id": "D-2-1",
+          "shop_id": "D",
+          "day": 2,
+          "kind": "question",
+          "package": null,
+          "forecast": null,
+          "profit_after_fees_per_unit": null,
+          "breakeven_roas_display": null,
+          "reasons_vi": [
+            "Sản phẩm thuộc nhóm từ khóa đang được quan tâm.",
+            "Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.",
+            "Gói được kiểm tra theo giới hạn chủ shop."
+          ],
+          "warnings_vi": [],
+          "notices_vi": [],
+          "rule_question": {
+            "pref_id": "D-bright",
+            "field": "content_style",
+            "value": "ảnh nền sáng",
+            "text_vi": "Lần sau chị muốn tạo ảnh nền sáng ngay từ đầu?"
+          }
+        }
+      }
+    },
+    {
+      "seq": 34,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "08:40",
+      "type": "seller_decision",
+      "actor": "seller",
+      "shop_id": "D",
+      "text_vi": "Chị Lan đã đồng ý.",
+      "data": {
+        "card_id": "D-2-1",
+        "action": "accept",
+        "note_vi": "",
+        "rule_answer": true
+      }
+    },
+    {
+      "seq": 35,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "08:50",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 2,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 36,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "09:00",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 37,
+      "run_id": "sample-day7",
+      "day": 2,
+      "ts": "09:10",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 2,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 6,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-2"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 38,
+      "run_id": "sample-day7",
+      "day": 3,
+      "ts": "09:20",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 3.",
+      "data": {
+        "day": 3
+      }
+    },
+    {
+      "seq": 39,
+      "run_id": "sample-day7",
+      "day": 3,
+      "ts": "09:30",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Gói đã duyệt vẫn đang chạy. Đọc góp ý cần chủ shop xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Ưu tiên ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 40,
+      "run_id": "sample-day7",
+      "day": 3,
+      "ts": "09:40",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 3,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 41,
+      "run_id": "sample-day7",
+      "day": 3,
+      "ts": "09:50",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 42,
+      "run_id": "sample-day7",
+      "day": 3,
+      "ts": "10:00",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 3,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 9,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-3"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 43,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "10:10",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 4.",
+      "data": {
+        "day": 4
+      }
+    },
+    {
+      "seq": 44,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "10:20",
+      "type": "opportunity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Từ khóa quạt mini cầm tay tăng 240% trong 7 ngày. Nhà Bé Lan có cơ hội cải thiện nội dung.",
+      "data": {
+        "keyword": "quạt mini cầm tay",
+        "growth_7d_pct": 240,
+        "chosen": [
+          "A",
+          "B",
+          "D",
+          "E"
+        ],
+        "excluded": [
+          {
+            "shop_id": "C",
+            "reason_vi": "Tồn kho dưới ngưỡng."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 45,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "10:30",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đọc lịch sử công khai và sở thích đã được xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Góp ý trước: ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 46,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "10:40",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang chuẩn bị đề xuất.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "task_id": "D-4-attempt1-platform-1",
+        "round": 1,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang chuẩn bị gói tăng trưởng"
+      }
+    },
+    {
+      "seq": 47,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "10:50",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đề xuất làm mới nội dung, quảng cáo 70.000đ/ngày và voucher 10% trong 3 ngày.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "round": 1,
+        "action": "propose",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 70000,
+          "voucher_pct": 10,
+          "stop_roas_below": 4,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 48,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:00",
+      "type": "agent_activity",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Code đang kiểm tra gói đề xuất.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "task_id": "D-4-attempt1-check-1",
+        "round": 1,
+        "phase": "validation",
+        "status": "running",
+        "label_vi": "Code đang kiểm tra ngân sách và điều kiện dừng"
+      }
+    },
+    {
+      "seq": 49,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:10",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói đầu tiên chưa đáp ứng các giới hạn của chủ shop.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "ok": false,
+        "checks": [
+          {
+            "ok": false,
+            "message_vi": "Ngân sách quảng cáo vượt giới hạn chủ shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Voucher chưa phù hợp với giới hạn của shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Cần siết lại điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 50,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:20",
+      "type": "agent_activity",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Agent shop đang xây dựng phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "task_id": "D-4-attempt1-shop-1",
+        "round": 1,
+        "phase": "response",
+        "status": "running",
+        "label_vi": "Agent shop đang điều chỉnh gói theo giới hạn của chủ shop"
+      }
+    },
+    {
+      "seq": 51,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:30",
+      "type": "shop_turn",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Đề nghị ngân sách 45.000đ/ngày, voucher 3% và ngưỡng dừng 6,5.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "round": 1,
+        "action": "counter",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "private_note_vi": "Điều chỉnh gói để đáp ứng các giới hạn riêng của chủ shop.",
+        "redacted": true
+      }
+    },
+    {
+      "seq": 52,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:40",
+      "type": "referee_review",
+      "actor": "referee",
+      "shop_id": "D",
+      "text_vi": "Phản đề xuất tập trung vào ngân sách và điều kiện dừng. Tiếp tục trao đổi về gói đã điều chỉnh.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "round": 1,
+        "action": "continue",
+        "evidence_refs": [
+          47,
+          51
+        ],
+        "unresolved_terms": [
+          "Ngân sách quảng cáo",
+          "Voucher"
+        ],
+        "next_actor": "platform_agent",
+        "focused_question": null
+      }
+    },
+    {
+      "seq": 53,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "11:50",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang xem phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "task_id": "D-4-attempt1-platform-2",
+        "round": 2,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang xem gói 45.000đ/ngày và voucher 3%"
+      }
+    },
+    {
+      "seq": 54,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:00",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đồng ý với gói đã điều chỉnh. Chuyển chị Lan duyệt sau kiểm tra cuối.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "round": 2,
+        "action": "accept",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 55,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:10",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói cuối đã qua kiểm tra các luật của chủ shop.",
+      "data": {
+        "negotiation_id": "D-4-attempt1",
+        "ok": true,
+        "checks": [
+          {
+            "ok": true,
+            "message_vi": "Quảng cáo không vượt 45.000đ/ngày."
+          },
+          {
+            "ok": true,
+            "message_vi": "Voucher phù hợp với giới hạn lợi nhuận."
+          },
+          {
+            "ok": true,
+            "message_vi": "Có điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 56,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:20",
+      "type": "card_sent",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã gửi thẻ đề xuất để chị Lan quyết định.",
+      "data": {
+        "card": {
+          "card_id": "D-4-1",
+          "shop_id": "D",
+          "day": 4,
+          "kind": "offer",
+          "package": {
+            "content_refresh": true,
+            "ads_daily_budget": 45000,
+            "voucher_pct": 3,
+            "stop_roas_below": 6.5,
+            "stop_after_days": 2,
+            "duration_days": 3
+          },
+          "forecast": {
+            "low": 18,
+            "point": 24,
+            "high": 30,
+            "factor_used": 1,
+            "stock_warning": false
+          },
+          "profit_after_fees_per_unit": 27136,
+          "breakeven_roas_display": 6.5,
+          "reasons_vi": [
+            "Sản phẩm thuộc nhóm từ khóa đang được quan tâm.",
+            "Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.",
+            "Gói được kiểm tra theo giới hạn chủ shop."
+          ],
+          "warnings_vi": [],
+          "notices_vi": [],
+          "rule_question": null
+        }
+      }
+    },
+    {
+      "seq": 57,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:30",
+      "type": "seller_decision",
+      "actor": "seller",
+      "shop_id": "D",
+      "text_vi": "Chị Lan đã đồng ý.",
+      "data": {
+        "card_id": "D-4-1",
+        "action": "accept",
+        "note_vi": "",
+        "rule_answer": null
+      }
+    },
+    {
+      "seq": 58,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:40",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Đang chuẩn bị tiêu đề, mô tả và ba phương án ảnh bìa.",
+      "data": {
+        "kind": "text",
+        "status": "done",
+        "version": 1,
+        "detail_vi": "Nội dung mẫu cho giao diện."
+      }
+    },
+    {
+      "seq": 59,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "12:50",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Ba phương án ảnh bìa đã sẵn sàng.",
+      "data": {
+        "kind": "image",
+        "status": "done",
+        "version": 1,
+        "detail_vi": "Ảnh minh họa cho bản xem trước giao diện."
+      }
+    },
+    {
+      "seq": 60,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "08:00",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Bản xem trước dùng ảnh minh họa; video thật do backend cung cấp.",
+      "data": {
+        "kind": "video",
+        "status": "failed",
+        "version": 1,
+        "detail_vi": "Có thể áp dụng nội dung và ảnh."
+      }
+    },
+    {
+      "seq": 61,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "08:10",
+      "type": "content_applied",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã áp dụng nội dung chị Lan chọn.",
+      "data": {
+        "version": 1,
+        "cover_option": "B"
+      }
+    },
+    {
+      "seq": 62,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "08:20",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 4,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 63,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "08:30",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 64,
+      "run_id": "sample-day7",
+      "day": 4,
+      "ts": "08:40",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 4,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 12,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-4"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 65,
+      "run_id": "sample-day7",
+      "day": 5,
+      "ts": "08:50",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 5.",
+      "data": {
+        "day": 5
+      }
+    },
+    {
+      "seq": 66,
+      "run_id": "sample-day7",
+      "day": 5,
+      "ts": "09:00",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Gói đã duyệt vẫn đang chạy. Đọc góp ý cần chủ shop xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Ưu tiên ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 67,
+      "run_id": "sample-day7",
+      "day": 5,
+      "ts": "09:10",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 5,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 68,
+      "run_id": "sample-day7",
+      "day": 5,
+      "ts": "09:20",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 69,
+      "run_id": "sample-day7",
+      "day": 5,
+      "ts": "09:30",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 5,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 15,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-5"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 70,
+      "run_id": "sample-day7",
+      "day": 6,
+      "ts": "09:40",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 6.",
+      "data": {
+        "day": 6
+      }
+    },
+    {
+      "seq": 71,
+      "run_id": "sample-day7",
+      "day": 6,
+      "ts": "09:50",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Gói đã duyệt vẫn đang chạy. Đọc góp ý cần chủ shop xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Ưu tiên ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 72,
+      "run_id": "sample-day7",
+      "day": 6,
+      "ts": "10:00",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 6,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 73,
+      "run_id": "sample-day7",
+      "day": 6,
+      "ts": "10:10",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 74,
+      "run_id": "sample-day7",
+      "day": 6,
+      "ts": "10:20",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 6,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 18,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-6"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    },
+    {
+      "seq": 75,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "10:30",
+      "type": "day_start",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Bắt đầu ngày mô phỏng 7.",
+      "data": {
+        "day": 7
+      }
+    },
+    {
+      "seq": 76,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "10:40",
+      "type": "opportunity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Từ khóa quạt mini cầm tay tăng 240% trong 7 ngày. Nhà Bé Lan có cơ hội cải thiện nội dung.",
+      "data": {
+        "keyword": "quạt mini cầm tay",
+        "growth_7d_pct": 240,
+        "chosen": [
+          "A",
+          "B",
+          "D",
+          "E"
+        ],
+        "excluded": [
+          {
+            "shop_id": "C",
+            "reason_vi": "Tồn kho dưới ngưỡng."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 77,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "10:50",
+      "type": "memory_read",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đọc lịch sử công khai và sở thích đã được xác nhận.",
+      "data": {
+        "who": "shop",
+        "items": [
+          "Góp ý trước: ảnh nền sáng."
+        ]
+      }
+    },
+    {
+      "seq": 78,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:00",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang chuẩn bị đề xuất.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "task_id": "D-7-attempt1-platform-1",
+        "round": 1,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang chuẩn bị gói tăng trưởng"
+      }
+    },
+    {
+      "seq": 79,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:10",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đề xuất làm mới nội dung, quảng cáo 70.000đ/ngày và voucher 10% trong 3 ngày.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "round": 1,
+        "action": "propose",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 70000,
+          "voucher_pct": 10,
+          "stop_roas_below": 4,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 80,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:20",
+      "type": "agent_activity",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Code đang kiểm tra gói đề xuất.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "task_id": "D-7-attempt1-check-1",
+        "round": 1,
+        "phase": "validation",
+        "status": "running",
+        "label_vi": "Code đang kiểm tra ngân sách và điều kiện dừng"
+      }
+    },
+    {
+      "seq": 81,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:30",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói đầu tiên chưa đáp ứng các giới hạn của chủ shop.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "ok": false,
+        "checks": [
+          {
+            "ok": false,
+            "message_vi": "Ngân sách quảng cáo vượt giới hạn chủ shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Voucher chưa phù hợp với giới hạn của shop."
+          },
+          {
+            "ok": false,
+            "message_vi": "Cần siết lại điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 82,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:40",
+      "type": "agent_activity",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Agent shop đang xây dựng phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "task_id": "D-7-attempt1-shop-1",
+        "round": 1,
+        "phase": "response",
+        "status": "running",
+        "label_vi": "Agent shop đang điều chỉnh gói theo giới hạn của chủ shop"
+      }
+    },
+    {
+      "seq": 83,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "11:50",
+      "type": "shop_turn",
+      "actor": "shop_agent",
+      "shop_id": "D",
+      "text_vi": "Đề nghị ngân sách 45.000đ/ngày, voucher 3% và ngưỡng dừng 6,5.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "round": 1,
+        "action": "counter",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        },
+        "private_note_vi": "Điều chỉnh gói để đáp ứng các giới hạn riêng của chủ shop.",
+        "redacted": true
+      }
+    },
+    {
+      "seq": 84,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:00",
+      "type": "referee_review",
+      "actor": "referee",
+      "shop_id": "D",
+      "text_vi": "Phản đề xuất tập trung vào ngân sách và điều kiện dừng. Tiếp tục trao đổi về gói đã điều chỉnh.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "round": 1,
+        "action": "continue",
+        "evidence_refs": [
+          79,
+          83
+        ],
+        "unresolved_terms": [
+          "Ngân sách quảng cáo",
+          "Voucher"
+        ],
+        "next_actor": "platform_agent",
+        "focused_question": null
+      }
+    },
+    {
+      "seq": 85,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:10",
+      "type": "agent_activity",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Agent sàn đang xem phản đề xuất.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "task_id": "D-7-attempt1-platform-2",
+        "round": 2,
+        "phase": "proposal",
+        "status": "running",
+        "label_vi": "Agent sàn đang xem gói 45.000đ/ngày và voucher 3%"
+      }
+    },
+    {
+      "seq": 86,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:20",
+      "type": "platform_turn",
+      "actor": "platform_agent",
+      "shop_id": "D",
+      "text_vi": "Đồng ý với gói đã điều chỉnh. Chuyển chị Lan duyệt sau kiểm tra cuối.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "round": 2,
+        "action": "accept",
+        "package": {
+          "content_refresh": true,
+          "ads_daily_budget": 45000,
+          "voucher_pct": 3,
+          "stop_roas_below": 6.5,
+          "stop_after_days": 2,
+          "duration_days": 3
+        }
+      }
+    },
+    {
+      "seq": 87,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:30",
+      "type": "code_check",
+      "actor": "code",
+      "shop_id": "D",
+      "text_vi": "Gói cuối đã qua kiểm tra các luật của chủ shop.",
+      "data": {
+        "negotiation_id": "D-7-attempt1",
+        "ok": true,
+        "checks": [
+          {
+            "ok": true,
+            "message_vi": "Quảng cáo không vượt 45.000đ/ngày."
+          },
+          {
+            "ok": true,
+            "message_vi": "Voucher phù hợp với giới hạn lợi nhuận."
+          },
+          {
+            "ok": true,
+            "message_vi": "Có điều kiện tự dừng quảng cáo."
+          }
+        ]
+      }
+    },
+    {
+      "seq": 88,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:40",
+      "type": "card_sent",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã gửi thẻ đề xuất để chị Lan quyết định.",
+      "data": {
+        "card": {
+          "card_id": "D-7-1",
+          "shop_id": "D",
+          "day": 7,
+          "kind": "offer",
+          "package": {
+            "content_refresh": true,
+            "ads_daily_budget": 45000,
+            "voucher_pct": 3,
+            "stop_roas_below": 6.5,
+            "stop_after_days": 2,
+            "duration_days": 3
+          },
+          "forecast": {
+            "low": 18,
+            "point": 24,
+            "high": 30,
+            "factor_used": 1,
+            "stock_warning": false
+          },
+          "profit_after_fees_per_unit": 27136,
+          "breakeven_roas_display": 6.5,
+          "reasons_vi": [
+            "Sản phẩm thuộc nhóm từ khóa đang được quan tâm.",
+            "Làm mới nội dung để giới thiệu rõ 3 tốc độ gió và pin 2000mAh.",
+            "Gói được kiểm tra theo giới hạn chủ shop."
+          ],
+          "warnings_vi": [],
+          "notices_vi": [],
+          "rule_question": null
+        }
+      }
+    },
+    {
+      "seq": 89,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "12:50",
+      "type": "seller_decision",
+      "actor": "seller",
+      "shop_id": "D",
+      "text_vi": "Chị Lan đã đồng ý.",
+      "data": {
+        "card_id": "D-7-1",
+        "action": "accept",
+        "note_vi": "",
+        "rule_answer": null
+      }
+    },
+    {
+      "seq": 90,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:00",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Đang chuẩn bị tiêu đề, mô tả và ba phương án ảnh bìa.",
+      "data": {
+        "kind": "text",
+        "status": "done",
+        "version": 1,
+        "detail_vi": "Nội dung mẫu cho giao diện."
+      }
+    },
+    {
+      "seq": 91,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:10",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Ba phương án ảnh bìa đã sẵn sàng.",
+      "data": {
+        "kind": "image",
+        "status": "done",
+        "version": 1,
+        "detail_vi": "Ảnh minh họa cho bản xem trước giao diện."
+      }
+    },
+    {
+      "seq": 92,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:20",
+      "type": "content_job",
+      "actor": "content_agent",
+      "shop_id": "D",
+      "text_vi": "Bản xem trước dùng ảnh minh họa; video thật do backend cung cấp.",
+      "data": {
+        "kind": "video",
+        "status": "failed",
+        "version": 1,
+        "detail_vi": "Có thể áp dụng nội dung và ảnh."
+      }
+    },
+    {
+      "seq": 93,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:30",
+      "type": "content_applied",
+      "actor": "system",
+      "shop_id": "D",
+      "text_vi": "Đã áp dụng nội dung chị Lan chọn.",
+      "data": {
+        "version": 1,
+        "cover_option": "B"
+      }
+    },
+    {
+      "seq": 94,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:40",
+      "type": "market_result",
+      "actor": "market",
+      "shop_id": "D",
+      "text_vi": "Đã tổng hợp kết quả ngày mô phỏng.",
+      "data": {
+        "metrics": {
+          "shop_id": "D",
+          "day": 7,
+          "impressions": 4200,
+          "clicks": 136,
+          "orders": 8,
+          "revenue": 1358000,
+          "ads_spend": 45000,
+          "roas": 6.8,
+          "fees": 220910,
+          "profit_after_fees": 172090
+        }
+      }
+    },
+    {
+      "seq": 95,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "08:50",
+      "type": "memory_write",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Đã cập nhật bộ nhớ cho ngày tiếp theo.",
+      "data": {
+        "compartment": "history",
+        "summary_vi": "Tóm tắt ngày mô phỏng."
+      }
+    },
+    {
+      "seq": 96,
+      "run_id": "sample-day7",
+      "day": 7,
+      "ts": "09:00",
+      "type": "night_summary",
+      "actor": "memory",
+      "shop_id": "D",
+      "text_vi": "Hoàn tất tổng kết ban đêm.",
+      "data": {
+        "summary": {
+          "day": 7,
+          "history_updates": [
+            "Ghi nhận gói chị Lan đã duyệt và kết quả trong ngày."
+          ],
+          "pref_candidates": [],
+          "calibration": {
+            "factor": 0.87,
+            "points": 21,
+            "mape_today": 0.24
+          },
+          "lesson_ops": [
+            {
+              "op": "ADD",
+              "lesson_id": "preview-lesson",
+              "text_vi": "Ưu tiên làm rõ thông tin sản phẩm và ngân sách phù hợp với chủ shop.",
+              "scope": "quat_mini",
+              "evidence": [
+                "D-7"
+              ]
+            }
+          ],
+          "rejected_ops": 0,
+          "memory_md_path": ""
+        }
+      }
+    }
+  ],
+  "proof": {
+    "seed": 42,
+    "days": 7,
+    "run_on": "preview-on",
+    "run_off": "preview-off",
+    "comparison_days": [
+      {
+        "day": 1,
+        "request_vi": "Làm mới ảnh bìa và đề xuất gói hỗ trợ bán hàng giúp chị.",
+        "situation_vi": "Ngày đầu · Hai bên chưa có lịch sử",
+        "takeaway_vi": "Ngày 1: cả hai đều cần hỏi. Góp ý hôm nay là dữ liệu để tham khảo từ ngày mai.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-1-1",
+              "actor": "shop_agent",
+              "text_vi": "Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.",
+              "event_seq": 11
+            },
+            {
+              "id": "off-1-2",
+              "actor": "seller",
+              "text_vi": "Ảnh nền sáng, ít chữ, voucher 2% giúp chị nhé.",
+              "event_seq": 12
+            },
+            {
+              "id": "off-1-3",
+              "actor": "shop_agent",
+              "text_vi": "Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.",
+              "event_seq": 13
+            }
+          ],
+          "result_vi": "Cần hỏi sở thích trong ngày đầu",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-1-1",
+              "actor": "shop_agent",
+              "text_vi": "Chị thích ảnh theo phong cách nào? Gói hiện có voucher 3%.",
+              "event_seq": 11
+            },
+            {
+              "id": "on-1-2",
+              "actor": "seller",
+              "text_vi": "Ảnh nền sáng, ít chữ, voucher 2% giúp chị nhé.",
+              "event_seq": 12
+            },
+            {
+              "id": "on-1-3",
+              "actor": "shop_agent",
+              "text_vi": "Em đề xuất ảnh nền sáng và voucher 2%. Chị xem rồi duyệt giúp em.",
+              "event_seq": 13
+            }
+          ],
+          "result_vi": "Cùng điểm xuất phát, chưa có dữ liệu quá khứ",
+          "memory_used": []
+        }
+      },
+      {
+        "day": 2,
+        "request_vi": "Làm ảnh bìa mới cho mẫu quạt này giúp chị nhé.",
+        "situation_vi": "Ghi nhớ phong cách ảnh",
+        "takeaway_vi": "Ngày 2: bên có học đọc lại góp ý ngày 1, giúp chủ shop bớt phải nhắc lại.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-2-1",
+              "actor": "shop_agent",
+              "text_vi": "Chị muốn ảnh theo phong cách nào?",
+              "event_seq": 21
+            },
+            {
+              "id": "off-2-2",
+              "actor": "seller",
+              "text_vi": "Nền sáng, ít chữ như hôm qua nhé.",
+              "event_seq": 22
+            }
+          ],
+          "result_vi": "Chủ shop cần nhắc lại phong cách",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-2-1",
+              "actor": "shop_agent",
+              "text_vi": "Em nhớ chị thích nền sáng, ít chữ. Bản nháp mới giữ phong cách đó để chị duyệt.",
+              "event_seq": 21
+            },
+            {
+              "id": "on-2-2",
+              "actor": "seller",
+              "text_vi": "Đúng ý chị, gửi nháp nhé.",
+              "event_seq": 22
+            }
+          ],
+          "result_vi": "Dùng góp ý cũ để đề xuất ngay từ đầu",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 1,
+              "text_vi": "Góp ý ảnh nền sáng",
+              "event_seq": 13
+            }
+          ]
+        }
+      },
+      {
+        "day": 3,
+        "request_vi": "Đề xuất gói hỗ trợ bán hàng hôm nay cho chị.",
+        "situation_vi": "Tham khảo gói từng được chủ shop chọn",
+        "takeaway_vi": "Ngày 3: cả hai giữ luật shop; bên có học còn tham khảo gói từng được chủ shop lựa chọn.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-3-1",
+              "actor": "shop_agent",
+              "text_vi": "Em đề xuất quảng cáo 45.000đ/ngày và voucher 3%, trong giới hạn của shop.",
+              "event_seq": 31
+            },
+            {
+              "id": "off-3-2",
+              "actor": "seller",
+              "text_vi": "Voucher 2% thôi, như gói chị đã chọn trước đó.",
+              "event_seq": 32
+            },
+            {
+              "id": "off-3-3",
+              "actor": "shop_agent",
+              "text_vi": "Em điều chỉnh voucher còn 2%, giữ ngân sách 45.000đ/ngày. Chờ chị duyệt.",
+              "event_seq": 33
+            }
+          ],
+          "result_vi": "Gói hợp luật, nhưng cần điều chỉnh theo sở thích",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-3-1",
+              "actor": "shop_agent",
+              "text_vi": "Lần trước chị chọn voucher 2%. Hôm nay em đề xuất mức đó, ngân sách 45.000đ/ngày, kèm điều kiện dừng đã kiểm tra.",
+              "event_seq": 31
+            },
+            {
+              "id": "on-3-2",
+              "actor": "seller",
+              "text_vi": "Gói này phù hợp, để chị xem và duyệt.",
+              "event_seq": 32
+            }
+          ],
+          "result_vi": "Tham khảo lựa chọn cũ trong cùng giới hạn",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 1,
+              "text_vi": "Chủ shop đã chọn voucher 2%",
+              "event_seq": 13
+            }
+          ]
+        }
+      },
+      {
+        "day": 4,
+        "request_vi": "Gói mới lần này dự kiến hiệu quả thế nào em?",
+        "situation_vi": "Hiệu chỉnh dự báo từ kết quả đã quan sát",
+        "takeaway_vi": "Ngày 4: bên có học dùng dữ liệu kết quả để hiệu chỉnh dự báo; các con số vẫn do code tính.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-4-1",
+              "actor": "shop_agent",
+              "text_vi": "Em dùng dự báo từ dữ liệu khởi tạo của kịch bản.",
+              "event_seq": 41
+            },
+            {
+              "id": "off-4-2",
+              "actor": "seller",
+              "text_vi": "Lần trước bán thấp hơn dự báo, em xem lại giúp chị.",
+              "event_seq": 42
+            },
+            {
+              "id": "off-4-3",
+              "actor": "shop_agent",
+              "text_vi": "Em sẽ trình bày rõ giả định và khoảng dự báo để chị cân nhắc.",
+              "event_seq": 43
+            }
+          ],
+          "result_vi": "Chủ shop cần nhắc kết quả lần trước",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-4-1",
+              "actor": "shop_agent",
+              "text_vi": "Em đã dùng kết quả những ngày trước để hiệu chỉnh dự báo bằng code. Gói mới kèm khoảng dự báo và các giả định để chị cân nhắc.",
+              "event_seq": 41
+            },
+            {
+              "id": "on-4-2",
+              "actor": "seller",
+              "text_vi": "Có đối chiếu kết quả cũ như vậy thì chị dễ xem hơn.",
+              "event_seq": 42
+            }
+          ],
+          "result_vi": "Dự báo tham khảo kết quả đã quan sát",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 3,
+              "text_vi": "Kết quả mô phỏng để hiệu chỉnh dự báo",
+              "event_seq": 33
+            }
+          ]
+        }
+      },
+      {
+        "day": 5,
+        "request_vi": "Lên bản nháp nội dung video cho quạt giúp chị nhé.",
+        "situation_vi": "Áp dụng góp ý nội dung vào lần tạo mới",
+        "takeaway_vi": "Ngày 5: góp ý ở lần làm ảnh được tham khảo khi soạn nội dung mới; bản nháp vẫn cần chủ shop duyệt.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-5-1",
+              "actor": "shop_agent",
+              "text_vi": "Chị muốn video có phong cách như thế nào?",
+              "event_seq": 51
+            },
+            {
+              "id": "off-5-2",
+              "actor": "seller",
+              "text_vi": "Nền sáng, ít chữ, giống ảnh bìa chị đã duyệt.",
+              "event_seq": 52
+            },
+            {
+              "id": "off-5-3",
+              "actor": "shop_agent",
+              "text_vi": "Em soạn bản nháp theo góp ý đó, chỉ dùng thông số sản phẩm đã xác minh.",
+              "event_seq": 53
+            }
+          ],
+          "result_vi": "Cần hỏi lại phong cách đã từng trao đổi",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-5-1",
+              "actor": "shop_agent",
+              "text_vi": "Em tham khảo ảnh nền sáng, ít chữ mà chị đã duyệt. Bản nháp video giữ phong cách đó và chỉ dùng thông số sản phẩm đã xác minh.",
+              "event_seq": 51
+            },
+            {
+              "id": "on-5-2",
+              "actor": "seller",
+              "text_vi": "Đúng ý chị, gửi bản nháp để chị xem nhé.",
+              "event_seq": 52
+            }
+          ],
+          "result_vi": "Dùng góp ý nội dung đã có, vẫn chờ duyệt",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 1,
+              "text_vi": "Ảnh nền sáng",
+              "event_seq": 13
+            },
+            {
+              "run_id": "preview-on",
+              "source_day": 2,
+              "text_vi": "Góp ý ít chữ trên ảnh",
+              "event_seq": 23
+            }
+          ]
+        }
+      },
+      {
+        "day": 6,
+        "request_vi": "Chuẩn bị gói mới, giữ cách làm phù hợp với shop chị nhé.",
+        "situation_vi": "Kết hợp lịch sử gói và góp ý nội dung",
+        "takeaway_vi": "Ngày 6: bên có học kết hợp nhiều phản hồi trước đó, thay vì hỏi lại từng lựa chọn.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-6-1",
+              "actor": "shop_agent",
+              "text_vi": "Em đề xuất gói trong giới hạn hiện tại. Chị muốn voucher 3% hay điều chỉnh?",
+              "event_seq": 61
+            },
+            {
+              "id": "off-6-2",
+              "actor": "seller",
+              "text_vi": "Giữ 2% và ảnh nền sáng như những lần trước.",
+              "event_seq": 62
+            },
+            {
+              "id": "off-6-3",
+              "actor": "shop_agent",
+              "text_vi": "Em ghi nhận để điều chỉnh gói lần này, chờ chị duyệt.",
+              "event_seq": 63
+            }
+          ],
+          "result_vi": "Cần nhắc lại lựa chọn từ các lần trước",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-6-1",
+              "actor": "shop_agent",
+              "text_vi": "Em tham khảo các gói chị từng chọn: voucher 2%, nội dung nền sáng. Gói mới giữ ngân sách trong hạn mức và đã qua kiểm tra.",
+              "event_seq": 61
+            },
+            {
+              "id": "on-6-2",
+              "actor": "seller",
+              "text_vi": "Đúng cách shop chị thường chọn, để chị duyệt gói nhé.",
+              "event_seq": 62
+            }
+          ],
+          "result_vi": "Kết hợp được các phản hồi đã lưu",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 1,
+              "text_vi": "Lựa chọn voucher 2%",
+              "event_seq": 13
+            },
+            {
+              "run_id": "preview-on",
+              "source_day": 2,
+              "text_vi": "Phong cách ảnh nền sáng",
+              "event_seq": 23
+            }
+          ]
+        }
+      },
+      {
+        "day": 7,
+        "request_vi": "Gợi ý kế hoạch tiếp theo dựa trên cách shop chị đang làm.",
+        "situation_vi": "Quan sát sự khác biệt sau một tuần",
+        "takeaway_vi": "Ngày 7: bộ nhớ nối phản hồi, gói từng được duyệt và kết quả cũ để hỗ trợ đề xuất mới.",
+        "off": {
+          "run_id": "preview-off",
+          "messages": [
+            {
+              "id": "off-7-1",
+              "actor": "shop_agent",
+              "text_vi": "Chị chia sẻ lại phong cách nội dung và gói từng phù hợp giúp em nhé.",
+              "event_seq": 71
+            },
+            {
+              "id": "off-7-2",
+              "actor": "seller",
+              "text_vi": "Ảnh nền sáng, ít chữ; voucher 2%. Nhớ xem kết quả các ngày trước.",
+              "event_seq": 72
+            },
+            {
+              "id": "off-7-3",
+              "actor": "shop_agent",
+              "text_vi": "Em sẽ lập đề xuất từ thông tin chị vừa cung cấp, trong giới hạn của shop.",
+              "event_seq": 73
+            }
+          ],
+          "result_vi": "Chủ shop phải cung cấp lại bối cảnh",
+          "memory_used": []
+        },
+        "on": {
+          "run_id": "preview-on",
+          "messages": [
+            {
+              "id": "on-7-1",
+              "actor": "shop_agent",
+              "text_vi": "Em tham khảo phản hồi nội dung, các gói chị đã chọn và kết quả đã lưu. Đề xuất tiếp theo ưu tiên nền sáng, voucher 2%, kèm dự báo đã hiệu chỉnh; chờ chị xem và duyệt.",
+              "event_seq": 71
+            },
+            {
+              "id": "on-7-2",
+              "actor": "seller",
+              "text_vi": "Em đã nắm được cách shop chị muốn làm. Gửi đề xuất chi tiết cho chị nhé.",
+              "event_seq": 72
+            }
+          ],
+          "result_vi": "Tham khảo được phản hồi, lựa chọn và kết quả cũ",
+          "memory_used": [
+            {
+              "run_id": "preview-on",
+              "source_day": 2,
+              "text_vi": "Góp ý nội dung",
+              "event_seq": 23
+            },
+            {
+              "run_id": "preview-on",
+              "source_day": 3,
+              "text_vi": "Lựa chọn gói và kết quả",
+              "event_seq": 33
+            },
+            {
+              "run_id": "preview-on",
+              "source_day": 6,
+              "text_vi": "Phản hồi về gói gần nhất",
+              "event_seq": 63
+            }
+          ]
+        }
+      }
+    ],
+    "metrics": [
+      {
+        "key": "acceptance",
+        "label_vi": "Tỷ lệ chấp nhận đề xuất",
+        "better": "higher",
+        "on": 83,
+        "off": 61,
+        "unit": "%"
+      },
+      {
+        "key": "profit",
+        "label_vi": "Tổng lãi sau phí",
+        "better": "higher",
+        "on": 3520000,
+        "off": 2780000,
+        "unit": "đ"
+      },
+      {
+        "key": "mape",
+        "label_vi": "Sai số dự báo",
+        "better": "lower",
+        "on": 14,
+        "off": 38,
+        "unit": "%"
+      },
+      {
+        "key": "revisions",
+        "label_vi": "Số lần sửa nội dung",
+        "better": "lower",
+        "on": 2,
+        "off": 6,
+        "unit": ""
+      }
+    ],
+    "note_vi": "Bộ dữ liệu minh họa 7 ngày được lưu và nạp từ SQLite. Hội thoại và chỉ số là dữ liệu mẫu cho trình chiếu, chưa phải kết quả thực nghiệm của agent.",
+    "sample_source": {
+      "kind": "sqlite_sample",
+      "label_vi": "Dữ liệu mẫu 7 ngày từ database",
+      "seed": 42
+    }
+  }
+}
