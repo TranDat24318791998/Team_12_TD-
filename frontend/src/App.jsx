@@ -8,7 +8,16 @@ import {pageURL} from './format.js';
 import {useRun} from './useRun.js';
 import {waitingForNegotiation} from './activity.js';
 
-export function App({client,page=globalThis.location?.pathname.split('/').pop() || 'index.html'}){
+const pages=new Set(['index.html','demo.html','updated.html','night.html','proof.html']);
+export function resolvePage(location=globalThis.location,body=globalThis.document?.body){
+  const segment=(location?.pathname || '').split('/').filter(Boolean).at(-1) || '';
+  const normalized=segment.endsWith('.html')?segment:`${segment}.html`;
+  if(pages.has(normalized))return normalized;
+  const bodyPage=body?.dataset?.page;
+  return pages.has(bodyPage)?bodyPage:'index.html';
+}
+
+export function App({client,page=resolvePage()}){
   const demo=page==='demo.html',proof=page==='proof.html';
   const run=useRun(client,{enabled:!proof,poll:true});
   const busy=run.pending || run.state?.busy;

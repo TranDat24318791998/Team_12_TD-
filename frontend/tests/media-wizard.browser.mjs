@@ -27,7 +27,9 @@ try{
   let state={run_id:'run',day:1,step:'content_review',demo_shop:shop,demo_shop_original:shop,busy:false,content_draft:draft};
   const sent=[];
   await page.route('https://shoppilot.test/**',async route=>{
-    const path=resolve(root,'.'+new URL(route.request().url()).pathname);
+    let pathname=new URL(route.request().url()).pathname;
+    if(/^\/(?:demo|proof|night|updated)$/.test(pathname))pathname+='.html';
+    const path=resolve(root,'.'+pathname);
     if(!path.startsWith(root+sep))return route.fulfill({status:403});
     try{const data=await readFile(path);return route.fulfill({status:200,contentType:({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.jpg':'image/jpeg','.png':'image/png'})[extname(path)] || 'application/octet-stream',body:data});}
     catch{return route.fulfill({status:404});}
@@ -47,7 +49,7 @@ try{
     }
     return reply({error:{message:'Unexpected request'}},404);
   });
-  await page.goto('https://shoppilot.test/demo.html?preview=0');
+  await page.goto('https://shoppilot.test/demo?preview=0');
   await page.getByRole('heading',{name:'Tạo ảnh và video sản phẩm'}).waitFor();
   assert.equal(await page.getByRole('img',{name:'Logo người bán'}).count(),1);
   assert.equal(await page.getByRole('img',{name:'Ảnh sản phẩm hiện có'}).count(),1);

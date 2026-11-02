@@ -49,3 +49,14 @@ Sites source checkout riêng: `../sites/shoppilot` tính từ repo. ID lưu `.op
 Test tự động dùng provider giả. Live smoke phải được chủ dự án cho phép; không tự tạo job trùng khi timeout. Review riêng Media và UI/host đã phát hiện/sửa lệch thời lượng, offline staging và cookie isolation.
 
 Các ảnh nguồn demo trong frontend/img được copy từ bộ ảnh OpenAI đã tạo; logo Gió Mát là thương hiệu mẫu, khác logo ứng dụng ShopPilot AI.
+
+### Live smoke ngày 31/10/2026
+
+- Run thử nghiệm `run_f81beabb7615411280e0`: OpenAI tạo JPG style `summer_fresh`, Muse tạo video người thật 5 giây, OpenAI trả mô tả ngắn. Thời lượng đo được đúng 5 giây.
+- Image job `6e374660b8bb4d469e477f6ae9ea1158`; video job `61b3920d008147c6b039f2f555f6d98d`. Cả hai có `storage=minio`, bucket `marketing-videos`; gọi GET job với đúng owner để lấy signed public URL mới khi link hết hạn.
+- Apply trả 200; đọc lại listing đã lưu có cả ảnh và video vừa tạo. Đây là phiên thử riêng, không thay dữ liệu phiên trình duyệt của người dùng.
+- Kiểm tra public: ảnh trả 200 `image/jpeg`, video Range trả 206 `video/mp4`; cả hai có CORS `*`. Đã phát video qua browser bằng media tunnel.
+- Sau đăng nhập ChatGPT, frontend Sites tải dữ liệu thật và xác nhận brief qua API thành công. Sites chuẩn hóa `.html` thành URL không đuôi; frontend hỗ trợ cả hai dạng đường dẫn.
+- Kiểm tra tự động: 89 frontend tests; 34 integration tests cho gateway, staged workflow và HTTP media bridge. Provider giả được dùng trong tests tự động; live smoke ở trên dùng OpenAI/Muse thật.
+
+MinIO vẫn là kho media gốc. Listing dùng đường dẫn Data cùng origin để giữ quyền sở hữu và không phụ thuộc tuổi thọ signed URL; Data giữ bản bytes đã kiểm checksum. Không coi việc GPT duyệt vài khung hình là xác nhận âm thanh, khẩu hình hoặc độ chính xác tuyệt đối của sản phẩm.

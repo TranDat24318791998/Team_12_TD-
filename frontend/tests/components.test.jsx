@@ -13,10 +13,20 @@ import {ControlPanel} from '../src/pages/Shop.jsx';
 import {NightPage} from '../src/pages/Night.jsx';
 import {ProofReport} from '../src/pages/Proof.jsx';
 import {DemoPage} from '../src/pages/Demo.jsx';
+import {resolvePage} from '../src/App.jsx';
 const noop=()=>{};
 const shop={shop_id:'Z',name:'Shop Ánh Dương <b>',title:'Đèn bàn USB & đế gỗ',description:'Đèn bàn có đế gỗ.',category:'den_ban',price:299000,stock:17,rating:4.9,images:['https://demo.test/media/lamp.jpg'],attributes:['Sạc USB','2 màu: Đen, Nâu'],active_voucher_pct:7,listing_quality:.81,search_rank_page:1};
 const state={run_id:'database-run',day:1,step:'idle',demo_shop:shop,demo_shop_original:shop,memory_enabled:true,mode:'offline',last_night:null,active_package:null};
 const button=(html,name)=>html.match(new RegExp('<button\\b[^>]*data-'+name+'="true"[^>]*>'))?.[0];
+
+test('hosted extensionless routes resolve to the same pages as static HTML',()=>{
+  for(const name of ['demo','proof','night','updated']){
+    assert.equal(resolvePage({pathname:`/${name}`},{dataset:{page:'index.html'}}),`${name}.html`);
+    assert.equal(resolvePage({pathname:`/${name}.html`},null),`${name}.html`);
+  }
+  assert.equal(resolvePage({pathname:'/hosted-entry'},{dataset:{page:'demo.html'}}),'demo.html');
+  assert.equal(resolvePage({pathname:'/'},{dataset:{page:'index.html'}}),'index.html');
+});
 
 test('shop and demo share the supplied ShopPilot AI brand image',()=>{
   const html=renderToStaticMarkup(<Logo preview={false}/>);
